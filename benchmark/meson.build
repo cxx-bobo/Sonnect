@@ -6,10 +6,13 @@ project_name_abbreviation = 'sc'
 dpdk = dependency('libdpdk')
 inc_dirs = include_directories('include')
 
+source_folder = './src/'
+
 sources = files(
-	project_name_abbreviation + '_main.c',
-    project_name_abbreviation + '_mbuf.c',
-    project_name_abbreviation + '_port.c'
+	source_folder + project_name_abbreviation + '_main.c',
+    source_folder + project_name_abbreviation + '_mbuf.c',
+    source_folder + project_name_abbreviation + '_port.c',
+	source_folder + project_name_abbreviation + '_utils.c'
 )
 
 executable(project_name, sources,

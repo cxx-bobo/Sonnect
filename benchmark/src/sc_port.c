@@ -1,13 +1,16 @@
+#include "sc_global.h"
 #include "sc_utils.h"
 #include "sc_port.h"
 
+int _init_single_port(uint16_t port_index, struct sc_config *sc_config);
+static bool _is_port_choosed(uint16_t port_index, struct sc_config *sc_config);
 static void _print_port_info(uint16_t port_index);
 static void _show_offloads(uint64_t offloads, const char *(show_offload)(uint64_t));
 
 /*!
  * \brief dpdk ethernet port configuration
  */
-struct rte_eth_conf port_conf_default = {
+static struct rte_eth_conf port_conf_default = {
     .rxmode = {
         .mq_mode = RTE_ETH_MQ_RX_RSS,
     },
@@ -18,26 +21,149 @@ struct rte_eth_conf port_conf_default = {
 
 /*!
  * \brief   initialize all available dpdk port
+ * \param   sc_config   the global configuration
  * \return  zero for successfully initialization
  */
-int init_ports(){
-    uint16_t port_index, nb_ports;
+int init_ports(struct sc_config *sc_config){
+    uint16_t i, port_index, nb_ports;
     
     /* check available ports */
     nb_ports = rte_eth_dev_count_avail();
     if(nb_ports == 0)
         rte_exit(EXIT_FAILURE, "No Ethernet ports\n");
     
-    for(port_index=0; port_index<nb_ports; port_index++){
-        /* skip port if it's unused */
-        if (!rte_eth_dev_is_valid_port(port_index))
-			continue;
-        
+    for(i=0, port_index=0; port_index<nb_ports; port_index++){
+        /* skip the port if it's unused */
+        if (!rte_eth_dev_is_valid_port(port_index)){
+            printf("port %d is not valid\n", port_index);
+            continue;
+        }
+
+        /* skip the port if not specified in the configuratio file */
+        if(!_is_port_choosed(port_index, sc_config))
+            continue;
+
         /* print detail info of the port */
         _print_port_info(port_index);
+
+        /* initialize the current port */
+        if(_init_single_port(port_index, sc_config) != SC_SUCCESS){
+            printf("failed to initailize port %d\n", port_index);
+            return SC_ERROR_INTERNAL;
+        }
+
+        sc_config->port_ids[i] = port_index; 
+        i++;
     }
 
+    sc_config->nb_used_ports = i;
     return SC_SUCCESS;
+}
+
+/*!
+ * \brief   initialize a specified port
+ * \param   port_index  the index of the init port
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully initialization
+ */
+int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
+    int ret;
+    uint16_t i;
+    struct rte_eth_conf port_conf = port_conf_default;
+	struct rte_ether_addr eth_addr;
+
+    /* obtain mac address of the port */
+    ret = rte_eth_macaddr_get(port_index, &eth_addr);
+    if (ret < 0) {
+        printf("failed to obtain mac address of port %d: %s\n", 
+            port_index, rte_strerror(-ret));
+        return SC_ERROR_INTERNAL;
+    }
+
+    /* configure the port */
+    ret = rte_eth_dev_configure(
+        port_index, sc_config->nb_rx_rings_per_port, 
+        sc_config->nb_tx_rings_per_port, &port_conf);
+	if (ret != 0) {
+        printf("failed to configure port %d: %s\n",
+            port_index, rte_strerror(-ret));
+        return SC_ERROR_INTERNAL;
+    }
+
+    /* allocate rx_rings */
+    for (i = 0; i < sc_config->nb_rx_rings_per_port; i++) {
+        ret = rte_eth_rx_queue_setup(
+            port_index, i, RTE_TEST_RX_DESC_DEFAULT,
+			rte_eth_dev_socket_id(port_index), NULL, 
+            sc_config->pktmbuf_pool);
+		if (ret < 0) {
+            printf("failed to setup rx_ring %d for port %d: %s\n", 
+                i, port_index, rte_strerror(-ret));
+            return SC_ERROR_INTERNAL;
+        }
+    }
+
+    /* allocate tx_rings */
+    for (i = 0; i < sc_config->nb_tx_rings_per_port; i++) {
+        ret = rte_eth_tx_queue_setup(
+            port_index, i, RTE_TEST_TX_DESC_DEFAULT,
+			rte_eth_dev_socket_id(port_index), NULL);
+		if (ret < 0) {
+            printf("failed to setup tx_ring %d for port %d: %s\n", 
+                i, port_index, rte_strerror(-ret));
+            return SC_ERROR_INTERNAL;
+        }
+    }
+
+    /* start the port */
+    ret = rte_eth_dev_start(port_index);
+	if (ret < 0) {
+        printf("failed to start port %d: %s\n", 
+            port_index, rte_strerror(-ret));
+        return SC_ERROR_INTERNAL;
+    }
+
+    /* set as promiscuous mode (if enabled) */
+    if(sc_config->enable_promiscuous){
+		ret = rte_eth_promiscuous_enable(port_index);
+		if (ret != 0) {
+            printf("failed to set port %d as promiscuous mode: %s\n", 
+                port_index, rte_strerror(-ret));
+            return SC_ERROR_INTERNAL;
+        }
+	}
+
+    printf("finish init port %u, MAC address: " RTE_ETHER_ADDR_PRT_FMT "\n\n",
+        port_index,
+        RTE_ETHER_ADDR_BYTES(&eth_addr));
+
+
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   check whether the port is going to be used 
+ *          (defined in the configuration file)
+ * \param   port_index  the index of the checked port
+ * \param   sc_config   the global configuration
+ * \return  whether the port is used
+ */
+static bool _is_port_choosed(uint16_t port_index, struct sc_config *sc_config){
+    int i, ret;
+    struct rte_ether_addr mac;
+    char ebuf[RTE_ETHER_ADDR_FMT_SIZE];
+
+    ret = rte_eth_macaddr_get(port_index, &mac);
+    if (ret == 0)
+        rte_ether_format_addr(ebuf, sizeof(ebuf), &mac);
+    else
+        return false;
+
+    for(i=0; i<sc_config->nb_ports; i++){
+        if(!strcmp(ebuf, sc_config->port_mac[i])) return true;
+    }
+
+    return false;
 }
 
 /*!
@@ -58,6 +184,8 @@ static void _print_port_info(uint16_t port_index){
     struct rte_eth_rss_conf rss_conf;
     char link_status_text[RTE_ETH_LINK_MAX_STR_LEN];
 
+    printf("\nUSED PORTs:\n");
+    
     /* get device info */
     ret = rte_eth_dev_info_get(port_index, &dev_info);
     if (ret != 0) {
@@ -195,7 +323,6 @@ static void _print_port_info(uint16_t port_index){
     ret = rte_eth_dev_rss_hash_conf_get(port_index, &rss_conf);
     if (ret == 0) {
         if (rss_conf.rss_key) {
-            printf("  - RSS\n");
             printf("\t  -- RSS len %u key (hex):",
                     rss_conf.rss_key_len);
             for (k = 0; k < rss_conf.rss_key_len; k++)
@@ -204,6 +331,8 @@ static void _print_port_info(uint16_t port_index){
                     rss_conf.rss_hf);
         }
     }
+
+    printf("\n");
 }
 
 /*!
