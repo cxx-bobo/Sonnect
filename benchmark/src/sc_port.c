@@ -137,7 +137,6 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
         port_index,
         RTE_ETHER_ADDR_BYTES(&eth_addr));
 
-
     return SC_SUCCESS;
 }
 
@@ -159,7 +158,8 @@ static bool _is_port_choosed(uint16_t port_index, struct sc_config *sc_config){
     else
         return false;
 
-    for(i=0; i<sc_config->nb_ports; i++){
+    for(i=0; i<1; i++){
+        if(sc_config->port_mac[i] == NULL) continue;
         if(!strcmp(ebuf, sc_config->port_mac[i])) return true;
     }
 

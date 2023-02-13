@@ -6,12 +6,25 @@
 
 #include <rte_mempool.h>
 
-#define SC_MAX_NB_PORTS 4
+/* maximum number of parameters to init rte eal */
+#define SC_RTE_ARGC_MAX (RTE_MAX_ETHPORTS << 1) + 7
+
+/* maximum number of ports to used */
+#define SC_MAX_NB_PORTS RTE_MAX_ETHPORTS
+
+/* maximum number of queues per port */
+#define SC_MAX_NB_QUEUE_PER_PORT RTE_MAX_QUEUES_PER_PORT
+
+/* maximum number of lcores to used */
+#define SC_MAX_NB_CORES RTE_MAX_LCORE
 
 struct sc_config {
+    /* lcore */
+    uint32_t core_ids[SC_MAX_NB_CORES];
+    uint32_t nb_used_cores;
+
     /* port */
     char* port_mac[SC_MAX_NB_PORTS];
-    uint16_t nb_ports;
     uint16_t port_ids[SC_MAX_NB_PORTS];
     uint16_t nb_used_ports;
     uint16_t nb_rx_rings_per_port;
@@ -20,6 +33,7 @@ struct sc_config {
 
     /* memory */
     struct rte_mempool *pktmbuf_pool;
+    uint16_t nb_memory_channels_per_socket;
 };
 
 #endif
