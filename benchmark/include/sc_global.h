@@ -5,7 +5,10 @@
 #include <stdint.h>
 #include <pthread.h>
 
+#include <rte_mbuf.h>
 #include <rte_mempool.h>
+
+#include "sc_global.h"
 
 /* maximum number of parameters to init rte eal */
 #define SC_RTE_ARGC_MAX (RTE_MAX_ETHPORTS << 1) + 7
@@ -20,7 +23,7 @@
 #define SC_MAX_NB_CORES RTE_MAX_LCORE
 
 struct app_config {
-    // TODO
+    int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config);
 };
 
 struct sc_config {

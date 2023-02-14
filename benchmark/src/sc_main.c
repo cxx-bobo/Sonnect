@@ -12,8 +12,10 @@
 #include "sc_mbuf.h"
 #include "sc_utils.h"
 #include "sc_worker.h"
+#include "sc_app.h"
 #include "sc_log.h"
 
+/* indicator to force shutdown all threads (e.g. worker threads, logging thread, etc.) */
 volatile bool force_quit;
 
 static int _init_env(struct sc_config *sc_config, int argc, char **argv);

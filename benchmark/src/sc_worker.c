@@ -7,10 +7,6 @@
 
 extern volatile bool force_quit;
 
-int __process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
-
-}
-
 /*!
  * \brief   function that execute on each lcore threads
  * \param   sc_config   the global configuration
@@ -46,7 +42,7 @@ int _worker_loop(void* param){
             SC_THREAD_LOG("received %u ethernet frames", nb_rx);
 
             for(j=0; j<nb_rx; j++){
-                if(__process_pkt(pkt[j], sc_config) != SC_SUCCESS){
+                if(sc_config->app_config->process_pkt(pkt[j], sc_config) != SC_SUCCESS){
                     SC_THREAD_WARNING("failed to process the received frame\n");
                 }
             }
@@ -64,22 +60,20 @@ worker_exit:
 }
 
 /*!
- * \brief   initialize application
- * \param   sc_config   the global configuration
- * \return  zero for successfully initialization
- */
-int init_app(struct sc_config *sc_config){
-    // TODO
-    return SC_SUCCESS;
-}
-
-/*!
  * \brief   initialize worker threads
  * \param   sc_config   the global configuration
  * \return  zero for successfully initialization
  */
 int init_worker_threads(struct sc_config *sc_config){
+    /* initialize the indicator for quiting all worker threads */
     force_quit = false;
+
+    /* make sure the process_pkt function is set */
+    if(!sc_config->app_config->process_pkt){
+        SC_ERROR_DETAILS("empty process_pkt function pointer");
+        return SC_ERROR_INTERNAL;
+    }
+
     return SC_SUCCESS;
 }
 

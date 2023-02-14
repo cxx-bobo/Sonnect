@@ -18,7 +18,8 @@ sources = files(
     source_folder + project_name_abbreviation + '_port.c',
 	source_folder + project_name_abbreviation + '_utils.c',
 	source_folder + project_name_abbreviation + '_worker.c',
-	source_folder + project_name_abbreviation + '_log.c'
+	source_folder + project_name_abbreviation + '_log.c',
+	source_folder + project_name_abbreviation + '_app.c'
 )
 
 executable(project_name, sources,
