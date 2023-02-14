@@ -1,5 +1,3 @@
-#include <unistd.h>
-
 #include "sc_global.h"
 #include "sc_worker.h"
 #include "sc_utils.h"

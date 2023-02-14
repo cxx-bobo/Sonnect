@@ -1,6 +1,8 @@
 #ifndef _SC_WORKER_H_
 #define _SC_WORKER_H_
 
+#include <unistd.h>
+
 #include <rte_launch.h>
 #include <rte_mbuf.h>
 #include <rte_ethdev.h>

@@ -118,7 +118,7 @@ static int _parse_kv_pair(char* key, char *value, struct sc_config* sc_config){
             _del_change_line(p);
 
             port_mac = (char*)malloc(strlen(p)+1);
-            if(!port_mac){
+            if(unlikely(!port_mac)){
                 SC_ERROR_DETAILS("Failed to allocate memory for port_mac\n");
                 result = SC_ERROR_MEMORY;
                 goto free_dev_src;

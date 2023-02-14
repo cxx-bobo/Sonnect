@@ -28,7 +28,7 @@ int main(int argc, char **argv){
 
   /* allocate memory space for storing configuration */
   struct app_config *app_config = (struct app_config*)malloc(sizeof(struct app_config));
-  if(!app_config){
+  if(unlikely(!app_config)){
     SC_ERROR_DETAILS("failed to allocate memory for app_config: %s\n", strerror(errno));
     result = EXIT_FAILURE;
     goto sc_exit;
@@ -36,7 +36,7 @@ int main(int argc, char **argv){
   memset(app_config, 0, sizeof(struct app_config));
   
   struct sc_config *sc_config = (struct sc_config*)malloc(sizeof(struct sc_config));
-  if(!sc_config){
+  if(unlikely(!sc_config)){
     SC_ERROR_DETAILS("failed to allocate memory for sc_config: %s\n", strerror(errno));
     result = EXIT_FAILURE;
     goto sc_exit;
