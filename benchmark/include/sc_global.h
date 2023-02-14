@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #include <rte_mempool.h>
 
@@ -26,6 +27,11 @@ struct sc_config {
     /* dpdk lcore */
     uint32_t core_ids[SC_MAX_NB_CORES];
     uint32_t nb_used_cores;
+
+    /* logging */
+    uint32_t log_core_id;
+    pthread_t *logging_thread;
+    pthread_mutex_t *timer_mutex;
 
     /* dpdk port */
     char* port_mac[SC_MAX_NB_PORTS];

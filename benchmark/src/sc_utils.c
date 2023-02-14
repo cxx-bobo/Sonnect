@@ -1,5 +1,6 @@
 #include "sc_global.h"
 #include "sc_utils.h"
+#include "sc_log.h"
 
 static char* _del_left_trim(char *str);
 static char* _del_both_trim(char *str);
@@ -7,6 +8,46 @@ static int _parse_kv_pair(char* key, char *value, struct sc_config* sc_config);
 static int _atoui_16(char *in, uint16_t *out);
 static int _atoui_32(char *in, uint32_t *out);
 static void _del_change_line(char *str);
+
+/* ==================== core operation ==================== */
+
+/*!
+ * \brief   stick the thread to a particular core
+ * \param   core_id     the index of the core
+ * \return  zero for successfully sticking
+ */
+int stick_this_thread_to_core(uint32_t core_id) {
+    if(check_core_id(core_id) != SC_SUCCESS){
+        SC_ERROR("failed to stick current thread to core %u", core_id);
+        return SC_ERROR_INPUT;
+    }
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+
+    pthread_t current_thread = pthread_self();
+    return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+}
+
+/*!
+ * \brief   check whether the index of the core exceed physical range
+ * \param   core_id     the index of the core
+ * \return  zero for successfully checking
+ */
+int check_core_id(uint32_t core_id){
+    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (core_id < 0 || core_id >= num_cores){
+        SC_ERROR_DETAILS("given core index (%u) exceed phiscal range (max: %d)", core_id, num_cores)
+        return SC_ERROR_INPUT;
+    }
+    return SC_SUCCESS;
+}
+
+/* ======================================================== */
+
+
+/* ==================== file operation ==================== */
 
 /*!
  * \brief   parse configuration file
@@ -35,11 +76,11 @@ int parse_config(FILE* fp, struct sc_config* sc_config){
                 key = _del_both_trim(key);
                 value = strtok(NULL, delim);
                 if(!value){
-                    printf("key %s without a value inside configuration file\n", key);
+                    SC_WARNING_DETAILS("key %s without a value inside configuration file\n", key);
                     continue;
                 }
                 if(_parse_kv_pair(key, value, sc_config) != SC_SUCCESS){
-                    printf("something is wrong within the configuration file\n");
+                    SC_ERROR("something is wrong within the configuration file\n");
                     return SC_ERROR_INTERNAL;
                 }
             }
@@ -78,7 +119,7 @@ static int _parse_kv_pair(char* key, char *value, struct sc_config* sc_config){
 
             port_mac = (char*)malloc(strlen(p)+1);
             if(!port_mac){
-                printf("Failed to allocate memory for port_mac\n");
+                SC_ERROR_DETAILS("Failed to allocate memory for port_mac\n");
                 result = SC_ERROR_MEMORY;
                 goto free_dev_src;
             }
@@ -114,7 +155,7 @@ free_dev_src:
         goto exit;
 
 invalid_nb_rx_rings_per_port:
-        printf("invalid configuration nb_rx_rings_per_port\n");
+        SC_ERROR_DETAILS("invalid configuration nb_rx_rings_per_port\n");
     }
 
     /* config: number of TX rings per port */
@@ -136,7 +177,7 @@ invalid_nb_rx_rings_per_port:
         goto exit;
 
 invalid_nb_tx_rings_per_port:
-        printf("invalid configuration nb_tx_rings_per_port\n");
+        SC_ERROR_DETAILS("invalid configuration nb_tx_rings_per_port\n");
     }
 
     /* config: whether to enable promiscuous mode */
@@ -155,11 +196,11 @@ invalid_nb_tx_rings_per_port:
         goto exit;
 
 invalid_enable_promiscuous:
-        printf("invalid configuration enable_promiscuous\n");
+        SC_ERROR_DETAILS("invalid configuration enable_promiscuous\n");
     }
 
     /* config: number of cores to used */
-    if(!strcmp(key, "used_cores")){
+    if(!strcmp(key, "used_core_ids")){
         uint16_t nb_used_cores = 0;
         uint32_t core_id = 0;
         char *delim = ",";
@@ -197,7 +238,7 @@ invalid_enable_promiscuous:
         goto exit;
 
 invalid_used_cores:
-            printf("invalid configuration used_cores\n");
+        SC_ERROR_DETAILS("invalid configuration used_cores\n");
     }
 
     /* config: number of memory channels per socket */
@@ -214,12 +255,35 @@ invalid_used_cores:
         goto exit;
 
 invalid_nb_memory_channels_per_socket:
-        printf("invalid configuration nb_memory_channels_per_socket\n");
+        SC_ERROR_DETAILS("invalid configuration nb_memory_channels_per_socket\n");
+    }
+
+    /* config: the core for logging */
+    if(!strcmp(key, "log_core_id")){
+        uint32_t log_core_id;
+        value = _del_both_trim(value);
+        _del_change_line(value);
+        if (_atoui_32(value, &log_core_id) != SC_SUCCESS) {
+            result = SC_ERROR_INPUT;
+            goto invalid_log_core_id;
+        }
+
+        sc_config->log_core_id = log_core_id;
+        goto exit;
+
+invalid_log_core_id:
+        SC_ERROR_DETAILS("invalid configuration log_core_id\n");
     }
 
 exit:
     return result;
 }
+
+/* ======================================================== */
+
+
+
+/* ==================== string operation ==================== */
 
 
 /*!
@@ -283,3 +347,5 @@ static int _atoui_32(char *in, uint32_t *out){
     *out = strtoul(in, NULL, 10);
     return SC_SUCCESS;
 }
+
+/* ========================================================== */

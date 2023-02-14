@@ -2,10 +2,14 @@
 #define _SC_WORKER_H_
 
 #include <rte_launch.h>
+#include <rte_mbuf.h>
+#include <rte_ethdev.h>
 
-int init_worker(struct sc_config *sc_config);
+#define SC_MAX_PKT_BURST 512
+
+int init_worker_threads(struct sc_config *sc_config);
 int init_app(struct sc_config *sc_config);
-int launch_worker(struct sc_config *sc_config);
-int launch_worker_async(struct sc_config *sc_config);
+int launch_worker_threads(struct sc_config *sc_config);
+int launch_worker_threads_async(struct sc_config *sc_config);
 
 #endif
