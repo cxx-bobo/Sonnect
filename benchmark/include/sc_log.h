@@ -22,6 +22,7 @@ fprintf(stderr, "\033[31m%s\033[0m \033[101m\033[97m Error \033[0m ", current_ti
 pthread_mutex_unlock(&timer_mutex);\
 fprintf(stderr, __VA_ARGS__);\
 fprintf(stderr, "\n");\
+fflush(stderr);\
 }
 
 #define SC_ERROR_DETAILS(...) \
@@ -31,6 +32,7 @@ fprintf(stderr, "\
   \033[33mfile:\033[0m       %s;\n\
   \033[33mfunction:\033[0m   %s;\n\
   \033[33mline:\033[0m       %d;\n", __FILE__, __func__, __LINE__);\
+fflush(stderr);\
 }
 
 #define SC_THREAD_ERROR(...) \
@@ -40,6 +42,7 @@ fprintf(stderr, "\033[31m%s\033[0m \033[101m\033[97m lcore %u Error \033[0m ", c
 pthread_mutex_unlock(&timer_mutex);\
 fprintf(stderr, __VA_ARGS__);\
 fprintf(stderr, "\n");\
+fflush(stderr);\
 }
 
 #define SC_THREAD_ERROR_DETAILS(...) \
@@ -50,6 +53,7 @@ fprintf(stderr, "\
   \033[33mfile:\033[0m       %s;\n\
   \033[33mfunction:\033[0m   %s;\n\
   \033[33mline:\033[0m       %d;\n", rte_lcore_id(), __FILE__, __func__, __LINE__);\
+fflush(stderr);\
 }
 
 #define SC_WARNING(...) \
@@ -59,6 +63,7 @@ fprintf(stdout, "\033[31m%s\033[0m \033[103m\033[97m Warning \033[0m ", current_
 pthread_mutex_unlock(&timer_mutex);\
 fprintf(stdout, __VA_ARGS__);\
 fprintf(stdout, "\n");\
+fflush(stdout);\
 }
 
 #define SC_WARNING_DETAILS(...) \
@@ -68,6 +73,7 @@ fprintf(stdout, "\
   \033[33mfile:\033[0m       %s;\n\
   \033[33mfunction:\033[0m   %s;\n\
   \033[33mline:\033[0m       %d;\n", __FILE__, __func__, __LINE__);\
+fflush(stdout);\
 }
 
 #define SC_THREAD_WARNING(...) \
@@ -77,6 +83,7 @@ fprintf(stdout, "\033[31m%s\033[0m \033[103m\033[97m lcore %u Warning \033[0m ",
 pthread_mutex_unlock(&timer_mutex);\
 fprintf(stdout, __VA_ARGS__);\
 fprintf(stdout, "\n");\
+fflush(stdout);\
 }
 
 #define SC_THREAD_WARNING_DETAILS(...) \
@@ -87,6 +94,7 @@ fprintf(stdout, "\
   \033[33mfile:\033[0m       %s;\n\
   \033[33mfunction:\033[0m   %s;\n\
   \033[33mline:\033[0m       %d;\n", rte_lcore_id(), __FILE__, __func__, __LINE__);\
+fflush(stdout);\
 }
 
 #if SC_LOG_ENABLE
@@ -98,6 +106,7 @@ fprintf(stdout, "\033[31m%s\033[0m \033[104m\033[97m Debug \033[0m ", current_ti
 pthread_mutex_unlock(&timer_mutex);\
 fprintf(stdout, __VA_ARGS__);\
 fprintf(stdout, "\n");\
+fflush(stdout);\
 }
 
 #define SC_LOG_DETAILS(...) \
@@ -107,6 +116,7 @@ fprintf(stdout, "\
   \033[33mfile:\033[0m       %s;\n\
   \033[33mfunction:\033[0m   %s;\n\
   \033[33mline:\033[0m       %d;\n", __FILE__, __func__, __LINE__);\
+fflush(stdout);\
 }
 
 #define SC_THREAD_LOG(...) \
@@ -116,6 +126,7 @@ fprintf(stdout, "\033[31m%s\033[0m \033[104m\033[97m lcore %u Debug \033[0m ", c
 pthread_mutex_unlock(&timer_mutex);\
 fprintf(stdout, __VA_ARGS__);\
 fprintf(stdout, "\n");\
+fflush(stdout);\
 }
 
 #define SC_THREAD_LOG_DETAILS(...) \
@@ -126,6 +137,7 @@ fprintf(stdout, "\
   \033[33mfile:\033[0m       %s;\n\
   \033[33mfunction:\033[0m   %s;\n\
   \033[33mline:\033[0m       %d;\n", rte_lcore_id(), __FILE__, __func__, __LINE__);\
+fflush(stdout);\
 }
 #else
 #define SC_LOG(...)

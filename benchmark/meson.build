@@ -11,7 +11,7 @@ dep += meson.get_compiler('c').find_library('pthread')
 
 # specified which application to use
 app = 'sketch'
-add_global_arguments('-DAPP_' + app.to_upper(), language : 'c')
+add_global_arguments('-DAPP_' + app.to_upper(), language: 'c')
 
 # specified the include path
 inc_dirs = include_directories('include', 'include/' + project_name_abbreviation + '_' + app)

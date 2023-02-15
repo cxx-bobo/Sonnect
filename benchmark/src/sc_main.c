@@ -18,8 +18,17 @@
 /* indicator to force shutdown all threads (e.g. worker threads, logging thread, etc.) */
 volatile bool force_quit;
 
+/* path to the configuration files */
+const char* base_conf_path = "../conf/base.conf";
+#ifdef APP_SKETCH
+const char* app_conf_path = "../conf/sketch.conf";
+#else
+const char* app_conf_path = "";
+#endif
+
 static int _init_env(struct sc_config *sc_config, int argc, char **argv);
 static int _check_configuration(struct sc_config *sc_config, int argc, char **argv);
+static int _parse_base_kv_pair(char* key, char *value, struct sc_config* sc_config);
 static void _signal_handler(int signum);
 
 int main(int argc, char **argv){
@@ -45,16 +54,16 @@ int main(int argc, char **argv){
   sc_config->app_config = app_config;
 
   /* open configuration file */
-  fp = fopen("../base.conf", "r");
+  fp = fopen(base_conf_path, "r");
   if(!fp){
-    SC_ERROR("failed to open the configuration file: %s\n", strerror(errno));
+    SC_ERROR("failed to open the base configuration file: %s\n", strerror(errno));
     result = EXIT_FAILURE;
     goto sc_exit;
   }
 
   /* parse configuration file */
-  if(parse_config(fp, sc_config) != SC_SUCCESS){
-    SC_ERROR("failed to parse the configuration file, exit\n");
+  if(parse_config(fp, sc_config, _parse_base_kv_pair) != SC_SUCCESS){
+    SC_ERROR("failed to parse the base configuration file, exit\n");
     result = EXIT_FAILURE;
     goto sc_exit;
   }
@@ -88,7 +97,7 @@ int main(int argc, char **argv){
   }
 
   /* initailize application */
-  if(init_app(sc_config) != SC_SUCCESS){
+  if(init_app(sc_config, app_conf_path) != SC_SUCCESS){
     SC_ERROR("failed to config application\n");
     result = EXIT_FAILURE;
     goto sc_exit;
@@ -242,4 +251,194 @@ static void _signal_handler(int signum) {
 		SC_WARNING("signal %d received, preparing to exit...\n", signum);
 		force_quit = true;
 	}
+}
+
+
+/*!
+ * \brief   parse key-value pair of base config
+ * \param   key         the key of the config pair
+ * \param   value       the value of the config pair
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully parsing
+ */
+static int _parse_base_kv_pair(char* key, char *value, struct sc_config* sc_config){
+    int i, result = SC_SUCCESS;
+    uint16_t nb_ports = 0;
+    
+    /* config: used device */
+    if(!strcmp(key, "port_mac")){
+        char *delim = ",";
+        char *p, *port_mac;
+
+        for(;;){
+            if(nb_ports == 0)
+                p = strtok(value, delim);
+            else
+                p = strtok(NULL, delim);
+            
+            if (!p) break;
+
+            p = del_both_trim(p);
+            del_change_line(p);
+
+            port_mac = (char*)malloc(strlen(p)+1);
+            if(unlikely(!port_mac)){
+                SC_ERROR_DETAILS("Failed to allocate memory for port_mac\n");
+                result = SC_ERROR_MEMORY;
+                goto free_dev_src;
+            }
+            memset(port_mac, 0, strlen(p)+1);
+
+            strcpy(port_mac, p);
+            sc_config->port_mac[nb_ports] = port_mac;
+            nb_ports += 1;
+        }
+
+        goto exit;
+
+free_dev_src:
+        for(i=0; i<nb_ports; i++) free(sc_config->port_mac[i]);
+    }
+
+    /* config: number of RX rings per port */
+    if(!strcmp(key, "nb_rx_rings_per_port")){
+        uint16_t nb_rings;
+        value = del_both_trim(value);
+        del_change_line(value);
+        if(atoui_16(value, &nb_rings) != SC_SUCCESS) {
+            result = SC_ERROR_INPUT;
+            goto invalid_nb_rx_rings_per_port;
+        }
+            
+        if(nb_rings <= 0 || nb_rings > SC_MAX_NB_QUEUE_PER_PORT) {
+            result = SC_ERROR_INPUT;
+            goto invalid_nb_rx_rings_per_port;
+        }
+
+        sc_config->nb_rx_rings_per_port = nb_rings;
+        goto exit;
+
+invalid_nb_rx_rings_per_port:
+        SC_ERROR_DETAILS("invalid configuration nb_rx_rings_per_port\n");
+    }
+
+    /* config: number of TX rings per port */
+    if(!strcmp(key, "nb_tx_rings_per_port")){
+        uint16_t nb_rings;
+        value = del_both_trim(value);
+        del_change_line(value);
+        if (atoui_16(value, &nb_rings) != SC_SUCCESS) {
+            result = SC_ERROR_INPUT;
+            goto invalid_nb_tx_rings_per_port;
+        }
+            
+        if(nb_rings == 0 || nb_rings > SC_MAX_NB_QUEUE_PER_PORT) {
+            result = SC_ERROR_INPUT;
+            goto invalid_nb_tx_rings_per_port;
+        }
+
+        sc_config->nb_tx_rings_per_port = nb_rings;
+        goto exit;
+
+invalid_nb_tx_rings_per_port:
+        SC_ERROR_DETAILS("invalid configuration nb_tx_rings_per_port\n");
+    }
+
+    /* config: whether to enable promiscuous mode */
+    if(!strcmp(key, "enable_promiscuous")){
+        value = del_both_trim(value);
+        del_change_line(value);
+        if (!strcmp(value, "true")){
+            sc_config->enable_promiscuous = true;
+        } else if (!strcmp(value, "false")){
+            sc_config->enable_promiscuous = false;
+        } else {
+            result = SC_ERROR_INPUT;
+            goto invalid_enable_promiscuous;
+        }
+
+        goto exit;
+
+invalid_enable_promiscuous:
+        SC_ERROR_DETAILS("invalid configuration enable_promiscuous\n");
+    }
+
+    /* config: number of cores to used */
+    if(!strcmp(key, "used_core_ids")){
+        uint16_t nb_used_cores = 0;
+        uint32_t core_id = 0;
+        char *delim = ",";
+        char *core_id_str;
+
+        value = del_both_trim(value);
+        del_change_line(value);
+        
+        for(;;){
+            if(nb_used_cores == 0)
+                core_id_str = strtok(value, delim);
+            else
+                core_id_str = strtok(NULL, delim);
+            
+            if (!core_id_str) break;
+
+            core_id_str = del_both_trim(core_id_str);
+            del_change_line(core_id_str);
+
+            if (atoui_32(core_id_str, &core_id) != SC_SUCCESS) {
+                result = SC_ERROR_INPUT;
+                goto invalid_used_cores;
+            }
+
+            if (core_id > SC_MAX_NB_CORES) {
+                result = SC_ERROR_INPUT;
+                goto invalid_used_cores;
+            }
+
+            sc_config->core_ids[nb_used_cores] = core_id;
+            nb_used_cores += 1;
+        }
+
+        sc_config->nb_used_cores = nb_used_cores;
+        goto exit;
+
+invalid_used_cores:
+        SC_ERROR_DETAILS("invalid configuration used_cores\n");
+    }
+
+    /* config: number of memory channels per socket */
+    if(!strcmp(key, "nb_memory_channels_per_socket")){
+        uint16_t nb_memory_channels_per_socket;
+        value = del_both_trim(value);
+        del_change_line(value);
+        if (atoui_16(value, &nb_memory_channels_per_socket) != SC_SUCCESS) {
+            result = SC_ERROR_INPUT;
+            goto invalid_nb_memory_channels_per_socket;
+        }
+
+        sc_config->nb_memory_channels_per_socket = nb_memory_channels_per_socket;
+        goto exit;
+
+invalid_nb_memory_channels_per_socket:
+        SC_ERROR_DETAILS("invalid configuration nb_memory_channels_per_socket\n");
+    }
+
+    /* config: the core for logging */
+    if(!strcmp(key, "log_core_id")){
+        uint32_t log_core_id;
+        value = del_both_trim(value);
+        del_change_line(value);
+        if (atoui_32(value, &log_core_id) != SC_SUCCESS) {
+            result = SC_ERROR_INPUT;
+            goto invalid_log_core_id;
+        }
+
+        sc_config->log_core_id = log_core_id;
+        goto exit;
+
+invalid_log_core_id:
+        SC_ERROR_DETAILS("invalid configuration log_core_id\n");
+    }
+
+exit:
+    return result;
 }

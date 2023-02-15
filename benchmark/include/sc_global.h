@@ -24,6 +24,7 @@
 
 struct app_config {
     int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config);
+    void *internal_config;
 };
 
 struct sc_config {

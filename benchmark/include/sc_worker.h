@@ -10,7 +10,6 @@
 #define SC_MAX_PKT_BURST 512
 
 int init_worker_threads(struct sc_config *sc_config);
-int init_app(struct sc_config *sc_config);
 int launch_worker_threads(struct sc_config *sc_config);
 int launch_worker_threads_async(struct sc_config *sc_config);
 
