@@ -25,8 +25,10 @@
 struct app_config {
     /* callback function: operations while entering the worker loop */
     int (*process_enter)(struct sc_config *sc_config);
-    /* callback function: processing single received packet */
+    /* callback function: processing single received packet (server mode) */
     int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config);
+    /* callback function: client logic (client mode) */
+    int (*process_client)(struct sc_config *sc_config, bool *ready_to_exit);
     /* callback function: operations while exiting the worker loop */
     int (*process_exit)(struct sc_config *sc_config);
 

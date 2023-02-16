@@ -56,6 +56,9 @@ struct _per_core_meta {
     uint64_t nb_pkts;
     uint64_t nb_bytes;
 
+    /* the start/end time of this thread */
+    struct timeval thread_start_time, thread_end_time;
+
     /* latency measure: number of processed packet/bytes */
     struct timeval overall_pkt_process;
     struct timeval overall_hash;
@@ -90,6 +93,7 @@ int _init_app(struct sc_config *sc_config);
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config);
 int _process_enter(struct sc_config *sc_config);
 int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config);
+int _process_client(struct sc_config *sc_config, bool *ready_to_exit);
 int _process_exit(struct sc_config *sc_config);
 
 /* ============================================================== */

@@ -14,7 +14,14 @@ int _worker_loop(void* param){
     int result = SC_SUCCESS;
     uint16_t i, j, queue_id, nb_rx;
     struct sc_config *sc_config = (struct sc_config*)param;
+
+#if defined(ROLE_SERVER)
     static struct rte_mbuf *pkt[SC_MAX_PKT_BURST];
+#endif
+
+#if defined(ROLE_CLIENT)
+    bool ready_to_exit = false;
+#endif
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         if(sc_config->core_ids[i] == rte_lcore_id()){
@@ -33,9 +40,15 @@ int _worker_loop(void* param){
     }
 
     while(!force_quit){
+    /* role: server */
+#if defined(ROLE_SERVER)
         for(i=0; i<sc_config->nb_used_ports; i++){
             for(j=0; j<SC_MAX_PKT_BURST; j++) {
                 pkt[j] = rte_pktmbuf_alloc(sc_config->pktmbuf_pool);
+                if(unlikely(!pkt[j])){
+                    SC_THREAD_ERROR_DETAILS("failed to allocate memory for pktmbuf");
+                    goto worker_exit;
+                }
             }
 
             nb_rx = rte_eth_rx_burst(i, queue_id, pkt, SC_MAX_PKT_BURST);
@@ -47,15 +60,24 @@ int _worker_loop(void* param){
             for(j=0; j<nb_rx; j++){
                 /* Hook Point: Packet Processing */
                 if(sc_config->app_config->process_pkt(pkt[j], sc_config) != SC_SUCCESS){
-                    SC_THREAD_WARNING("failed to process the received frame\n");
+                    SC_THREAD_WARNING("failed to process the received frame");
                 }
             }
-
 free_pkt_mbuf:
             for(j=0; j<SC_MAX_PKT_BURST; j++) {
                 rte_pktmbuf_free(pkt[j]);
             }
         }
+#endif
+
+    /* role: client */
+#if defined(ROLE_CLIENT)
+        /* Hook Point: Packet Preparing */
+        if(sc_config->app_config->process_client(sc_config, &ready_to_exit) != SC_SUCCESS){
+            SC_THREAD_WARNING("failed to prepare a frame to send");
+        }
+        if(ready_to_exit){ break; }
+#endif
     }
 
 exit_callback:

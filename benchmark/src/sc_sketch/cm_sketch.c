@@ -38,7 +38,7 @@ int __cm_update(const char* key, struct sc_config *sc_config){
             += (hash_end.tv_sec - hash_start.tv_sec) * 1000000 
                 + (hash_end.tv_usec - hash_start.tv_usec);
 #endif
-        SC_THREAD_LOG("hash result: %u", hash_result);
+        // SC_THREAD_LOG("hash result: %u", hash_result);
     
         /* step 2: require spin lock */
 #if defined(MODE_LATENCY)
@@ -114,7 +114,7 @@ int __cm_clean(struct sc_config *sc_config){
  * \return  zero for successfully recording
  */
 int __cm_record(const char* key, struct sc_config *sc_config){
-    return SC_ERROR_NOT_IMPLEMENTED;
+    return SC_SUCCESS;
 }
 
 /*!
@@ -122,34 +122,50 @@ int __cm_record(const char* key, struct sc_config *sc_config){
  * \return  evaluate the throughput/latency/accuracy of the sketch
  */
 int __cm_evaluate(struct sc_config *sc_config){
+    SC_THREAD_LOG_LOCK();
+
     /* output latency log */
 #if defined(MODE_LATENCY)
     /* packet process */
     SC_THREAD_LOG("overall pkt process latency: %ld us",
         PER_CORE_META(sc_config).overall_pkt_process.tv_usec);
-    SC_THREAD_LOG("average pkt process latency: %lf us/pkt",
-        PER_CORE_META(sc_config).overall_pkt_process.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+    if(PER_CORE_META(sc_config).nb_pkts > 0){
+        SC_THREAD_LOG("average pkt process latency: %lf us/pkt",
+            PER_CORE_META(sc_config).overall_pkt_process.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+    }
     /* hash */
     SC_THREAD_LOG("overall hash latency: %ld us",
         PER_CORE_META(sc_config).overall_hash.tv_usec);
-    SC_THREAD_LOG("average hash latency: %lf us/pkt",
-        PER_CORE_META(sc_config).overall_hash.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+    if(PER_CORE_META(sc_config).nb_pkts > 0){
+        SC_THREAD_LOG("average hash latency: %lf us/pkt",
+            PER_CORE_META(sc_config).overall_hash.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+    }
     /* lock */
     SC_THREAD_LOG("overall lock latency: %ld us",
         PER_CORE_META(sc_config).overall_lock.tv_usec);
-    SC_THREAD_LOG("average lock latency: %lf us/pkt",
-        PER_CORE_META(sc_config).overall_lock.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+    if(PER_CORE_META(sc_config).nb_pkts > 0){
+        SC_THREAD_LOG("average lock latency: %lf us/pkt",
+            PER_CORE_META(sc_config).overall_lock.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+    }
     /* update */
     SC_THREAD_LOG("overall update latency: %ld us",
         PER_CORE_META(sc_config).overall_update.tv_usec);
-    SC_THREAD_LOG("average update latency: %lf us/pkt",
-        PER_CORE_META(sc_config).overall_update.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+    if(PER_CORE_META(sc_config).nb_pkts > 0){
+        SC_THREAD_LOG("average update latency: %lf us/pkt",
+            PER_CORE_META(sc_config).overall_update.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+    }
 #endif
 
     /* output throughput log */
 #if defined(MODE_THROUGHPUT)
-
+    SC_THREAD_LOG("thread execute duration: %ld us", 
+        PER_CORE_META(sc_config).thread_end_time.tv_sec * 1000000 
+        + PER_CORE_META(sc_config).thread_end_time.tv_usec 
+        - PER_CORE_META(sc_config).thread_start_time.tv_sec * 1000000 
+        - PER_CORE_META(sc_config).thread_start_time.tv_usec 
+    );
 #endif
 
+    SC_THREAD_LOG_UNLOCK();
     return SC_SUCCESS;
 }

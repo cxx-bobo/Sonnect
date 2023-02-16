@@ -27,8 +27,11 @@ int init_app(struct sc_config *sc_config, const char *app_conf_path){
     /* specify pkt entering callback function */
     sc_config->app_config->process_enter = _process_enter;
 
-    /* specify pkt processing callback function */
+    /* specify pkt processing callback function (server mode) */
     sc_config->app_config->process_pkt = _process_pkt;
+
+    /* specify client callback function (server mode) */
+    sc_config->app_config->process_client = _process_client;
 
     /* specify pkt exiting callback function */
     sc_config->app_config->process_exit = _process_exit;

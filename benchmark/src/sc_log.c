@@ -3,6 +3,7 @@
 #include "sc_utils.h"
 
 char current_time_str[128];
+pthread_mutex_t thread_log_mutex;
 pthread_mutex_t timer_mutex;
 extern volatile bool force_quit;
 
@@ -54,6 +55,12 @@ int init_logging_thread(struct sc_config *sc_config){
     /* initialize mutex lock for timer */
     if(pthread_mutex_init(&timer_mutex, NULL) != 0){
         SC_ERROR_DETAILS("failed to initialize timer mutex");
+        return SC_ERROR_INTERNAL;
+    }
+
+    /* initialize log lock for each thread */
+    if(pthread_mutex_init(&thread_log_mutex, NULL) != 0){
+        SC_ERROR_DETAILS("failed to initialize per-thread log mutex");
         return SC_ERROR_INTERNAL;
     }
 

@@ -138,6 +138,10 @@ exit:
  * \return  zero for successfully executing
  */
 int _process_enter(struct sc_config *sc_config){
+    /* record the start time of this thread */
+    gettimeofday(&PER_CORE_META(sc_config).thread_start_time, NULL);
+
+    goto process_enter_exit;
 process_enter_warning:
     SC_WARNING("error occured while executing entering callback");
 process_enter_exit:
@@ -192,20 +196,20 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
         _udp_hdr->dst_port
     );
 
-    SC_LOG("tuple key: %s, size: %ld", tuple_key, sizeof(tuple_key));
+    // SC_LOG("tuple key: %s, size: %ld", tuple_key, sizeof(tuple_key));
 
-    printf("recv ether frame\n");
-    printf("- source MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-            " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-        _eth_addr->src_addr.addr_bytes[0], _eth_addr->src_addr.addr_bytes[1],
-        _eth_addr->src_addr.addr_bytes[2], _eth_addr->src_addr.addr_bytes[3],
-        _eth_addr->src_addr.addr_bytes[4], _eth_addr->src_addr.addr_bytes[5]);
-    printf("- dest MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-            " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-        _eth_addr->dst_addr.addr_bytes[0], _eth_addr->dst_addr.addr_bytes[1],
-        _eth_addr->dst_addr.addr_bytes[2], _eth_addr->dst_addr.addr_bytes[3],
-        _eth_addr->dst_addr.addr_bytes[4], _eth_addr->dst_addr.addr_bytes[5]);
-    fflush(stdout);
+    // printf("recv ether frame\n");
+    // printf("- source MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+    //         " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+    //     _eth_addr->src_addr.addr_bytes[0], _eth_addr->src_addr.addr_bytes[1],
+    //     _eth_addr->src_addr.addr_bytes[2], _eth_addr->src_addr.addr_bytes[3],
+    //     _eth_addr->src_addr.addr_bytes[4], _eth_addr->src_addr.addr_bytes[5]);
+    // printf("- dest MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+    //         " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+    //     _eth_addr->dst_addr.addr_bytes[0], _eth_addr->dst_addr.addr_bytes[1],
+    //     _eth_addr->dst_addr.addr_bytes[2], _eth_addr->dst_addr.addr_bytes[3],
+    //     _eth_addr->dst_addr.addr_bytes[4], _eth_addr->dst_addr.addr_bytes[5]);
+    // fflush(stdout);
 
     /* update sketch */
     if(SC_SUCCESS != INTERNAL_CONF(sc_config)->sketch_core.update(tuple_key, sc_config)){
@@ -242,11 +246,25 @@ process_pkt_exit:
 }
 
 /*!
+ * \brief   callback for client logic
+ * \param   sc_config       the global configuration
+ * \param   ready_to_exit   indicator for exiting worker loop
+ * \return  zero for successfully executing
+ */
+int _process_client(struct sc_config *sc_config, bool *ready_to_exit){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
  * \brief   callback while exiting application
  * \param   sc_config   the global configuration
  * \return  zero for successfully executing
  */
 int _process_exit(struct sc_config *sc_config){
+    /* record the start time of this thread */
+    gettimeofday(&PER_CORE_META(sc_config).thread_end_time, NULL);
+
+    /* start evaluation process */
     if(SC_SUCCESS != INTERNAL_CONF(sc_config)->sketch_core.evaluate(sc_config)){
         goto process_exit_warning;
     }

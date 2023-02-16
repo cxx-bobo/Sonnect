@@ -8,12 +8,16 @@
 
 extern char current_time_str[128];
 extern pthread_mutex_t timer_mutex;
+extern pthread_mutex_t thread_log_mutex;
 
 int init_logging_thread(struct sc_config *sc_config);
 int launch_logging_thread_async(struct sc_config *sc_config);
 int join_logging_thread(struct sc_config *sc_config);
 
 #define SC_LOG_ENABLE true
+
+#define SC_THREAD_LOG_LOCK() pthread_mutex_lock(&thread_log_mutex);
+#define SC_THREAD_LOG_UNLOCK() pthread_mutex_unlock(&thread_log_mutex);
 
 #define SC_ERROR(...) \
 {\
