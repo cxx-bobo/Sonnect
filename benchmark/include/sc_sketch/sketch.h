@@ -1,6 +1,8 @@
 #ifndef _SC_SKETCH_H_
 #define _SC_SKETCH_H_
 
+#include <sys/time.h>
+
 #include <rte_malloc.h>
 #include <rte_mbuf.h>
 #include <rte_ether.h>
@@ -25,17 +27,18 @@ enum {
 
 #define TUPLE_KEY_LENGTH 57
 
-struct hash_field {
-    struct rte_ether_hdr    *eth_hdr;
-    struct rte_ipv4_hdr     *ipv4_hdr;
-    struct rte_udp_hdr      *udp_hdr;
-};
-
 /* common sketch components */
 struct _sketch_core {
+    /* update the sketch structure using a specific key */
     int (*update)(const char* key, struct sc_config *sc_config);
+    /* query the sketch structure using a specific key */
     int (*query)(const char* key, void *result, struct sc_config *sc_config);
+    /* clean the sketch structure */
     int (*clean)(struct sc_config *sc_config);
+    /* record the actual value for a specific key */
+    int (*record)(const char* key, struct sc_config *sc_config);
+    /* evaluate the throughput/latency/accuracy of the sketch */
+    int (*evaluate)(struct sc_config *sc_config);
 };
 
 /* memory of count-min sketch */
@@ -47,10 +50,34 @@ struct cm_sketch {
 
 /* =================== Application Interfaces =================== */
 
+/* per-core metadata of all sketches */
+struct _per_core_meta {
+    /* throughput measure: number of processed packet/bytes */
+    uint64_t nb_pkts;
+    uint64_t nb_bytes;
+
+    /* latency measure: number of processed packet/bytes */
+    struct timeval overall_pkt_process;
+    struct timeval overall_hash;
+    struct timeval overall_lock;
+    struct timeval overall_update;
+};
+#define PER_CORE_META(scc) ((struct _per_core_meta*)scc->per_core_meta)[rte_lcore_id()]
+
 /* definition of internal config */
 struct _internal_config {
-    uint16_t sketch_type;
     struct _sketch_core sketch_core;
+    
+    /* type of the used sketch */
+    uint16_t sketch_type;
+
+    /* executing mode */
+    uint16_t sketch_mode;
+    
+    /* number of processed packet/bytes */
+    uint64_t nb_pkts;
+    uint64_t nb_bytes;
+
     /* cm sketch related config */
     uint32_t cm_nb_rows;
     uint32_t cm_nb_counters_per_row;
@@ -61,7 +88,9 @@ struct _internal_config {
 /* must-provided interfaces */
 int _init_app(struct sc_config *sc_config);
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config);
+int _process_enter(struct sc_config *sc_config);
 int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config);
+int _process_exit(struct sc_config *sc_config);
 
 /* ============================================================== */
 

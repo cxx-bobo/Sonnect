@@ -23,7 +23,14 @@
 #define SC_MAX_NB_CORES RTE_MAX_LCORE
 
 struct app_config {
+    /* callback function: operations while entering the worker loop */
+    int (*process_enter)(struct sc_config *sc_config);
+    /* callback function: processing single received packet */
     int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config);
+    /* callback function: operations while exiting the worker loop */
+    int (*process_exit)(struct sc_config *sc_config);
+
+    /* internal configuration of the application */
     void *internal_config;
 };
 
@@ -51,6 +58,9 @@ struct sc_config {
 
     /* app */
     struct app_config *app_config;
+
+    /* per-core metadata */
+    void **per_core_meta;
 };
 
 #endif

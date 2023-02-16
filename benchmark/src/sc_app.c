@@ -16,7 +16,7 @@ int init_app(struct sc_config *sc_config, const char *app_conf_path){
     int result;
     FILE* fp = NULL;
 
-     /* allocate internal config */
+    /* allocate internal config */
     struct _internal_config *_internal_config = (struct _internal_config*)malloc(sizeof(struct _internal_config));
     if(unlikely(!_internal_config)){
         SC_ERROR_DETAILS("failed to allocate memory for internal_config");
@@ -24,8 +24,14 @@ int init_app(struct sc_config *sc_config, const char *app_conf_path){
     }
     sc_config->app_config->internal_config = _internal_config;
 
-    /* specify pkt process function */
+    /* specify pkt entering callback function */
+    sc_config->app_config->process_enter = _process_enter;
+
+    /* specify pkt processing callback function */
     sc_config->app_config->process_pkt = _process_pkt;
+
+    /* specify pkt exiting callback function */
+    sc_config->app_config->process_exit = _process_exit;
 
     /* open application configuration file */
     fp = fopen(app_conf_path, "r");

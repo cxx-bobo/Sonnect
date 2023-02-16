@@ -27,6 +27,11 @@ int _worker_loop(void* param){
         }
     }
 
+    /* Hook Point: Enter */
+    if(sc_config->app_config->process_enter(sc_config) != SC_SUCCESS){
+        SC_THREAD_WARNING("error occurs while executing enter callback\n");
+    }
+
     while(!force_quit){
         for(i=0; i<sc_config->nb_used_ports; i++){
             for(j=0; j<SC_MAX_PKT_BURST; j++) {
@@ -40,6 +45,7 @@ int _worker_loop(void* param){
             SC_THREAD_LOG("received %u ethernet frames", nb_rx);
 
             for(j=0; j<nb_rx; j++){
+                /* Hook Point: Packet Processing */
                 if(sc_config->app_config->process_pkt(pkt[j], sc_config) != SC_SUCCESS){
                     SC_THREAD_WARNING("failed to process the received frame\n");
                 }
@@ -52,6 +58,12 @@ free_pkt_mbuf:
         }
     }
 
+exit_callback:
+    /* Hook Point: Exit */
+    if(sc_config->app_config->process_exit(sc_config) != SC_SUCCESS){
+        SC_THREAD_WARNING("error occurs while executing exit callback\n");
+    }
+    
 worker_exit:
     SC_THREAD_WARNING("worker thread exit\n");
     return result;
