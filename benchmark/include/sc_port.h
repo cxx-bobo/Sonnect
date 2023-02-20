@@ -2,7 +2,9 @@
 #define _SC_PORT_H_
 
 #include <stdlib.h>
+
 #include <rte_ethdev.h>
+#include <rte_version.h>
 
 /*!
  * \brief configurable number of RX/TX ring descriptors

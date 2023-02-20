@@ -7,6 +7,7 @@
 
 #include <rte_mbuf.h>
 #include <rte_mempool.h>
+#include <rte_version.h>
 
 #include "sc_global.h"
 
@@ -21,20 +22,6 @@
 
 /* maximum number of lcores to used */
 #define SC_MAX_NB_CORES RTE_MAX_LCORE
-
-struct app_config {
-    /* callback function: operations while entering the worker loop */
-    int (*process_enter)(struct sc_config *sc_config);
-    /* callback function: processing single received packet (server mode) */
-    int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config);
-    /* callback function: client logic (client mode) */
-    int (*process_client)(struct sc_config *sc_config, bool *ready_to_exit);
-    /* callback function: operations while exiting the worker loop */
-    int (*process_exit)(struct sc_config *sc_config);
-
-    /* internal configuration of the application */
-    void *internal_config;
-};
 
 struct sc_config {
     /* dpdk lcore */
@@ -62,7 +49,21 @@ struct sc_config {
     struct app_config *app_config;
 
     /* per-core metadata */
-    void **per_core_meta;
+    void *per_core_meta;
+};
+
+struct app_config {
+    /* callback function: operations while entering the worker loop */
+    int (*process_enter)(struct sc_config *sc_config);
+    /* callback function: processing single received packet (server mode) */
+    int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config);
+    /* callback function: client logic (client mode) */
+    int (*process_client)(struct sc_config *sc_config, bool *ready_to_exit);
+    /* callback function: operations while exiting the worker loop */
+    int (*process_exit)(struct sc_config *sc_config);
+
+    /* internal configuration of the application */
+    void *internal_config;
 };
 
 #endif

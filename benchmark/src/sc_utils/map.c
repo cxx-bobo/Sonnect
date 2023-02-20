@@ -8,7 +8,7 @@
 int new_kv_map(sc_kv_map_t **p){
     *p = (sc_kv_map_t*)rte_malloc(NULL, sizeof(sc_kv_map_t), 0);
     if(!(*p)){
-        SC_ERROR_DETAILS("failed to allocate memory for sc_kv_map_t: %d", strerror(errno));
+        SC_ERROR_DETAILS("failed to allocate memory for sc_kv_map_t: %s", strerror(errno));
         return SC_ERROR_MEMORY;
     }
     memset((*p), 0, sizeof(sc_kv_map_t));
@@ -31,14 +31,14 @@ int insert_kv_map(sc_kv_map_t *p, void *key, uint64_t key_len, void *value, uint
 
     sc_kv_entry_t *entry = (sc_kv_entry_t*)rte_malloc(NULL, sizeof(sc_kv_entry_t), 0);
     if(!entry){
-        SC_ERROR_DETAILS("failed to allocate memory for sc_kv_entry_t: %d", strerror(errno));
+        SC_ERROR_DETAILS("failed to allocate memory for sc_kv_entry_t: %s", strerror(errno));
         result = SC_ERROR_MEMORY;
         goto insert_kv_map_exit;
     }
     
     void *_key = (void*)rte_malloc(NULL, key_len, 0);
     if(!_key){
-        SC_ERROR_DETAILS("failed to allocate memory for key: %d", strerror(errno));
+        SC_ERROR_DETAILS("failed to allocate memory for key: %s", strerror(errno));
         result = SC_ERROR_MEMORY;
         goto free_sc_kv_entry_t;
     }
@@ -46,7 +46,7 @@ int insert_kv_map(sc_kv_map_t *p, void *key, uint64_t key_len, void *value, uint
 
     void *_value = (void*)rte_malloc(NULL, value_len, 0);
     if(!_value){
-        SC_ERROR_DETAILS("failed to allocate memory for value: %d", strerror(errno));
+        SC_ERROR_DETAILS("failed to allocate memory for value: %s", strerror(errno));
         result = SC_ERROR_MEMORY;
         goto free_key;
     }
@@ -136,7 +136,6 @@ int delete_kv_map(sc_kv_map_t *p, void *key, uint64_t key_len){
  * \return  zero for successfully updating  
  */
 int update_kv_map(sc_kv_map_t *p, void *key, uint64_t key_len, void *value, uint64_t value_len){
-    int result;
     unsigned char *new_value;
     sc_kv_entry_t *pointer = p->head;
 
@@ -154,7 +153,7 @@ int update_kv_map(sc_kv_map_t *p, void *key, uint64_t key_len, void *value, uint
     /* update */
     new_value = (unsigned char*)rte_malloc(NULL, sizeof(unsigned char) * value_len, 0);
     if(!new_value){
-        SC_ERROR_DETAILS("failed to allocate memory for value: %d", strerror(errno));
+        SC_ERROR_DETAILS("failed to allocate memory for value: %s", strerror(errno));
         return SC_ERROR_MEMORY;
     }
     memcpy(new_value, value, value_len);

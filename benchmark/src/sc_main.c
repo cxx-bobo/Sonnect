@@ -7,6 +7,7 @@
 
 #include <gmp.h>
 
+#include "sc_compile_debug.h"
 #include "sc_global.h"
 #include "sc_port.h"
 #include "sc_mbuf.h"

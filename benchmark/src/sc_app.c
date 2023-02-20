@@ -13,7 +13,6 @@
  * \return  zero for successfully initialization
  */
 int init_app(struct sc_config *sc_config, const char *app_conf_path){
-    int result;
     FILE* fp = NULL;
 
     /* allocate internal config */
@@ -30,7 +29,7 @@ int init_app(struct sc_config *sc_config, const char *app_conf_path){
     /* specify pkt processing callback function (server mode) */
     sc_config->app_config->process_pkt = _process_pkt;
 
-    /* specify client callback function (server mode) */
+    /* specify client callback function (client mode) */
     sc_config->app_config->process_client = _process_client;
 
     /* specify pkt exiting callback function */

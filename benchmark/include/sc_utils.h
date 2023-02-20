@@ -10,6 +10,8 @@
 #include <sched.h>
 #include <unistd.h>
 
+#include "sc_global.h"
+
 /*!
  * \brief all return status
  */
@@ -31,6 +33,8 @@ int parse_config(FILE* fp, struct sc_config* sc_config,
     int (*parse_kv_pair)(char* key, char *value, struct sc_config* sc_config));
 
 /* string operation */
+#define XSTR(x) STR(x)
+#define STR(x) #x
 char* del_left_trim(char *str);
 char* del_both_trim(char *str);
 void del_change_line(char *str);

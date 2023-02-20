@@ -24,7 +24,7 @@ int _init_app(struct sc_config *sc_config){
         SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_meta");
         return SC_ERROR_MEMORY;
     }
-    memset(per_core_meta, sizeof(struct _per_core_meta)*sc_config->nb_used_cores, 0);
+    memset(per_core_meta, 0, sizeof(struct _per_core_meta)*sc_config->nb_used_cores);
     sc_config->per_core_meta = per_core_meta;
 
     /* allocate memory space for sketch */
@@ -36,7 +36,7 @@ int _init_app(struct sc_config *sc_config){
             SC_ERROR_DETAILS("failed to rte_malloc memory for cm_sketch");
             return SC_ERROR_MEMORY;
         }
-        memset(cm_sketch, sizeof(struct cm_sketch), 0);
+        memset(cm_sketch, 0, sizeof(struct cm_sketch));
         INTERNAL_CONF(sc_config)->cm_sketch = cm_sketch;
 
         /* allocate counters */
@@ -47,7 +47,7 @@ int _init_app(struct sc_config *sc_config){
             SC_ERROR_DETAILS("failed to rte_malloc memory for counters");
             return SC_ERROR_MEMORY;
         }
-        memset(counters, counter_size, 0);
+        memset(counters, 0, counter_size);
         INTERNAL_CONF(sc_config)->cm_sketch->counters = counters;
 
         /* initialize hash function seeds */
@@ -56,7 +56,7 @@ int _init_app(struct sc_config *sc_config){
             SC_ERROR_DETAILS("failed to rte_malloc memory for hash_seeds");
             return SC_ERROR_MEMORY;
         }
-        memset(hash_seeds, sizeof(uint32_t)*INTERNAL_CONF(sc_config)->cm_nb_rows, 0);
+        memset(hash_seeds, 0, sizeof(uint32_t)*INTERNAL_CONF(sc_config)->cm_nb_rows);
         for(i=0; i<INTERNAL_CONF(sc_config)->cm_nb_rows; i++){
             hash_seeds[i] = random_unsigned_int32();
         }
@@ -171,11 +171,11 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
     /* initialize tuple key */
     struct rte_ether_hdr *_eth_addr 
         = rte_pktmbuf_mtod_offset(pkt, struct rte_ether_hdr*, 0);
-    struct rte_ipv4_hdr *_ipv4_hdr 
-        = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr*, RTE_ETHER_HDR_LEN);
-    struct rte_udp_hdr *_udp_hdr
-        = rte_pktmbuf_mtod_offset(
-            pkt, struct rte_udp_hdr*, RTE_ETHER_HDR_LEN+rte_ipv4_hdr_len(_ipv4_hdr));
+    // struct rte_ipv4_hdr *_ipv4_hdr 
+    //     = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr*, RTE_ETHER_HDR_LEN);
+    // struct rte_udp_hdr *_udp_hdr
+    //     = rte_pktmbuf_mtod_offset(
+    //         pkt, struct rte_udp_hdr*, RTE_ETHER_HDR_LEN+rte_ipv4_hdr_len(_ipv4_hdr));
     
     /* five-tuples */
     // sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%u%u%u%u",
@@ -204,25 +204,41 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
     // );
 
     /* ethernet-tuples */
-    SC_THREAD_LOG("setup tuples");
-    sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-        /* source mac address */
-        _eth_addr->src_addr.addr_bytes[0],
-        _eth_addr->src_addr.addr_bytes[1],
-        _eth_addr->src_addr.addr_bytes[2],
-        _eth_addr->src_addr.addr_bytes[3],
-        _eth_addr->src_addr.addr_bytes[4],
-        _eth_addr->src_addr.addr_bytes[5],
-        /* destination mac address */
-        _eth_addr->dst_addr.addr_bytes[0],
-        _eth_addr->dst_addr.addr_bytes[1],
-        _eth_addr->dst_addr.addr_bytes[2],
-        _eth_addr->dst_addr.addr_bytes[3],
-        _eth_addr->dst_addr.addr_bytes[4],
-        _eth_addr->dst_addr.addr_bytes[5]
-    );
-    SC_THREAD_LOG("end tuples");
-
+    #if RTE_VERSION <= RTE_VERSION_NUM(20, 11, 0, 0)
+        sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+            /* source mac address */
+            _eth_addr->src_addr.addr_bytes[0],
+            _eth_addr->src_addr.addr_bytes[1],
+            _eth_addr->src_addr.addr_bytes[2],
+            _eth_addr->src_addr.addr_bytes[3],
+            _eth_addr->src_addr.addr_bytes[4],
+            _eth_addr->src_addr.addr_bytes[5],
+            /* destination mac address */
+            _eth_addr->dst_addr.addr_bytes[0],
+            _eth_addr->dst_addr.addr_bytes[1],
+            _eth_addr->dst_addr.addr_bytes[2],
+            _eth_addr->dst_addr.addr_bytes[3],
+            _eth_addr->dst_addr.addr_bytes[4],
+            _eth_addr->dst_addr.addr_bytes[5]
+        );
+    #else
+        sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+            /* source mac address */
+            _eth_addr->s_addr.addr_bytes[0],
+            _eth_addr->s_addr.addr_bytes[1],
+            _eth_addr->s_addr.addr_bytes[2],
+            _eth_addr->s_addr.addr_bytes[3],
+            _eth_addr->s_addr.addr_bytes[4],
+            _eth_addr->s_addr.addr_bytes[5],
+            /* destination mac address */
+            _eth_addr->d_addr.addr_bytes[0],
+            _eth_addr->d_addr.addr_bytes[1],
+            _eth_addr->d_addr.addr_bytes[2],
+            _eth_addr->d_addr.addr_bytes[3],
+            _eth_addr->d_addr.addr_bytes[4],
+            _eth_addr->d_addr.addr_bytes[5]
+        );
+    #endif
     // SC_LOG("tuple key: %s, size: %ld", tuple_key, sizeof(tuple_key));
 
     // printf("recv ether frame\n");

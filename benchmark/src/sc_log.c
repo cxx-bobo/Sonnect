@@ -36,6 +36,7 @@ void* _log_loop(void *args){
     }
 
     SC_WARNING("logging thread exit\n");
+    return NULL;
 }
 
 /*!
@@ -86,7 +87,7 @@ int launch_logging_thread_async(struct sc_config *sc_config){
  * \return  zero for successfully launch
  */
 int join_logging_thread(struct sc_config *sc_config){
-    pthread_join(sc_config->logging_thread, NULL);
+    pthread_join(*(sc_config->logging_thread), NULL);
     pthread_mutex_destroy(&timer_mutex);
     return SC_SUCCESS;
 }

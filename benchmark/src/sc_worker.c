@@ -63,7 +63,7 @@ int _worker_loop(void* param){
                         SC_THREAD_WARNING("failed to process the received frame");
                     }
                 }
-    free_pkt_mbuf:
+            free_pkt_mbuf:
                 for(j=0; j<SC_MAX_PKT_BURST; j++) {
                     rte_pktmbuf_free(pkt[j]);
                 }

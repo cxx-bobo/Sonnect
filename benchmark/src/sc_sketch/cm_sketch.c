@@ -239,28 +239,28 @@ int __cm_evaluate(struct sc_config *sc_config){
             PER_CORE_META(sc_config).overall_pkt_process.tv_usec);
         if(PER_CORE_META(sc_config).nb_pkts > 0){
             SC_THREAD_LOG("average pkt process latency: %f us/pkt",
-                PER_CORE_META(sc_config).overall_pkt_process.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+                (float)PER_CORE_META(sc_config).overall_pkt_process.tv_usec / (float)PER_CORE_META(sc_config).nb_pkts);
         }
         /* hash */
         SC_THREAD_LOG("overall hash latency: %ld us",
             PER_CORE_META(sc_config).overall_hash.tv_usec);
         if(PER_CORE_META(sc_config).nb_pkts > 0){
             SC_THREAD_LOG("average hash latency: %f us/pkt",
-                PER_CORE_META(sc_config).overall_hash.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+                (float)PER_CORE_META(sc_config).overall_hash.tv_usec / (float)PER_CORE_META(sc_config).nb_pkts);
         }
         /* lock */
         SC_THREAD_LOG("overall lock latency: %ld us",
             PER_CORE_META(sc_config).overall_lock.tv_usec);
         if(PER_CORE_META(sc_config).nb_pkts > 0){
             SC_THREAD_LOG("average lock latency: %f us/pkt",
-                PER_CORE_META(sc_config).overall_lock.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+                (float)PER_CORE_META(sc_config).overall_lock.tv_usec / (float)PER_CORE_META(sc_config).nb_pkts);
         }
         /* update */
         SC_THREAD_LOG("overall update latency: %ld us",
             PER_CORE_META(sc_config).overall_update.tv_usec);
         if(PER_CORE_META(sc_config).nb_pkts > 0){
             SC_THREAD_LOG("average update latency: %f us/pkt",
-                PER_CORE_META(sc_config).overall_update.tv_usec / PER_CORE_META(sc_config).nb_pkts);
+                (float)PER_CORE_META(sc_config).overall_update.tv_usec / (float)PER_CORE_META(sc_config).nb_pkts);
         }
     #endif
 

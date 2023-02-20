@@ -11,12 +11,21 @@ static void _show_offloads(uint64_t offloads, const char *(show_offload)(uint64_
  * \brief dpdk ethernet port configuration
  */
 static struct rte_eth_conf port_conf_default = {
-    .rxmode = {
-        .mq_mode = RTE_ETH_MQ_RX_RSS,
-    },
-    .txmode = {
-        .mq_mode = RTE_ETH_MQ_TX_NONE,
-    },
+    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+        .rxmode = {
+            .mq_mode = RTE_ETH_MQ_RX_RSS,
+        },
+        .txmode = {
+            .mq_mode = RTE_ETH_MQ_TX_NONE,
+        },
+    #else
+        .rxmode = {
+            .mq_mode = ETH_MQ_RX_RSS,
+        },
+        .txmode = {
+            .mq_mode = ETH_MQ_TX_NONE,
+        },
+    #endif
 };
 
 /*!
@@ -133,10 +142,13 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
         }
 	}
 
-    printf("finish init port %u, MAC address: " RTE_ETHER_ADDR_PRT_FMT "\n\n",
-        port_index,
-        RTE_ETHER_ADDR_BYTES(&eth_addr));
-
+    /* print finish message */
+    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+        printf("finish init port %u, MAC address: " RTE_ETHER_ADDR_PRT_FMT "\n\n",
+            port_index,
+            RTE_ETHER_ADDR_BYTES(&eth_addr));
+    #endif
+        printf("finish init port %u\n\n", port_index);
     return SC_SUCCESS;
 }
 
@@ -178,11 +190,14 @@ static void _print_port_info(uint16_t port_index){
     struct rte_eth_dev_info dev_info;
     struct rte_eth_rxq_info rx_queue_info;
     struct rte_eth_txq_info tx_queue_info;
-    struct rte_eth_fc_conf fc_conf;
     struct rte_eth_dev_owner owner;
     struct rte_ether_addr mac;
     struct rte_eth_rss_conf rss_conf;
     char link_status_text[RTE_ETH_LINK_MAX_STR_LEN];
+
+    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+        struct rte_eth_fc_conf fc_conf;
+    #endif
 
     printf("\nUSED PORTs:\n");
     
@@ -218,9 +233,10 @@ static void _print_port_info(uint16_t port_index){
     }
 
     /* print flow control */
-    ret = rte_eth_dev_flow_ctrl_get(port_index, &fc_conf);
-    if (ret == 0 && fc_conf.mode != RTE_ETH_FC_NONE)  {
-        printf("\t  -- flow control mode %s%s high %u low %u pause %u%s%s\n",
+    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+        ret = rte_eth_dev_flow_ctrl_get(port_index, &fc_conf);
+        if (ret == 0 && fc_conf.mode != RTE_ETH_FC_NONE)  {
+            printf("\t  -- flow control mode %s%s high %u low %u pause %u%s%s\n",
                 fc_conf.mode == RTE_ETH_FC_RX_PAUSE ? "rx " :
                 fc_conf.mode == RTE_ETH_FC_TX_PAUSE ? "tx " :
                 fc_conf.mode == RTE_ETH_FC_FULL ? "full" : "???",
@@ -230,7 +246,8 @@ static void _print_port_info(uint16_t port_index){
                 fc_conf.pause_time,
                 fc_conf.send_xon ? " xon" : "",
                 fc_conf.mac_ctrl_frame_fwd ? " mac_ctrl" : "");
-    }
+        }
+    #endif
 
     /* print mac address */
     ret = rte_eth_macaddr_get(port_index, &mac);
