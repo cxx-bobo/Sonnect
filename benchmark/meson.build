@@ -14,7 +14,11 @@ app = 'sketch'
 add_global_arguments('-DAPP_' + app.to_upper(), language: 'c')
 
 # specified the include path
-inc_dirs = include_directories('include', 'include/' + project_name_abbreviation + '_' + app)
+inc_dirs = include_directories(
+	'include', 
+	'include/' + project_name_abbreviation +'_utils', 
+	'include/' + project_name_abbreviation + '_' + app
+)
 
 # specified the sub directory to include more meson.build file
 subdir('src/' + project_name_abbreviation + '_' + app)

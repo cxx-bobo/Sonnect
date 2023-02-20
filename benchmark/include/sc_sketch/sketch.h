@@ -11,6 +11,7 @@
 #include <rte_tcp.h>
 
 #include "sc_global.h"
+#include "sc_utils/map.h"
 
 /* type of the sketch counter */
 typedef uint64_t    l_counter_t;   // 8 bytes
@@ -19,11 +20,6 @@ typedef uint16_t    s_counter_t;   // 2 bytes
 typedef uint8_t     t_counter_t;   // 1 bytes
 
 typedef m_counter_t counter_t;
-
-/* enumerate of all available sketch types */
-enum {
-    SC_SKETCH_TYPE_CM = 0,  // Count-min Sketch
-};
 
 #define TUPLE_KEY_LENGTH 57
 
@@ -42,28 +38,40 @@ struct _sketch_core {
 };
 
 /* memory of count-min sketch */
-struct cm_sketch {
-    counter_t *counters;
-    rte_spinlock_t lock;
-    uint32_t *hash_seeds;
-};
+#if defined(SKETCH_TYPE_CM)
+    struct cm_sketch {
+        counter_t *counters;
+        rte_spinlock_t lock;
+        uint32_t *hash_seeds;
+    };
+#endif
 
 /* =================== Application Interfaces =================== */
 
 /* per-core metadata of all sketches */
 struct _per_core_meta {
-    /* throughput measure: number of processed packet/bytes */
-    uint64_t nb_pkts;
-    uint64_t nb_bytes;
+    #if defined(MODE_LATENCY) || defined(MODE_THROUGHPUT)
+        /* throughput measure: number of processed packet/bytes */
+        uint64_t nb_pkts;
+        uint64_t nb_bytes;
 
-    /* the start/end time of this thread */
-    struct timeval thread_start_time, thread_end_time;
+        /* the start/end time of this thread */
+        struct timeval thread_start_time, thread_end_time;
+    #endif
 
-    /* latency measure: number of processed packet/bytes */
-    struct timeval overall_pkt_process;
-    struct timeval overall_hash;
-    struct timeval overall_lock;
-    struct timeval overall_update;
+    #if defined(MODE_LATENCY)
+        /* latency measure: number of processed packet/bytes */
+        struct timeval overall_pkt_process;
+        struct timeval overall_hash;
+        struct timeval overall_lock;
+        struct timeval overall_update;
+    #endif
+
+    #if defined(MODE_ACCURACY)
+        /* key-value map for recording received flow */
+        sc_kv_map_t *kv_map;
+    #endif
+
 };
 #define PER_CORE_META(scc) ((struct _per_core_meta*)scc->per_core_meta)[rte_lcore_id()]
 
@@ -82,9 +90,11 @@ struct _internal_config {
     uint64_t nb_bytes;
 
     /* cm sketch related config */
-    uint32_t cm_nb_rows;
-    uint32_t cm_nb_counters_per_row;
-    struct cm_sketch *cm_sketch;
+    #if defined(SKETCH_TYPE_CM)
+        uint32_t cm_nb_rows;
+        uint32_t cm_nb_counters_per_row;
+        struct cm_sketch *cm_sketch;
+    #endif
 };
 #define INTERNAL_CONF(scc) ((struct _internal_config*)scc->app_config->internal_config)
 

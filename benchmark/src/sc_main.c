@@ -21,9 +21,9 @@ volatile bool force_quit;
 /* path to the configuration files */
 const char* base_conf_path = "../conf/base.conf";
 #ifdef APP_SKETCH
-const char* app_conf_path = "../conf/sketch.conf";
+  const char* app_conf_path = "../conf/sketch.conf";
 #else
-const char* app_conf_path = "";
+  const char* app_conf_path = "";
 #endif
 
 static int _init_env(struct sc_config *sc_config, int argc, char **argv);
