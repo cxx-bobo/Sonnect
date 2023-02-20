@@ -119,8 +119,6 @@ int __cm_query(const char* key, void *result, struct sc_config *sc_config){
         return SC_SUCCESS;
     }
 
-
-
     return SC_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -195,8 +193,7 @@ int __cm_evaluate(struct sc_config *sc_config){
         counter_t cm_result;
 
         for(i=0; i<PER_CORE_META(sc_config).kv_map->length; i++){
-            /* obraub actual result */
-            
+            /* obtain actual result */
             if(SC_SUCCESS != get_kv_entry_by_index(PER_CORE_META(sc_config).kv_map, i, &entry)){
                 SC_THREAD_ERROR(
                     "failed to get key-value entry from key-value map with index %ld, something is wrong", i);
