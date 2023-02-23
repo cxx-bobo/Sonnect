@@ -17,11 +17,11 @@ int _worker_loop(void* param){
 
     #if defined(ROLE_SERVER)
         static struct rte_mbuf *pkt[SC_MAX_PKT_BURST];
-    #endif
+    #endif // ROLE_SERVER
 
     #if defined(ROLE_CLIENT)
         bool ready_to_exit = false;
-    #endif
+    #endif // ROLE_CLIENT
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         if(sc_config->core_ids[i] == rte_lcore_id()){
@@ -68,7 +68,7 @@ int _worker_loop(void* param){
                     rte_pktmbuf_free(pkt[j]);
                 }
             }
-        #endif
+        #endif // ROLE_SERVER
 
         /* role: client */
         #if defined(ROLE_CLIENT)
@@ -77,7 +77,7 @@ int _worker_loop(void* param){
                 SC_THREAD_WARNING("failed to prepare a frame to send");
             }
             if(ready_to_exit){ break; }
-        #endif
+        #endif // ROLE_CLIENT
     }
 
 exit_callback:

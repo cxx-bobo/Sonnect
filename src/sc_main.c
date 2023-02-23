@@ -25,7 +25,7 @@ const char* base_conf_path = "../conf/base.conf";
   const char* app_conf_path = "../conf/sketch.conf";
 #else
   const char* app_conf_path = "";
-#endif
+#endif // APP_*
 
 static int _init_env(struct sc_config *sc_config, int argc, char **argv);
 static int _check_configuration(struct sc_config *sc_config, int argc, char **argv);

@@ -20,8 +20,9 @@ subdir('src/' + project_name_abbreviation + '_' + app)
 # ==================== Third-party Library Detection ====================
 
 # check whether doca exist
-has_doca 				= false
 doca_path 				= '/opt/mellanox/doca'
+message('try to search doca in ' + doca_path)
+has_doca 				= false
 doca_common_dep 		= dependency('doca-common', required: false)
 doca_argp_dep 			= dependency('doca-argp', required: false)
 doca_comm_channel_dep 	= dependency('doca-comm-channel', required: false)

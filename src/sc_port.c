@@ -147,7 +147,7 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
         printf("finish init port %u, MAC address: " RTE_ETHER_ADDR_PRT_FMT "\n\n",
             port_index,
             RTE_ETHER_ADDR_BYTES(&eth_addr));
-    #endif
+    #endif // RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         printf("finish init port %u\n\n", port_index);
     return SC_SUCCESS;
 }
@@ -197,7 +197,7 @@ static void _print_port_info(uint16_t port_index){
 
     #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         struct rte_eth_fc_conf fc_conf;
-    #endif
+    #endif // RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
 
     printf("\nUSED PORTs:\n");
     
@@ -247,7 +247,7 @@ static void _print_port_info(uint16_t port_index){
                 fc_conf.send_xon ? " xon" : "",
                 fc_conf.mac_ctrl_frame_fwd ? " mac_ctrl" : "");
         }
-    #endif
+    #endif // RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
 
     /* print mac address */
     ret = rte_eth_macaddr_get(port_index, &mac);

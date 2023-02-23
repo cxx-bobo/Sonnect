@@ -23,7 +23,7 @@ int __cm_update(const char* key, struct sc_config *sc_config){
         struct timeval hash_start, hash_end;
         struct timeval update_start, update_end;
         struct timeval lock_start, lock_end;
-    #endif
+    #endif // MODE_LATENCY
 
     for(i=0; i<cm_nb_rows; i++){
         /* step 1: hashing */
@@ -37,44 +37,44 @@ int __cm_update(const char* key, struct sc_config *sc_config){
             PER_CORE_META(sc_config).overall_hash.tv_usec
                 += (hash_end.tv_sec - hash_start.tv_sec) * 1000000 
                     + (hash_end.tv_usec - hash_start.tv_usec);
-        #endif
+        #endif // MODE_LATENCY
         // SC_THREAD_LOG("hash result: %u", hash_result);
     
         /* step 2: require spin lock */
         #if defined(MODE_LATENCY)
             gettimeofday(&lock_start, NULL);
-        #endif
+        #endif // MODE_LATENCY
         rte_spinlock_lock(lock);
         #if defined(MODE_LATENCY)
             gettimeofday(&lock_end, NULL);
             PER_CORE_META(sc_config).overall_lock.tv_usec
                 += (lock_end.tv_sec - lock_start.tv_sec) * 1000000 
                     + (lock_end.tv_usec - lock_start.tv_usec);
-        #endif
+        #endif // MODE_LATENCY
 
         /* step 3: update counter */
         #if defined(MODE_LATENCY)
             gettimeofday(&update_start, NULL);
-        #endif
+        #endif // MODE_LATENCY
         counters[i*cm_nb_counters_per_row + hash_result] += 1;
         #if defined(MODE_LATENCY)
             gettimeofday(&update_end, NULL);
             PER_CORE_META(sc_config).overall_update.tv_usec
                 += (update_end.tv_sec - update_start.tv_sec) * 1000000 
                     + (update_end.tv_usec - update_start.tv_usec);
-        #endif
+        #endif // MODE_LATENCY
 
         /* step 4: expire spin lock */
         #if defined(MODE_LATENCY)
             gettimeofday(&lock_start, NULL);
-        #endif
+        #endif // MODE_LATENCY
         rte_spinlock_unlock(lock);
         #if defined(MODE_LATENCY)
             gettimeofday(&lock_end, NULL);
             PER_CORE_META(sc_config).overall_lock.tv_usec
                 += (lock_end.tv_sec - lock_start.tv_sec) * 1000000 
                     + (lock_end.tv_usec - lock_start.tv_usec);
-        #endif
+        #endif // MODE_LATENCY
     }
 
     return SC_SUCCESS;
@@ -175,7 +175,7 @@ int __cm_record(const char* key, struct sc_config *sc_config){
                 return SC_ERROR_INTERNAL;
             }
         }
-    #endif
+    #endif // MODE_ACCURACY
     return SC_SUCCESS;
 }
 
@@ -221,7 +221,7 @@ int __cm_evaluate(struct sc_config *sc_config){
                 (const char*)(entry->key), *((uint64_t*)(entry->value)), cm_result
             );
         }
-    #endif
+    #endif // MODE_ACCURACY
 
     /* output latency log */
     #if defined(MODE_LATENCY)
@@ -259,7 +259,7 @@ int __cm_evaluate(struct sc_config *sc_config){
             SC_THREAD_LOG("average update latency: %f us/pkt",
                 (float)PER_CORE_META(sc_config).overall_update.tv_usec / (float)PER_CORE_META(sc_config).nb_pkts);
         }
-    #endif
+    #endif // MODE_LATENCY
 
     /* output throughput log */
     #if defined(MODE_THROUGHPUT)
@@ -269,7 +269,7 @@ int __cm_evaluate(struct sc_config *sc_config){
             - PER_CORE_META(sc_config).thread_start_time.tv_sec * 1000000   
             - PER_CORE_META(sc_config).thread_start_time.tv_usec 
         );
-    #endif
+    #endif // MODE_THROUGHPUT
 
     SC_THREAD_LOG_UNLOCK();
     return SC_SUCCESS;

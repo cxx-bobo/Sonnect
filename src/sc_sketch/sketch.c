@@ -71,7 +71,7 @@ int _init_app(struct sc_config *sc_config){
         INTERNAL_CONF(sc_config)->sketch_core.clean = __cm_clean;
         INTERNAL_CONF(sc_config)->sketch_core.record = __cm_record;
         INTERNAL_CONF(sc_config)->sketch_core.evaluate = __cm_evaluate;
-    #endif
+    #endif // SKETCH_TYPE_CM
 
     return SC_SUCCESS;
 }
@@ -119,7 +119,7 @@ int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
     invalid_cm_nb_counters_per_row:
             SC_ERROR_DETAILS("invalid configuration cm_nb_counters_per_row\n")
         }
-    #endif
+    #endif // SKETCH_TYPE_CM
 
 exit:
     return result;
@@ -139,12 +139,12 @@ int _process_enter(struct sc_config *sc_config){
             return SC_ERROR_MEMORY;
         }
         PER_CORE_META(sc_config).kv_map = kv_map;
-    #endif
+    #endif // MODE_ACCURACY
 
     #if defined(MODE_LATENCY) || defined(MODE_THROUGHPUT)
         /* record the start time of this thread */
         gettimeofday(&PER_CORE_META(sc_config).thread_start_time, NULL);
-    #endif
+    #endif // MODE_ACCURACY || MODE_THROUGHPUT
 
     goto process_enter_exit;
 process_enter_warning:
@@ -163,7 +163,7 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
     #if defined(MODE_LATENCY)
         struct timeval pkt_process_start, pkt_process_end;
         gettimeofday(&pkt_process_start, NULL);
-    #endif
+    #endif // MODE_LATENCY
 
     /* allocate memory for storing tuple key */
     char tuple_key[TUPLE_KEY_LENGTH];
@@ -204,7 +204,7 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
     // );
 
     /* ethernet-tuples */
-    #if RTE_VERSION <= RTE_VERSION_NUM(20, 11, 0, 0)
+    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
             /* source mac address */
             _eth_addr->src_addr.addr_bytes[0],
@@ -238,7 +238,7 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
             _eth_addr->d_addr.addr_bytes[4],
             _eth_addr->d_addr.addr_bytes[5]
         );
-    #endif
+    #endif // RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
     // SC_LOG("tuple key: %s, size: %ld", tuple_key, sizeof(tuple_key));
 
     // printf("recv ether frame\n");
@@ -264,21 +264,21 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
     #if defined(MODE_THROUGHPUT) || defined(MODE_LATENCY)
         PER_CORE_META(sc_config).nb_pkts += 1;
         PER_CORE_META(sc_config).nb_bytes += pkt->data_len;
-    #endif
+    #endif // MODE_THROUGHPUT || MODE_LATENCY
 
     /* record the received flow */
     #if defined(MODE_ACCURACY)
         if(SC_SUCCESS != INTERNAL_CONF(sc_config)->sketch_core.record(tuple_key, sc_config)){
             SC_WARNING("error occured duing recording");
         }
-    #endif
+    #endif // MODE_ACCURACY
 
     #if defined(MODE_LATENCY)
         gettimeofday(&pkt_process_end, NULL);
         PER_CORE_META(sc_config).overall_pkt_process.tv_usec 
             += (pkt_process_end.tv_sec - pkt_process_start.tv_sec) * 1000000 
                 + (pkt_process_end.tv_usec - pkt_process_start.tv_usec);
-    #endif
+    #endif // MODE_LATENCY
 
     goto process_pkt_exit;
 
@@ -308,7 +308,7 @@ int _process_exit(struct sc_config *sc_config){
     #if defined(MODE_LATENCY) || defined(MODE_THROUGHPUT)
         /* record the start time of this thread */
         gettimeofday(&PER_CORE_META(sc_config).thread_end_time, NULL);
-    #endif
+    #endif // MODE_LATENCY || MODE_THROUGHPUT
 
     /* start evaluation process */
     if(SC_SUCCESS != INTERNAL_CONF(sc_config)->sketch_core.evaluate(sc_config)){
