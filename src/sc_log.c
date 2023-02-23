@@ -5,7 +5,7 @@
 char current_time_str[128];
 pthread_mutex_t thread_log_mutex;
 pthread_mutex_t timer_mutex;
-extern volatile bool force_quit;
+extern volatile bool sc_force_quit;
 
 /*!
  * \brief   function that execute on the logging thread
@@ -19,7 +19,7 @@ void* _log_loop(void *args){
     /* stick this thread to specified logging core */
     stick_this_thread_to_core(sc_config->log_core_id);
 
-    while(!force_quit){
+    while(!sc_force_quit){
         /* timer */
         pthread_mutex_lock(&timer_mutex);
         time(&time_ptr);

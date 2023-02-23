@@ -3,7 +3,7 @@
 #include "sc_utils.h"
 #include "sc_log.h"
 
-extern volatile bool force_quit;
+extern volatile bool sc_force_quit;
 
 /*!
  * \brief   function that execute on each lcore threads
@@ -39,7 +39,7 @@ int _worker_loop(void* param){
         SC_THREAD_WARNING("error occurs while executing enter callback\n");
     }
 
-    while(!force_quit){
+    while(!sc_force_quit){
         /* role: server */
         #if defined(ROLE_SERVER)
             for(i=0; i<sc_config->nb_used_ports; i++){
@@ -98,7 +98,7 @@ worker_exit:
  */
 int init_worker_threads(struct sc_config *sc_config){
     /* initialize the indicator for quiting all worker threads */
-    force_quit = false;
+    sc_force_quit = false;
 
     /* make sure the process_pkt function is set */
     if(!sc_config->app_config->process_pkt){

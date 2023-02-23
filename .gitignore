@@ -2,3 +2,5 @@
 .vscode
 **/dpdk-21.11
 **/__pycache__
+doca/
+AnchorBench/

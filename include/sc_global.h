@@ -3,13 +3,12 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <pthread.h>
 
 #include <rte_mbuf.h>
 #include <rte_mempool.h>
 #include <rte_version.h>
-
-#include "sc_global.h"
 
 /* maximum number of parameters to init rte eal */
 #define SC_RTE_ARGC_MAX (RTE_MAX_ETHPORTS << 1) + 7
@@ -23,6 +22,10 @@
 /* maximum number of lcores to used */
 #define SC_MAX_NB_CORES RTE_MAX_LCORE
 
+struct app_config;
+struct doca_config;
+
+/* global configuration of SoConnect */
 struct sc_config {
     /* dpdk lcore */
     uint32_t core_ids[SC_MAX_NB_CORES];
@@ -50,8 +53,14 @@ struct sc_config {
 
     /* per-core metadata */
     void *per_core_meta;
+
+    /* doca specific configurations */
+    #if defined(HAS_DOCA)
+        void *doca_config;
+    #endif
 };
 
+/* application specific configuration */
 struct app_config {
     /* callback function: operations while entering the worker loop */
     int (*process_enter)(struct sc_config *sc_config);
@@ -66,4 +75,4 @@ struct app_config {
     void *internal_config;
 };
 
-#endif
+#endif // _SC_GLOBAL_H_

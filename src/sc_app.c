@@ -3,13 +3,14 @@
 #include "sc_app.h"
 #include "sc_log.h"
 
-#ifdef APP_SKETCH
+#if defined(APP_SKETCH)
 #include "sc_sketch/sketch.h"
-#endif
+#endif // APP_SKETCH
 
 /*!
  * \brief   initialize application
- * \param   sc_config   the global configuration
+ * \param   sc_config       the global configuration
+ * \param   app_conf_path   path to the configuration file of currernt application
  * \return  zero for successfully initialization
  */
 int init_app(struct sc_config *sc_config, const char *app_conf_path){

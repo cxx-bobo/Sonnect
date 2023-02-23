@@ -15,17 +15,27 @@
 #include "sc_worker.h"
 #include "sc_app.h"
 #include "sc_log.h"
+#if defined(HAS_DOCA)
+  #include "sc_doca.h"
+#endif
 
 /* indicator to force shutdown all threads (e.g. worker threads, logging thread, etc.) */
-volatile bool force_quit;
+volatile bool sc_force_quit;
 
-/* path to the configuration files */
+/* path to the base configuration file */
 const char* base_conf_path = "../conf/base.conf";
-#ifdef APP_SKETCH
+
+/* path to the application configuration file */
+#if defined(APP_SKETCH)
   const char* app_conf_path = "../conf/sketch.conf";
 #else
   const char* app_conf_path = "";
 #endif // APP_*
+
+/* path to the doca configuration file */
+#if defined(HAS_DOCA)
+  const char* doca_conf_path = "../conf/doca.conf";
+#endif
 
 static int _init_env(struct sc_config *sc_config, int argc, char **argv);
 static int _check_configuration(struct sc_config *sc_config, int argc, char **argv);
@@ -45,6 +55,16 @@ int main(int argc, char **argv){
   }
   memset(app_config, 0, sizeof(struct app_config));
   
+  #if defined(HAS_DOCA)
+    struct doca_config *doca_config = (struct doca_config*)malloc(sizeof(struct doca_config));
+    if(unlikely(!doca_config)){
+      SC_ERROR_DETAILS("failed to allocate memory for doca_config: %s\n", strerror(errno));
+      result = EXIT_FAILURE;
+      goto sc_exit;
+    }
+    memset(doca_config, 0, sizeof(struct doca_config));
+  #endif // HAS_DOCA
+
   struct sc_config *sc_config = (struct sc_config*)malloc(sizeof(struct sc_config));
   if(unlikely(!sc_config)){
     SC_ERROR_DETAILS("failed to allocate memory for sc_config: %s\n", strerror(errno));
@@ -53,6 +73,9 @@ int main(int argc, char **argv){
   }
   memset(sc_config, 0, sizeof(struct sc_config));
   sc_config->app_config = app_config;
+  #if defined(HAS_DOCA)
+    sc_config->doca_config = (void*)doca_config;
+  #endif // HAS_DOCA
 
   /* open configuration file */
   fp = fopen(base_conf_path, "r");
@@ -96,6 +119,15 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+
+  /* initailize doca (if necessary) */
+  #if defined(HAS_DOCA)
+    if(init_doca(sc_config, doca_conf_path) != SC_SUCCESS){
+      SC_ERROR("failed to initialize doca, exit\n");
+      result = EXIT_FAILURE;
+      goto sc_exit;
+    }
+  #endif
 
   /* initailize application */
   if(init_app(sc_config, app_conf_path) != SC_SUCCESS){
@@ -250,7 +282,7 @@ static int _check_configuration(struct sc_config *sc_config, int argc, char **ar
 static void _signal_handler(int signum) {
 	if (signum == SIGINT || signum == SIGTERM) {
 		SC_WARNING("signal %d received, preparing to exit...\n", signum);
-		force_quit = true;
+		sc_force_quit = true;
 	}
 }
 
