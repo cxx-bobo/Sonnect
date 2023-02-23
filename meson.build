@@ -2,7 +2,6 @@ project('SC_BENCHMARK', 'C',
 	# Get version number from file.
 	version: run_command(find_program('cat'),
 		files('./VERSION'), check: true).stdout().strip(),
-	meson_version: '>= 0.61.2'
 )
 
 # project name
