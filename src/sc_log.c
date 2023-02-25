@@ -17,7 +17,7 @@ void* _log_loop(void *args){
     struct sc_config *sc_config = (struct sc_config*)args;
 
     /* stick this thread to specified logging core */
-    stick_this_thread_to_core(sc_config->log_core_id);
+    sc_util_stick_this_thread_to_core(sc_config->log_core_id);
 
     while(!sc_force_quit){
         /* timer */

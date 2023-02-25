@@ -1,11 +1,11 @@
-project('SC_BENCHMARK', 'C',
+project('SOCONNECT', 'C',
 	# Get version number from file.
 	version: run_command(find_program('cat'),
 		files('./VERSION'), check: true).stdout().strip(),
 )
 
 # project name
-project_name = 'sc_benchmark'
+project_name = 'soconnect'
 project_name_abbreviation = 'sc'
 
 # specified which application to use
@@ -15,6 +15,8 @@ add_global_arguments('-DAPP_' + app.to_upper(), language: 'c')
 # specified the sub directory to include more meson.build file
 subdir('src/' + project_name_abbreviation + '_' + app)
 
+# set the SC_CLOSE_MOCK_MACRO to clear mock macro definition for developing
+add_global_arguments('-DSC_CLOSE_MOCK_MACRO', language: 'c')
 
 # ==================== Third-party Library Detection ====================
 

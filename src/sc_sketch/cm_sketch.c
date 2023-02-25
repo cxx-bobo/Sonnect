@@ -180,7 +180,7 @@ int __cm_record(const char* key, struct sc_config *sc_config){
 }
 
 /*!
- * \brief   clean cm sketch
+ * \brief   evaluate cm sketch result
  * \return  evaluate the throughput/latency/accuracy of the sketch
  */
 int __cm_evaluate(struct sc_config *sc_config){

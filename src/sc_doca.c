@@ -12,9 +12,7 @@ static int _parse_doca_kv_pair(char* key, char *value, struct sc_config* sc_conf
  * \param   doca_conf_path  path to the configuration for doca
  * \return  zero for successfully initialization
  */
-int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
-    return SC_SUCCESS;
-    
+int init_doca(struct sc_config *sc_config, const char *doca_conf_path){   
     int result = SC_SUCCESS;
     doca_error_t doca_result;
     FILE* fp = NULL;
@@ -28,7 +26,7 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
     }
 
     /* parse doca configuration file */
-    if(parse_config(fp, sc_config, _parse_doca_kv_pair) != SC_SUCCESS){
+    if(sc_util_parse_config(fp, sc_config, _parse_doca_kv_pair) != SC_SUCCESS){
         SC_ERROR("failed to parse the doca configuration file, exit\n");
         result = SC_ERROR_INTERNAL;
         goto init_doca_exit;
@@ -40,11 +38,30 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
         struct doca_sha *sha_ctx;
         doca_result = doca_sha_create(&sha_ctx);
         if (doca_result != DOCA_SUCCESS) {
-            DOCA_LOG_ERR("Unable to create sha engine: %s", doca_get_error_string(result));
+            SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string(result));
             result = SC_ERROR_INTERNAL;
             goto init_doca_exit;
         }
         DOCA_CONF(sc_config)->doca_ctx = doca_sha_as_ctx(sha_ctx);
+
+        /* open doca sha device */
+        result = sc_doca_util_open_doca_device_with_pci(
+            &(DOCA_CONF(sc_config)->sha_pci_bdf), NULL,
+            &(DOCA_CONF(sc_config)->sha_doca_dev)
+        );
+        if (result != SC_SUCCESS) {
+            SC_ERROR_DETAILS("failed to open pci device of sha engine");
+
+            doca_result = doca_sha_destroy(sha_ctx);
+            if(doca_result != DOCA_SUCCESS){
+                SC_ERROR_DETAILS("failed to destory sha engine: %s",
+                    doca_get_error_string(doca_result));
+                result = SC_ERROR_INTERNAL;
+            }
+            
+            goto init_doca_exit;
+        }
+        
     #endif // SC_NEED_DOCA_SHA
 
 init_doca_exit:
@@ -64,19 +81,13 @@ static int _parse_doca_kv_pair(char* key, char *value, struct sc_config* sc_conf
     #if defined(SC_NEED_DOCA_SHA)
         /* config: PCI address of SHA engine */
         if(!strcmp(key, "sha_pci_address")){
-            char *pci_address_str;
-
-            value = del_both_trim(value);
-            del_change_line(value);
-
-            pci_address_str = (char*)malloc(strlen(value)+1);
-            if(unlikely(!pci_address_str)){
-                SC_ERROR_DETAILS("Failed to allocate memory for pci_address_str\n");
-                result = SC_ERROR_MEMORY;
-            } else {
-                DOCA_CONF(sc_config)->doca_sha_pci_address = pci_address_str;
+            value = sc_util_del_both_trim(value);
+            sc_util_del_change_line(value);
+            if(SC_SUCCESS != sc_doca_util_parse_pci_addr(
+                    value, &(DOCA_CONF(sc_config)->sha_pci_bdf))){
+                SC_ERROR("failed to parse pci address for doca sha engine");
+                result = SC_ERROR_INVALID_VALUE;
             }
-
             goto parse_doca_kv_pair_exit;
         }
     #endif

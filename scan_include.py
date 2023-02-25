@@ -22,16 +22,16 @@ include_dirs = [
 # optional: add doca headers files of applications and samples
 if(sys.argv[3] == "true" and sys.argv[5][0:3] == '1.5'):
     include_dirs += [
-        "{}/samples/".format(sys.argv[4]),
-        "{}/samples/doca_apsh".format(sys.argv[4]),
-        "{}/samples/doca_comm_channel".format(sys.argv[4]),
-        "{}/samples/doca_compress".format(sys.argv[4]),
-        "{}/samples/doca_dma".format(sys.argv[4]),
-        "{}/samples/doca_dpi".format(sys.argv[4]),
-        "{}/samples/doca_flow".format(sys.argv[4]),
-        "{}/samples/doca_regex".format(sys.argv[4]),
-        "{}/samples/doca_sha".format(sys.argv[4]),
-        "{}/samples/doca_telemetry".format(sys.argv[4]),
+        # "{}/samples/".format(sys.argv[4]),
+        # "{}/samples/doca_apsh".format(sys.argv[4]),
+        # "{}/samples/doca_comm_channel".format(sys.argv[4]),
+        # "{}/samples/doca_compress".format(sys.argv[4]),
+        # "{}/samples/doca_dma".format(sys.argv[4]),
+        # "{}/samples/doca_dpi".format(sys.argv[4]),
+        # "{}/samples/doca_flow".format(sys.argv[4]),
+        # "{}/samples/doca_regex".format(sys.argv[4]),
+        # "{}/samples/doca_sha".format(sys.argv[4]),
+        # "{}/samples/doca_telemetry".format(sys.argv[4]),
         "{}".format(sys.argv[4])
     ]
     

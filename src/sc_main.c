@@ -86,7 +86,7 @@ int main(int argc, char **argv){
   }
 
   /* parse dpdk configuration file */
-  if(parse_config(fp, sc_config, _parse_dpdk_kv_pair) != SC_SUCCESS){
+  if(sc_util_parse_config(fp, sc_config, _parse_dpdk_kv_pair) != SC_SUCCESS){
     SC_ERROR("failed to parse the base configuration file, exit\n");
     result = EXIT_FAILURE;
     goto sc_exit;
@@ -279,12 +279,12 @@ static int _check_configuration(struct sc_config *sc_config, int argc, char **ar
     } else {
       if (rte_lcore_to_socket_id(sc_config->core_ids[i]) != socket_id) {
         SC_ERROR_DETAILS("specified lcores aren't locate at the same NUMA socket");
-        return SC_ERROR_INPUT;
+        return SC_ERROR_INVALID_VALUE;
       }
     }
 
-    if(check_core_id(sc_config->core_ids[i]) != SC_SUCCESS){
-      return SC_ERROR_INPUT;
+    if(sc_util_check_core_id(sc_config->core_ids[i]) != SC_SUCCESS){
+      return SC_ERROR_INVALID_VALUE;
     }
   }
 
@@ -296,14 +296,14 @@ static int _check_configuration(struct sc_config *sc_config, int argc, char **ar
         sc_config->nb_tx_rings_per_port,
         sc_config->nb_used_cores
       );
-      return SC_ERROR_INPUT;
+      return SC_ERROR_INVALID_VALUE;
   }
 
   /* check whether the core for logging is conflict with other worker cores */
   for(i=0; i<sc_config->nb_used_cores; i++){
     if(sc_config->core_ids[i] == sc_config->log_core_id){
       SC_ERROR_DETAILS("the core for logging is conflict with other worker cores");
-      return SC_ERROR_INPUT;
+      return SC_ERROR_INVALID_VALUE;
     }
   }
 
@@ -311,7 +311,7 @@ static int _check_configuration(struct sc_config *sc_config, int argc, char **ar
     /* check whether number of scalable functions is valid */
     if(DOCA_CONF(sc_config)->nb_used_sfs == 0){
       SC_ERROR_DETAILS("no scalable functions is specified, unbale to initialize rte eal on Bluefield");
-      return SC_ERROR_INPUT;
+      return SC_ERROR_INVALID_VALUE;
     }
   #endif
 
@@ -354,8 +354,8 @@ static int _parse_dpdk_kv_pair(char* key, char *value, struct sc_config* sc_conf
             
             if (!p) break;
 
-            p = del_both_trim(p);
-            del_change_line(p);
+            p = sc_util_del_both_trim(p);
+            sc_util_del_change_line(p);
 
             port_mac = (char*)malloc(strlen(p)+1);
             if(unlikely(!port_mac)){
@@ -379,15 +379,15 @@ free_dev_src:
     /* config: number of RX rings per port */
     if(!strcmp(key, "nb_rx_rings_per_port")){
         uint16_t nb_rings;
-        value = del_both_trim(value);
-        del_change_line(value);
-        if(atoui_16(value, &nb_rings) != SC_SUCCESS) {
-            result = SC_ERROR_INPUT;
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if(sc_util_atoui_16(value, &nb_rings) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
             goto invalid_nb_rx_rings_per_port;
         }
             
         if(nb_rings <= 0 || nb_rings > SC_MAX_NB_QUEUE_PER_PORT) {
-            result = SC_ERROR_INPUT;
+            result = SC_ERROR_INVALID_VALUE;
             goto invalid_nb_rx_rings_per_port;
         }
 
@@ -401,15 +401,15 @@ invalid_nb_rx_rings_per_port:
     /* config: number of TX rings per port */
     if(!strcmp(key, "nb_tx_rings_per_port")){
         uint16_t nb_rings;
-        value = del_both_trim(value);
-        del_change_line(value);
-        if (atoui_16(value, &nb_rings) != SC_SUCCESS) {
-            result = SC_ERROR_INPUT;
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (sc_util_atoui_16(value, &nb_rings) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
             goto invalid_nb_tx_rings_per_port;
         }
             
         if(nb_rings == 0 || nb_rings > SC_MAX_NB_QUEUE_PER_PORT) {
-            result = SC_ERROR_INPUT;
+            result = SC_ERROR_INVALID_VALUE;
             goto invalid_nb_tx_rings_per_port;
         }
 
@@ -422,14 +422,14 @@ invalid_nb_tx_rings_per_port:
 
     /* config: whether to enable promiscuous mode */
     if(!strcmp(key, "enable_promiscuous")){
-        value = del_both_trim(value);
-        del_change_line(value);
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
         if (!strcmp(value, "true")){
             sc_config->enable_promiscuous = true;
         } else if (!strcmp(value, "false")){
             sc_config->enable_promiscuous = false;
         } else {
-            result = SC_ERROR_INPUT;
+            result = SC_ERROR_INVALID_VALUE;
             goto invalid_enable_promiscuous;
         }
 
@@ -446,8 +446,8 @@ invalid_enable_promiscuous:
         char *delim = ",";
         char *core_id_str;
 
-        value = del_both_trim(value);
-        del_change_line(value);
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
         
         for(;;){
             if(nb_used_cores == 0)
@@ -457,16 +457,16 @@ invalid_enable_promiscuous:
             
             if (!core_id_str) break;
 
-            core_id_str = del_both_trim(core_id_str);
-            del_change_line(core_id_str);
+            core_id_str = sc_util_del_both_trim(core_id_str);
+            sc_util_del_change_line(core_id_str);
 
-            if (atoui_32(core_id_str, &core_id) != SC_SUCCESS) {
-                result = SC_ERROR_INPUT;
+            if (sc_util_atoui_32(core_id_str, &core_id) != SC_SUCCESS) {
+                result = SC_ERROR_INVALID_VALUE;
                 goto invalid_used_cores;
             }
 
             if (core_id > SC_MAX_NB_CORES) {
-                result = SC_ERROR_INPUT;
+                result = SC_ERROR_INVALID_VALUE;
                 goto invalid_used_cores;
             }
 
@@ -484,10 +484,10 @@ invalid_used_cores:
     /* config: number of memory channels per socket */
     if(!strcmp(key, "nb_memory_channels_per_socket")){
         uint16_t nb_memory_channels_per_socket;
-        value = del_both_trim(value);
-        del_change_line(value);
-        if (atoui_16(value, &nb_memory_channels_per_socket) != SC_SUCCESS) {
-            result = SC_ERROR_INPUT;
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (sc_util_atoui_16(value, &nb_memory_channels_per_socket) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
             goto invalid_nb_memory_channels_per_socket;
         }
 
@@ -501,10 +501,10 @@ invalid_nb_memory_channels_per_socket:
     /* config: the core for logging */
     if(!strcmp(key, "log_core_id")){
         uint32_t log_core_id;
-        value = del_both_trim(value);
-        del_change_line(value);
-        if (atoui_32(value, &log_core_id) != SC_SUCCESS) {
-            result = SC_ERROR_INPUT;
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (sc_util_atoui_32(value, &log_core_id) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
             goto invalid_log_core_id;
         }
 
@@ -532,8 +532,8 @@ invalid_log_core_id:
             
             if (!p) break;
 
-            p = del_both_trim(p);
-            del_change_line(p);
+            p = sc_util_del_both_trim(p);
+            sc_util_del_change_line(p);
 
             bf_sf = (char*)malloc(strlen(p)+1);
             if(unlikely(!bf_sf)){

@@ -1,6 +1,9 @@
 #ifndef _SC_DOCA_H_
 #define _SC_DOCA_H_
 
+#include "sc_global.h"
+#include "sc_doca_utils.h"
+
 #if defined(SC_HAS_DOCA)
 
 /* macro to compute a version number usable for comparisons */
@@ -38,7 +41,8 @@ struct doca_config {
 
     /* sha configurations */
     #if defined(SC_NEED_DOCA_SHA)
-        char *doca_sha_pci_address;
+        struct doca_pci_bdf sha_pci_bdf;    /* pci bus-device-function index*/
+        struct doca_dev *sha_doca_dev;		/* doca device */
     #endif // SC_HAS_DOCA && SC_NEED_DOCA_SHA
 };
 #define DOCA_CONF(scc) ((struct doca_config*)scc->doca_config)

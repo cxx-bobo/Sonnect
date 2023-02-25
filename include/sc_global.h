@@ -10,6 +10,15 @@
 #include <rte_mempool.h>
 #include <rte_version.h>
 
+/* 
+ * the compiler will define SC_CLOSE_MOCK_MACRO 
+ * automatically while build the final binary 
+ */
+#if !defined(SC_CLOSE_MOCK_MACRO)
+    #define SC_HAS_DOCA
+    #define SC_NEED_DOCA_SHA
+#endif // SC_CLOSE_MOCK_MACRO
+
 /* maximum number of parameters to init rte eal */
 #define SC_RTE_ARGC_MAX (RTE_MAX_ETHPORTS << 1) + 7
 

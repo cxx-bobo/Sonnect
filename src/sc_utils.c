@@ -9,10 +9,10 @@
  * \param   core_id     the index of the core
  * \return  zero for successfully sticking
  */
-int stick_this_thread_to_core(uint32_t core_id) {
-    if(check_core_id(core_id) != SC_SUCCESS){
+int sc_util_stick_this_thread_to_core(uint32_t core_id) {
+    if(sc_util_check_core_id(core_id) != SC_SUCCESS){
         SC_ERROR("failed to stick current thread to core %u", core_id);
-        return SC_ERROR_INPUT;
+        return SC_ERROR_INVALID_VALUE;
     }
 
     cpu_set_t cpuset;
@@ -28,11 +28,11 @@ int stick_this_thread_to_core(uint32_t core_id) {
  * \param   core_id     the index of the core
  * \return  zero for successfully checking
  */
-int check_core_id(uint32_t core_id){
+int sc_util_check_core_id(uint32_t core_id){
     int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     if (core_id < 0 || core_id >= num_cores){
         SC_ERROR_DETAILS("given core index (%u) exceed phiscal range (max: %d)", core_id, num_cores)
-        return SC_ERROR_INPUT;
+        return SC_ERROR_INVALID_VALUE;
     }
     return SC_SUCCESS;
 }
@@ -49,7 +49,7 @@ int check_core_id(uint32_t core_id){
  * \param   parse_kv_pair   function for parsing specific key-value pair
  * \return  zero for successfully parsing
  */
-int parse_config(
+int sc_util_parse_config(
         FILE* fp, struct sc_config* sc_config, 
         int (*parse_kv_pair)(char* key, char *value, struct sc_config* sc_config)){
     char buf[64];
@@ -62,14 +62,14 @@ int parse_config(
         if  ((p = fgets(buf, sizeof(buf), fp)) != NULL) {
             strcpy(s, p);
             /* skip empty line and comment line */
-            ch=del_left_trim(s)[0];
+            ch=sc_util_del_left_trim(s)[0];
             if  (ch ==  '#'  || isblank(ch) || ch== '\n' )
                 continue;
             /* split string based on given delim */
             key = strtok(s, delim);
 
             if (key) {
-                key = del_both_trim(key);
+                key = sc_util_del_both_trim(key);
                 value = strtok(NULL, delim);
                 if(!value){
                     SC_WARNING_DETAILS("key %s without a value inside configuration file\n", key);
@@ -98,7 +98,7 @@ int parse_config(
  * \param   str the target string
  * \return  the processed string
  */
-char* del_left_trim(char *str) {
+char* sc_util_del_left_trim(char *str) {
     assert(str != NULL);
     for  (;*str !=  '\0'  && isblank(*str) ; ++str);
     return  str;
@@ -109,10 +109,10 @@ char* del_left_trim(char *str) {
  * \param   str the target string
  * \return  the processed string
  */
-char* del_both_trim(char *str) {
+char* sc_util_del_both_trim(char *str) {
     char *p;
     char * sz_output;
-    sz_output = del_left_trim(str);
+    sz_output = sc_util_del_left_trim(str);
     for  (p=sz_output+strlen(sz_output)-1; p>=sz_output && isblank(*p); --p);
     *(++p) =  '\0' ;
     
@@ -123,7 +123,7 @@ char* del_both_trim(char *str) {
  * \brief   delete the '\n' at the end of string
  * \param   str the target string
  */
-void del_change_line(char *str){
+void sc_util_del_change_line(char *str){
     if(str[strlen(str)-1] == '\n') str[strlen(str)-1] = '\0';
 }
 
@@ -133,10 +133,10 @@ void del_change_line(char *str){
  * \param   out output uint16_t
  * \return  zero for successfully parsing
  */
-int atoui_16(char *in, uint16_t *out){
+int sc_util_atoui_16(char *in, uint16_t *out){
     char *p;
     for(p = in; *p; p++)
-        if (*p > '9' || *p < '0') return SC_ERROR_INPUT;
+        if (*p > '9' || *p < '0') return SC_ERROR_INVALID_VALUE;
     *out = strtoul(in, NULL, 10);
     return SC_SUCCESS;
 }
@@ -147,10 +147,10 @@ int atoui_16(char *in, uint16_t *out){
  * \param   out output uint16_t
  * \return  zero for successfully parsing
  */
-int atoui_32(char *in, uint32_t *out){
+int sc_util_atoui_32(char *in, uint32_t *out){
     char *p;
     for(p = in; *p; p++)
-        if (*p > '9' || *p < '0') return SC_ERROR_INPUT;
+        if (*p > '9' || *p < '0') return SC_ERROR_INVALID_VALUE;
     *out = strtoul(in, NULL, 10);
     return SC_SUCCESS;
 }
@@ -177,7 +177,7 @@ uint64_t random_unsigned_int64(){
  * \brief   generate random unsigned 64-bits integer
  * \return  the generated value
  */
-uint32_t random_unsigned_int32(){
+uint32_t sc_util_random_unsigned_int32(){
     uint16_t i;
     uint32_t r=0;
     for(i=0; i<32; i++)

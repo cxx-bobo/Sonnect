@@ -44,9 +44,9 @@ int init_app(struct sc_config *sc_config, const char *app_conf_path){
     }
 
     /* parse configuration file */
-    if(parse_config(fp, sc_config, _parse_app_kv_pair) != SC_SUCCESS){
+    if(sc_util_parse_config(fp, sc_config, _parse_app_kv_pair) != SC_SUCCESS){
         SC_ERROR("failed to parse the application configuration file, exit\n");
-        return SC_ERROR_INPUT;
+        return SC_ERROR_INVALID_VALUE;
     }
     
     /* initialize application (internal) */

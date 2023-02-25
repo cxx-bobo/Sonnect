@@ -58,7 +58,7 @@ int _init_app(struct sc_config *sc_config){
         }
         memset(hash_seeds, 0, sizeof(uint32_t)*INTERNAL_CONF(sc_config)->cm_nb_rows);
         for(i=0; i<INTERNAL_CONF(sc_config)->cm_nb_rows; i++){
-            hash_seeds[i] = random_unsigned_int32();
+            hash_seeds[i] = sc_util_random_unsigned_int32();
         }
         INTERNAL_CONF(sc_config)->cm_sketch->hash_seeds = hash_seeds;
 
@@ -90,11 +90,11 @@ int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
     #if defined(SKETCH_TYPE_CM)
         /* number of rows */
         if(!strcmp(key, "cm_nb_rows")){
-            value = del_both_trim(value);
-            del_change_line(value);
+            value = sc_util_del_both_trim(value);
+            sc_util_del_change_line(value);
             uint32_t cm_nb_rows;
-            if(atoui_32(value, &cm_nb_rows) != SC_SUCCESS) {
-                result = SC_ERROR_INPUT;
+            if(sc_util_atoui_32(value, &cm_nb_rows) != SC_SUCCESS) {
+                result = SC_ERROR_INVALID_VALUE;
                 goto invalid_cm_nb_rows;
             }
             INTERNAL_CONF(sc_config)->cm_nb_rows = cm_nb_rows;
@@ -106,11 +106,11 @@ int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
 
         /* number of counters per row */
         if(!strcmp(key, "cm_nb_counters_per_row")){
-            value = del_both_trim(value);
-            del_change_line(value);
+            value = sc_util_del_both_trim(value);
+            sc_util_del_change_line(value);
             uint32_t cm_nb_counters_per_row;
-            if(atoui_32(value, &cm_nb_counters_per_row) != SC_SUCCESS) {
-                result = SC_ERROR_INPUT;
+            if(sc_util_atoui_32(value, &cm_nb_counters_per_row) != SC_SUCCESS) {
+                result = SC_ERROR_INVALID_VALUE;
                 goto invalid_cm_nb_counters_per_row;
             }
             INTERNAL_CONF(sc_config)->cm_nb_counters_per_row = cm_nb_counters_per_row;
