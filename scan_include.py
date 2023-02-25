@@ -31,10 +31,10 @@ if(sys.argv[3] == "true" and sys.argv[5][0:3] == '1.5'):
         "{}/samples/doca_flow".format(sys.argv[4]),
         "{}/samples/doca_regex".format(sys.argv[4]),
         "{}/samples/doca_sha".format(sys.argv[4]),
-        "{}/samples/doca_telemetry".format(sys.argv[4])
+        "{}/samples/doca_telemetry".format(sys.argv[4]),
+        "{}".format(sys.argv[4])
     ]
     
-
 # optional: add cuda headers files
 if(sys.argv[6] == "true"):
     include_dirs += [

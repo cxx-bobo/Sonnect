@@ -41,16 +41,18 @@ if doca_common_dep.found() and doca_argp_dep.found() and doca_apsh_dep.found() \
 		and doca_sha_dep.found() and doca_telemetry_dep.found()
 	# set doca as founded
 	has_doca = true
-	add_global_arguments('-DHAS_DOCA', language: 'c')
+	add_global_arguments('-DSC_HAS_DOCA', language: 'c')
 
 	# set doca version
 	doca_version = run_command(
 		find_program('cat'), files(doca_path + '/applications/VERSION'), check: true).stdout().strip()
 	message('found DOCA ' + doca_version)
+	add_global_arguments('-DSC_DOCA_MAIN_VERSION=' + doca_version[0], language: 'c')
+	add_global_arguments('-DSC_DOCA_SUB_VERSION=' + doca_version[2], language: 'c')
 
 	# specified necessary doca resources according to application
 	if app == 'sketch'
-		add_global_arguments('-DNEED_DOCA_SHA', language: 'c')
+		add_global_arguments('-DSC_NEED_DOCA_SHA', language: 'c')
 		message('enabled DOCA SHA engine')
 	endif
 endif
@@ -62,7 +64,7 @@ has_cuda 	= false
 cuda_dep 	= dependency('cuda', version : '>=11', required: false)
 if cuda_dep.found()
 	has_cuda = true
-	add_global_arguments('-DHAS_CUDA', language: 'c')
+	add_global_arguments('-DSC_HAS_CUDA', language: 'c')
 endif
 
 # =======================================================================
@@ -120,11 +122,13 @@ sources = glob.stdout().strip().split('\n')
 # =======================================================================
 
 
-
 # build executable
 executable(project_name, sources,
 	dependencies : dep,
-	c_args: '-D_GNU_SOURCE',
+	# Note: we detect different DPDK, DOCA and CUDA version inside meson and source files,
+	#		so we block all deprecated-declarations warnings here to make log output of 
+	#		the build process cleaner
+	c_args: ['-D_GNU_SOURCE', '-Wno-deprecated-declarations'],
 	include_directories: inc_dirs,
 	install: false
 )

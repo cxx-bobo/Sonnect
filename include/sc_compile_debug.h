@@ -5,8 +5,14 @@
 
 #include "sc_utils.h"
 
-/* print rte version while compiling */
-#pragma message "RTE Version: " \
+/* print dpdk version while compiling */
+#pragma message "DPDK Version: " \
     XSTR(RTE_VER_YEAR) "." XSTR(RTE_VER_MONTH) "." XSTR(RTE_VER_MINOR) "." XSTR(RTE_VER_RELEASE)
+
+#if defined(SC_HAS_DOCA)
+    /* print doca version while compiling */
+    #pragma message "DOCA Version: " \
+        XSTR(SC_DOCA_MAIN_VERSION) "." XSTR(SC_DOCA_SUB_VERSION)
+#endif
 
 #endif

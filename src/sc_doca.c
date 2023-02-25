@@ -1,6 +1,6 @@
 #include "sc_doca.h"
 
-#if defined(HAS_DOCA)
+#if defined(SC_HAS_DOCA)
 
 DOCA_LOG_REGISTER(SC::DOCA);
 
@@ -35,7 +35,7 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
     }
 
     /* initialize sha engine if the application need it */
-    #if defined(NEED_DOCA_SHA)
+    #if defined(SC_NEED_DOCA_SHA)
         /* create doca context */
         struct doca_sha *sha_ctx;
         doca_result = doca_sha_create(&sha_ctx);
@@ -45,7 +45,7 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
             goto init_doca_exit;
         }
         DOCA_CONF(sc_config)->doca_ctx = doca_sha_as_ctx(sha_ctx);
-    #endif // NEED_DOCA_SHA
+    #endif // SC_NEED_DOCA_SHA
 
 init_doca_exit:
     return result;
@@ -61,7 +61,7 @@ init_doca_exit:
 static int _parse_doca_kv_pair(char* key, char *value, struct sc_config* sc_config){
     int result = SC_SUCCESS;
 
-    #if defined(NEED_DOCA_SHA)
+    #if defined(SC_NEED_DOCA_SHA)
         /* config: PCI address of SHA engine */
         if(!strcmp(key, "sha_pci_address")){
             char *pci_address_str;
@@ -87,4 +87,4 @@ parse_doca_kv_pair_exit:
 
 
 
-#endif // HAS_DOCA
+#endif // SC_HAS_DOCA

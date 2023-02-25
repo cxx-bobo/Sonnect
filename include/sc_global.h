@@ -55,7 +55,7 @@ struct sc_config {
     void *per_core_meta;
 
     /* doca specific configurations */
-    #if defined(HAS_DOCA)
+    #if defined(SC_HAS_DOCA)
         void *doca_config;
     #endif
 };

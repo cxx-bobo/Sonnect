@@ -89,7 +89,7 @@ int __cm_update(const char* key, struct sc_config *sc_config){
  */
 int __cm_query(const char* key, void *result, struct sc_config *sc_config){
     int i;
-    counter_t c, smallest_c;
+    counter_t c, smallest_c = 0;
     uint32_t hash_result;
     uint32_t cm_nb_rows = INTERNAL_CONF(sc_config)->cm_nb_rows;
     uint32_t cm_nb_counters_per_row = INTERNAL_CONF(sc_config)->cm_nb_counters_per_row;

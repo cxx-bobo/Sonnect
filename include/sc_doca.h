@@ -1,7 +1,12 @@
 #ifndef _SC_DOCA_H_
 #define _SC_DOCA_H_
 
-#if defined(HAS_DOCA)
+#if defined(SC_HAS_DOCA)
+
+/* macro to compute a version number usable for comparisons */
+#define SC_DOCA_VERSION_NUM(a,b) ((a) << 8 | (b))
+#define SC_DOCA_VERSION \
+    SC_DOCA_VERSION_NUM(SC_DOCA_MAIN_VERSION, SC_DOCA_SUB_VERSION)
 
 #include <doca_argp.h>
 #include <doca_error.h>
@@ -27,16 +32,20 @@ struct doca_config {
     struct doca_ctx *doca_ctx;			        /* doca context */
     struct doca_workq *doca_workq;		        /* doca work queue */
 
+    /* scalable functions */
+    char* scalable_functions[SC_MAX_NB_PORTS];
+    uint16_t nb_used_sfs;
+
     /* sha configurations */
-    #if defined(HAS_DOCA) && defined(NEED_DOCA_SHA)
+    #if defined(SC_NEED_DOCA_SHA)
         char *doca_sha_pci_address;
-    #endif // HAS_DOCA && NEED_DOCA_SHA
+    #endif // SC_HAS_DOCA && SC_NEED_DOCA_SHA
 };
 #define DOCA_CONF(scc) ((struct doca_config*)scc->doca_config)
 
 int init_doca(struct sc_config *sc_config, const char *doca_conf_path);
 
-#endif // HAS_DOCA
+#endif // SC_HAS_DOCA
 
 
 #endif

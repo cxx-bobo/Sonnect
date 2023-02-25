@@ -11,6 +11,6 @@ mode = 'latency'
 add_global_arguments('-DMODE_' + mode.to_upper(), language: 'c')
 
 # sketch type to used:
-# [1] cm / [2] 
+# [1] cm
 skecth_type = 'cm'
 add_global_arguments('-DSKETCH_TYPE_' + skecth_type.to_upper(), language: 'c')
