@@ -42,12 +42,12 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
             result = SC_ERROR_INTERNAL;
             goto init_doca_exit;
         }
-        DOCA_CONF(sc_config)->doca_ctx = doca_sha_as_ctx(sha_ctx);
+        DOCA_CONF(sc_config)->sha_ctx = doca_sha_as_ctx(sha_ctx);
 
         /* open doca sha device */
         result = sc_doca_util_open_doca_device_with_pci(
             &(DOCA_CONF(sc_config)->sha_pci_bdf), NULL,
-            &(DOCA_CONF(sc_config)->sha_doca_dev)
+            &(DOCA_CONF(sc_config)->sha_dev)
         );
         if (result != SC_SUCCESS) {
             SC_ERROR_DETAILS("failed to open pci device of sha engine");
@@ -61,7 +61,9 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
             
             goto init_doca_exit;
         }
-        
+
+        /* initialize doca core object for sha engine */
+        // TODO:
     #endif // SC_NEED_DOCA_SHA
 
 init_doca_exit:

@@ -28,21 +28,18 @@
  *       the integration of future version of DOCA easier
  */
 struct doca_config {
-    /* doca core objects */
-    struct doca_dev *doca_dev;			        /* doca device */
-    struct doca_mmap *doca_mmap;			    /* doca mmap */
-    struct doca_buf_inventory *doca_buf_inv;	/* doca buffer inventory */
-    struct doca_ctx *doca_ctx;			        /* doca context */
-    struct doca_workq *doca_workq;		        /* doca work queue */
-
     /* scalable functions */
     char* scalable_functions[SC_MAX_NB_PORTS];
     uint16_t nb_used_sfs;
 
     /* sha configurations */
     #if defined(SC_NEED_DOCA_SHA)
-        struct doca_pci_bdf sha_pci_bdf;    /* pci bus-device-function index*/
-        struct doca_dev *sha_doca_dev;		/* doca device */
+        struct doca_pci_bdf sha_pci_bdf;        /* pci bus-device-function index of sha engine */
+        struct doca_mmap *sha_mmap;             /* memory map for sha engine */
+        struct doca_dev *sha_dev;		        /* doca device of sha engine */
+        struct doca_buf_inventory *sha_buf_inv; /* buffer inventory for sha engine */
+        struct doca_ctx *sha_ctx;			    /* doca context for sha engine */
+        struct doca_workq *sha_workq;           /* work queue for sha engine */
     #endif // SC_HAS_DOCA && SC_NEED_DOCA_SHA
 };
 #define DOCA_CONF(scc) ((struct doca_config*)scc->doca_config)
