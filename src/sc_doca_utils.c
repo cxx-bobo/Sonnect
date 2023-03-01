@@ -6,26 +6,26 @@
 #if defined(SC_HAS_DOCA)
 
 
-/* ================= DOCA initilization operation ================ */
+/* ================= DOCA core object operation ================ */
 
 /*!
  * \brief   initialize all necessary doca object of  the specified resources
- * \param   mmap    	pointer to the allocated doca memery map
- * \param   dev			pointer to the doca device instance
- * \param	buf_inv		pointer to the allocated doca buffer inventory
- * \param	ctx			pointer to the doca context
- * \param	workq		pointer to the allocated work queue
+ * \param   mmap    	the allocated doca memery map
+ * \param   dev			the doca device instance
+ * \param	buf_inv		the allocated doca buffer inventory
+ * \param	ctx			the doca context
+ * \param	workq		the allocated work queue
  * \param	extensions	?
  * \param	workq_depth	depth of the allocated work queue
  * \param	max_chunks	maximum number of memory chunks
  * \return  zero for successfully initialization
  */
 int sc_doca_util_init_core_objects(
-		struct doca_mmap *mmap,
+		struct doca_mmap **mmap,
 		struct doca_dev *dev,
-		struct doca_buf_inventory *buf_inv,
+		struct doca_buf_inventory **buf_inv,
 		struct doca_ctx *ctx,
-		struct doca_workq *workq,
+		struct doca_workq **workq,
 		uint32_t extensions,
 		uint32_t workq_depth,
 		uint32_t max_chunks
@@ -35,7 +35,7 @@ int sc_doca_util_init_core_objects(
 	struct doca_workq *_workq;
 
 	/* allocate doca memory map */
-	doca_result = doca_mmap_create(NULL, &mmap);
+	doca_result = doca_mmap_create(NULL, mmap);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("unable to create mmap: %s", doca_get_error_string(doca_result));
 		result = SC_ERROR_INTERNAL;
@@ -43,7 +43,7 @@ int sc_doca_util_init_core_objects(
 	}
 
 	/* create doca buffer inventory */
-	doca_result = doca_buf_inventory_create(NULL, max_chunks, extensions, &buf_inv);
+	doca_result = doca_buf_inventory_create(NULL, max_chunks, extensions, buf_inv);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("unable to create buffer inventory: %s", 
 			doca_get_error_string(doca_result));
@@ -52,7 +52,7 @@ int sc_doca_util_init_core_objects(
 	}	
 
 	/* set the maximum number of chunks */
-	doca_result = doca_mmap_set_max_num_chunks(mmap, max_chunks);
+	doca_result = doca_mmap_set_max_num_chunks(*mmap, max_chunks);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("unable to set memory map nb chunks: %s",
 			doca_get_error_string(doca_result));
@@ -61,7 +61,7 @@ int sc_doca_util_init_core_objects(
 	}
 
 	/* start doca memory map */
-	doca_result = doca_mmap_start(mmap);
+	doca_result = doca_mmap_start(*mmap);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("unable to start memory map: %s",
 			doca_get_error_string(doca_result));
@@ -70,7 +70,7 @@ int sc_doca_util_init_core_objects(
 	}
     
 	/* add device to the allocated memory map */
-	doca_result = doca_mmap_dev_add(mmap, dev);
+	doca_result = doca_mmap_dev_add(*mmap, dev);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("unable to add device to mmap: %s",
 			doca_get_error_string(doca_result));
@@ -79,7 +79,7 @@ int sc_doca_util_init_core_objects(
 	}
 
 	/* start the buffer inventory */
-	doca_result = doca_buf_inventory_start(buf_inv);
+	doca_result = doca_buf_inventory_start(*buf_inv);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("unable to start buffer inventory: %s",
 			doca_get_error_string(doca_result));
@@ -106,7 +106,7 @@ int sc_doca_util_init_core_objects(
 	}
 
 	/* create work queue */
-	doca_result = doca_workq_create(workq_depth, &workq);
+	doca_result = doca_workq_create(workq_depth, workq);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("unable to create work queue: %s",
 			doca_get_error_string(doca_result));
@@ -115,7 +115,7 @@ int sc_doca_util_init_core_objects(
 	}
 
 	/* add work queue to the context */
-	doca_result = doca_ctx_workq_add(ctx, workq);
+	doca_result = doca_ctx_workq_add(ctx, *workq);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("unable to register work queue with context: %s", 
 			doca_get_error_string(doca_result));
@@ -126,18 +126,111 @@ int sc_doca_util_init_core_objects(
 	goto init_core_objects_exit;
 
 destory_workq:
-	doca_workq_destroy(workq);
+	doca_workq_destroy(*workq);
+	*workq = NULL;
 
 remove_ctx_dev:
 	doca_ctx_dev_rm(ctx, dev);
 
 destory_doca_buf_inv:
-	doca_buf_inventory_destroy(buf_inv);
+	doca_buf_inventory_destroy(*buf_inv);
 
 destory_doca_mmap:
-	doca_mmap_destroy(mmap);
+	doca_mmap_destroy(*mmap);
 
 init_core_objects_exit:
+	return result;
+}
+
+/*!
+ * \brief   destory all doca objects of the specified resources
+ * \param   mmap    	the allocated doca memery map
+ * \param   dev			the doca device instance
+ * \param	buf_inv		the allocated doca buffer inventory
+ * \param	ctx			the doca context
+ * \param	workq		the allocated work queue
+ * \return  zero for successfully initialization
+ */
+int sc_doca_util_destory_core_objects(
+		struct doca_mmap **mmap,
+		struct doca_dev **dev,
+		struct doca_buf_inventory **buf_inv,
+		struct doca_ctx *ctx,
+		struct doca_workq **workq
+){
+	int result = SC_SUCCESS;
+	doca_error_t doca_result;
+
+	/* release work queue */
+	if(*workq != NULL){
+		doca_result = doca_ctx_workq_rm(ctx, *workq);
+		if(doca_result != DOCA_SUCCESS){
+			SC_ERROR_DETAILS("failed to remove work queue from ctx: %s", 
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+		}
+		doca_result = doca_workq_destroy(*workq);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("failed to destroy work queue: %s", 
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+		}
+		*workq = NULL;
+	}
+
+	/* release buffer inventory */
+	if(*buf_inv != NULL){
+		doca_result = doca_buf_inventory_destroy(*buf_inv);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("failed to destroy buf inventory: %s", 
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+		}
+		*buf_inv = NULL;
+	}
+
+	/* release memory map */
+	if (*mmap != NULL) {
+		doca_result = doca_mmap_dev_rm(*mmap, *dev);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("failed to remove device from mmap: %s", 
+				doca_get_error_string(doca_result));
+		}
+		doca_result = doca_mmap_destroy(*mmap);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("failed to destroy mmap: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+		}
+		*mmap = NULL;
+	}
+
+	/* release doca device from context */
+	if (ctx != NULL) {
+		doca_result = doca_ctx_stop(ctx);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to stop context: %s", 
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+		}
+		doca_result = doca_ctx_dev_rm(ctx, *dev);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("failed to remove device from ctx: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+		}
+	}
+
+	if (*dev != NULL) {
+		doca_result = doca_dev_close(*dev);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("Failed to close device: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+		}
+		*dev = NULL;
+	}
+
 	return result;
 }
 

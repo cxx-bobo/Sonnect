@@ -15,12 +15,20 @@
 typedef int (*jobs_check)(struct doca_devinfo *);
 
 
-/* ================= DOCA initilization operation ================ */
+/* ================= DOCA core object operation ================ */
 int sc_doca_util_init_core_objects(
-	struct doca_mmap *mmap, struct doca_dev *dev,
-	struct doca_buf_inventory *buf_inv, struct doca_ctx *ctx,
-	struct doca_workq *workq, uint32_t extensions,
+	struct doca_mmap **mmap, struct doca_dev *dev,
+	struct doca_buf_inventory **buf_inv, struct doca_ctx *ctx,
+	struct doca_workq **workq, uint32_t extensions,
 	uint32_t workq_depth, uint32_t max_chunks
+);
+
+int sc_doca_util_destory_core_objects(
+	struct doca_mmap **mmap,
+	struct doca_dev **dev,
+	struct doca_buf_inventory **buf_inv,
+	struct doca_ctx *ctx,
+	struct doca_workq **workq
 );
 /* =============================================================== */
 

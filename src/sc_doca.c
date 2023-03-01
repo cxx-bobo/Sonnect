@@ -36,6 +36,9 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
     #if defined(SC_NEED_DOCA_SHA)
         /* create doca context */
         struct doca_sha *sha_ctx;
+        uint32_t workq_depth = 1;		/* The sha engine will run 1 sha job */
+        uint32_t max_chunks = 2;		/* The sha engine will use 2 doca buffers */
+
         doca_result = doca_sha_create(&sha_ctx);
         if (doca_result != DOCA_SUCCESS) {
             SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string(result));
@@ -63,7 +66,36 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
         }
 
         /* initialize doca core object for sha engine */
-        // TODO:
+        result = sc_doca_util_init_core_objects(
+            &(DOCA_CONF(sc_config)->sha_mmap),
+            DOCA_CONF(sc_config)->sha_dev,
+            &(DOCA_CONF(sc_config)->sha_buf_inv),
+            DOCA_CONF(sc_config)->sha_ctx,
+            &(DOCA_CONF(sc_config)->sha_workq),
+            DOCA_BUF_EXTENSION_NONE,
+            workq_depth, max_chunks
+        );
+        if(result != SC_SUCCESS){
+            SC_ERROR("failed to initialize core objects for sha engine");
+            result = SC_ERROR_INTERNAL;
+            goto sha_cleanup;
+        }
+
+sha_cleanup:
+        sc_doca_util_destory_core_objects(
+            &(DOCA_CONF(sc_config)->sha_mmap),
+            &(DOCA_CONF(sc_config)->sha_dev),
+            &(DOCA_CONF(sc_config)->sha_buf_inv),
+            DOCA_CONF(sc_config)->sha_ctx,
+            &(DOCA_CONF(sc_config)->sha_workq)
+        );
+
+        doca_result = doca_sha_destroy(sha_ctx);
+        if(doca_result != DOCA_SUCCESS){
+            SC_ERROR_DETAILS("failed to destroy sha: %s",
+                doca_get_error_string(doca_result));
+            result = SC_ERROR_INTERNAL;
+        }
     #endif // SC_NEED_DOCA_SHA
 
 init_doca_exit:
