@@ -83,18 +83,18 @@ _parse_app_kv_pair_exit:
  */
 int _process_enter(struct sc_config *sc_config){
     /* calculate per-core meter value */
-    PER_CORE_META(sc_config).per_core_meter = 
+    PER_CORE_APP_META(sc_config).per_core_meter = 
         (float)INTERNAL_CONF(sc_config)->meter / (float)sc_config->nb_used_cores;
-    SC_THREAD_LOG("per core meter is %f Gbps", PER_CORE_META(sc_config).per_core_meter);
+    SC_THREAD_LOG("per core meter is %f Gbps", PER_CORE_APP_META(sc_config).per_core_meter);
 
     /* initialize the last_send_time */
-    if(unlikely(-1 == gettimeofday(&PER_CORE_META(sc_config).last_send_time, NULL))){
+    if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).last_send_time, NULL))){
         SC_THREAD_ERROR_DETAILS("failed to obtain current time");
         return SC_ERROR_INTERNAL;
     }
 
     /* initialize the start_time */
-    if(unlikely(-1 == gettimeofday(&PER_CORE_META(sc_config).start_time, NULL))){
+    if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).start_time, NULL))){
         SC_THREAD_ERROR_DETAILS("failed to obtain current time");
         return SC_ERROR_INTERNAL;
     }
@@ -146,14 +146,14 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
         result = SC_ERROR_INTERNAL;
         goto process_client_ready_to_exit;
     }
-    interval_sec = current_time.tv_sec - PER_CORE_META(sc_config).last_send_time.tv_sec;
-    interval_usec = current_time.tv_usec - PER_CORE_META(sc_config).last_send_time.tv_usec;
+    interval_sec = current_time.tv_sec - PER_CORE_APP_META(sc_config).last_send_time.tv_sec;
+    interval_usec = current_time.tv_usec - PER_CORE_APP_META(sc_config).last_send_time.tv_usec;
     interval_usec += 1000000 * interval_sec;    /* duration since last send (us) */
 
     /* meter check */
     if( INTERNAL_CONF(sc_config)->pkt_len
-        * PER_CORE_META(sc_config).nb_send_pkt_interval
-        * 8 > PER_CORE_META(sc_config).per_core_meter * 1000000000
+        * PER_CORE_APP_META(sc_config).nb_send_pkt_interval
+        * 8 > PER_CORE_APP_META(sc_config).per_core_meter * 1000000000
     ){
         goto process_client_exit;
     }
@@ -168,14 +168,14 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
     }
     
     /* refresh last send time */
-    if(unlikely(-1 == gettimeofday(&PER_CORE_META(sc_config).last_send_time, NULL))){
+    if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).last_send_time, NULL))){
         SC_THREAD_ERROR_DETAILS("failed to obtain current time");
         result = SC_ERROR_INTERNAL;
         goto process_client_ready_to_exit;
     }
 
     /* refresh number of sent packet within the interval */
-    PER_CORE_META(sc_config).nb_send_pkt_interval = 0;
+    PER_CORE_APP_META(sc_config).nb_send_pkt_interval = 0;
 
     /* assemble udp header */
     src_port = sc_util_random_unsigned_int16();
@@ -243,8 +243,8 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
     for(i=0; i<sc_config->nb_used_ports; i++){
         nb_tx += rte_eth_tx_burst(sc_config->port_ids[i], queue_id, send_pkt_bufs, INTERNAL_CONF(sc_config)->nb_pkt_per_burst);
     }
-    PER_CORE_META(sc_config).nb_send_pkt += nb_tx;
-    PER_CORE_META(sc_config).nb_send_pkt_interval += nb_tx;
+    PER_CORE_APP_META(sc_config).nb_send_pkt += nb_tx;
+    PER_CORE_APP_META(sc_config).nb_send_pkt_interval += nb_tx;
     
     goto process_client_exit;
 
@@ -267,20 +267,20 @@ int _process_exit(struct sc_config *sc_config){
     long interval_usec;
 
     /* initialize the end_time */
-    if(unlikely(-1 == gettimeofday(&PER_CORE_META(sc_config).end_time, NULL))){
+    if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).end_time, NULL))){
         SC_THREAD_ERROR_DETAILS("failed to obtain current time");
         return SC_ERROR_INTERNAL;
     }
 
     interval_sec 
-        = PER_CORE_META(sc_config).end_time.tv_sec - PER_CORE_META(sc_config).start_time.tv_sec;
+        = PER_CORE_APP_META(sc_config).end_time.tv_sec - PER_CORE_APP_META(sc_config).start_time.tv_sec;
     interval_usec 
-        = PER_CORE_META(sc_config).end_time.tv_usec - PER_CORE_META(sc_config).start_time.tv_usec;
+        = PER_CORE_APP_META(sc_config).end_time.tv_usec - PER_CORE_APP_META(sc_config).start_time.tv_usec;
     interval_usec += 1000 * 1000 * interval_sec;    /* duration since last send (us) */
 
     SC_THREAD_LOG("send %d packets in total, throughput: %f Gbps",
-        PER_CORE_META(sc_config).nb_send_pkt,
-        (float)(PER_CORE_META(sc_config).nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
+        PER_CORE_APP_META(sc_config).nb_send_pkt,
+        (float)(PER_CORE_APP_META(sc_config).nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
         / (float)(interval_usec * 1000)
     );
     return SC_SUCCESS;

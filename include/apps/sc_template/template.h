@@ -1,7 +1,7 @@
 #ifndef _SC_TEMPLATE_H_
 #define _SC_TEMPLATE_H_
 
-struct _per_core_meta {
+struct _per_core_app_meta {
     int something;
 };
 

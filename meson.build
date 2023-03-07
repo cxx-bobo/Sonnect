@@ -9,7 +9,7 @@ project_name = 'soconnect'
 project_name_abbreviation = 'sc'
 
 # specified which application to use
-app = 'pktgen'
+app = 'sketch'
 add_global_arguments('-DAPP_' + app.to_upper(), language: 'c')
 
 # set configuration file for the application

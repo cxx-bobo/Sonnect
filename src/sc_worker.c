@@ -13,18 +13,30 @@ extern volatile bool sc_force_quit;
  */
 int __worker_loop_init(struct sc_config *sc_config) {
     int i;
+#define MBUF_POOL_NAME_LEM 32
+    char *mbuf_pool_name;
     struct rte_mempool *pktmbuf_pool;
     
-    /* allocate memory buffer pool for current thread */
-    pktmbuf_pool = rte_pktmbuf_pool_create(
-        "mbuf_pool", NUM_MBUFS, MEMPOOL_CACHE_SIZE, 0, 
-        RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
-    if (!pktmbuf_pool){
-        SC_THREAD_ERROR_DETAILS("failed to allocate memory for mbuf pool");
+    /* specified mbuf pool name for current thread */
+    mbuf_pool_name = (char*)malloc(sizeof(char)*MBUF_POOL_NAME_LEM);
+    if(unlikely(!mbuf_pool_name)){
+        SC_ERROR_DETAILS("failed to allocate memory for mbuf_pool_name");
         return SC_ERROR_MEMORY;
     }
-    PER_CORE_MBUF_POOL(sc_config) = pktmbuf_pool;
+    sprintf(mbuf_pool_name, "mbuf_pool_core_%u", rte_lcore_id());
+    PER_CORE_META(sc_config).mbuf_pool_name = mbuf_pool_name;
 
+    /* allocate memory buffer pool for current thread */
+    pktmbuf_pool = rte_pktmbuf_pool_create(
+        mbuf_pool_name, NUM_MBUFS, MEMPOOL_CACHE_SIZE, 0, 
+        RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+    if (!pktmbuf_pool){
+        SC_THREAD_ERROR_DETAILS("failed to allocate memory for mbuf pool: %s", rte_strerror(rte_errno));
+        return SC_ERROR_MEMORY;
+    }
+    rte_pktmbuf_pool_init(pktmbuf_pool, NULL);
+    PER_CORE_MBUF_POOL(sc_config) = pktmbuf_pool;
+    
     return SC_SUCCESS;
 }
 
@@ -72,24 +84,16 @@ int _worker_loop(void* param){
     if(sc_config->app_config->process_enter(sc_config) != SC_SUCCESS){
         SC_THREAD_WARNING("error occurs while executing enter callback\n");
     }
-
+    
     while(!sc_force_quit){
         /* role: server */
         #if defined(ROLE_SERVER)
             for(i=0; i<sc_config->nb_used_ports; i++){
-                for(j=0; j<SC_MAX_PKT_BURST; j++) {
-                    pkt[j] = rte_pktmbuf_alloc(PER_CORE_MBUF_POOL(sc_config));
-                    if(unlikely(!pkt[j])){
-                        SC_THREAD_ERROR_DETAILS("failed to allocate memory for pktmbuf");
-                        goto worker_exit;
-                    }
-                }
-
                 nb_rx = rte_eth_rx_burst(i, queue_id, pkt, SC_MAX_PKT_BURST);
                 
                 if(nb_rx == 0) goto free_pkt_mbuf;
                 
-                SC_THREAD_LOG("received %u ethernet frames", nb_rx);
+                // SC_THREAD_LOG("received %u ethernet frames", nb_rx);
 
                 for(j=0; j<nb_rx; j++){
                     /* Hook Point: Packet Processing */
@@ -108,11 +112,10 @@ int _worker_loop(void* param){
                     // reset need forward flag
                     need_forward = false;
                 }
+
             free_pkt_mbuf:
-                for(j=0; j<SC_MAX_PKT_BURST; j++) {
-                    if(pkt[j]){
-                        rte_pktmbuf_free(pkt[j]);
-                    }
+                for(j=0; j<nb_rx; j++) {
+                    if(pkt[j]){ rte_pktmbuf_free(pkt[j]); }
                 }
             }
         #endif // ROLE_SERVER
@@ -147,15 +150,17 @@ int init_worker_threads(struct sc_config *sc_config){
     /* initialize the indicator for quiting all worker threads */
     sc_force_quit = false;
 
-    /* allocate per-core memory pool array */
-    struct rte_mempool **per_core_pktmbuf_pool = NULL;
-    per_core_pktmbuf_pool = (struct rte_mempool**)rte_malloc(NULL, sizeof(struct rte_mempool*)*sc_config->nb_used_cores, 0);
-    if(unlikely(!per_core_pktmbuf_pool)){
-        SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_pktmbuf_pool array");
+    /* allocate per-core metadata array */
+    struct per_core_meta *per_core_meta_array = NULL;
+    per_core_meta_array = (struct per_core_meta*)rte_malloc(NULL, 
+        sizeof(struct per_core_meta)*sc_config->nb_used_cores, 0);
+    if(unlikely(!per_core_meta_array)){
+        SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_meta array");
         return SC_ERROR_MEMORY;
     }
-    sc_config->per_core_pktmbuf_pool = per_core_pktmbuf_pool;
-
+    memset(per_core_meta_array, 0, sizeof(struct per_core_meta)*sc_config->nb_used_cores);
+    sc_config->per_core_meta = per_core_meta_array;
+    
     return SC_SUCCESS;
 }
 

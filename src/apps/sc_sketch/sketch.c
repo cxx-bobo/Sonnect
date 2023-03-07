@@ -128,12 +128,12 @@ int _process_enter(struct sc_config *sc_config){
             SC_ERROR("failed to allocate memory for sc_kv_map_t");
             return SC_ERROR_MEMORY;
         }
-        PER_CORE_META(sc_config).kv_map = kv_map;
+        PER_CORE_APP_META(sc_config).kv_map = kv_map;
     #endif // MODE_ACCURACY
 
     #if defined(MODE_LATENCY) || defined(MODE_THROUGHPUT)
         /* record the start time of this thread */
-        gettimeofday(&PER_CORE_META(sc_config).thread_start_time, NULL);
+        gettimeofday(&PER_CORE_APP_META(sc_config).thread_start_time, NULL);
     #endif // MODE_ACCURACY || MODE_THROUGHPUT
 
     goto process_enter_exit;
@@ -253,8 +253,8 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fw
 
     /* record number of processing packets and bytes */
     #if defined(MODE_THROUGHPUT) || defined(MODE_LATENCY)
-        PER_CORE_META(sc_config).nb_pkts += 1;
-        PER_CORE_META(sc_config).nb_bytes += pkt->data_len;
+        PER_CORE_APP_META(sc_config).nb_pkts += 1;
+        PER_CORE_APP_META(sc_config).nb_bytes += pkt->data_len;
     #endif // MODE_THROUGHPUT || MODE_LATENCY
 
     /* record the received flow */
@@ -266,7 +266,7 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fw
 
     #if defined(MODE_LATENCY)
         gettimeofday(&pkt_process_end, NULL);
-        PER_CORE_META(sc_config).overall_pkt_process.tv_usec 
+        PER_CORE_APP_META(sc_config).overall_pkt_process.tv_usec 
             += (pkt_process_end.tv_sec - pkt_process_start.tv_sec) * 1000000 
                 + (pkt_process_end.tv_usec - pkt_process_start.tv_usec);
     #endif // MODE_LATENCY
@@ -299,7 +299,7 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
 int _process_exit(struct sc_config *sc_config){
     #if defined(MODE_LATENCY) || defined(MODE_THROUGHPUT)
         /* record the start time of this thread */
-        gettimeofday(&PER_CORE_META(sc_config).thread_end_time, NULL);
+        gettimeofday(&PER_CORE_APP_META(sc_config).thread_end_time, NULL);
     #endif // MODE_LATENCY || MODE_THROUGHPUT
 
     /* start evaluation process */

@@ -44,7 +44,7 @@ struct _sketch_core {
 /* =================== Application Interfaces =================== */
 
 /* per-core metadata of all sketches */
-struct _per_core_meta {
+struct _per_core_app_meta {
     #if defined(MODE_LATENCY) || defined(MODE_THROUGHPUT)
         /* throughput measure: number of processed packet/bytes */
         uint64_t nb_pkts;

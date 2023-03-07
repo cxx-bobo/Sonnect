@@ -5,7 +5,7 @@
 #include <rte_ether.h>
 #include <rte_malloc.h>
 
-struct _per_core_meta {
+struct _per_core_app_meta {
     float per_core_meter;
 
     uint64_t nb_send_pkt;

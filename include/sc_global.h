@@ -9,6 +9,7 @@
 #include <rte_mbuf.h>
 #include <rte_mempool.h>
 #include <rte_version.h>
+#include <rte_lcore.h>
 
 /* 
  * the compiler will define SC_CLOSE_MOCK_MACRO 
@@ -33,6 +34,7 @@
 
 struct app_config;
 struct doca_config;
+struct per_core_meta;
 
 /* global configuration of SoConnect */
 struct sc_config {
@@ -58,22 +60,26 @@ struct sc_config {
     struct rte_mempool *pktmbuf_pool;
     uint16_t nb_memory_channels_per_socket;
 
-    /* app */
+    /* application global configuration */
     struct app_config *app_config;
 
+    /* application per-core metadata */
+    void *per_core_app_meta;
+
     /* per-core metadata */
-    void *per_core_meta;
+    struct per_core_meta *per_core_meta;
 
     /* per-core memory buffer pool */
-    struct rte_mempool **per_core_pktmbuf_pool;
+    struct rte_mempool *per_core_pktmbuf_pool;
 
     /* doca specific configurations */
     #if defined(SC_HAS_DOCA)
         void *doca_config;
     #endif
 };
-#define PER_CORE_META(scc) ((struct _per_core_meta*)scc->per_core_meta)[rte_lcore_id()]
-#define PER_CORE_MBUF_POOL(scc) ((struct rte_mempool**)scc->per_core_pktmbuf_pool)[rte_lcore_id()]
+#define PER_CORE_META(scc) ((struct per_core_meta*)scc->per_core_meta)[rte_lcore_index(rte_lcore_id())]
+#define PER_CORE_MBUF_POOL(scc) (PER_CORE_META(scc)).pktmbuf_pool
+#define PER_CORE_APP_META(scc) ((struct _per_core_app_meta*)scc->per_core_app_meta)[rte_lcore_index(rte_lcore_id())]
 #define INTERNAL_CONF(scc) ((struct _internal_config*)scc->app_config->internal_config)
 
 /* application specific configuration */
@@ -89,6 +95,18 @@ struct app_config {
 
     /* internal configuration of the application */
     void *internal_config;
+};
+
+/* per-core metadata */
+struct per_core_meta {
+    /* core id starts from 0 */
+    uint64_t core_seq_id;
+
+    /* name of the private memory buffer */
+    char *mbuf_pool_name;
+
+    /* per-core memory pool */
+    struct rte_mempool *pktmbuf_pool
 };
 
 #endif // _SC_GLOBAL_H_
