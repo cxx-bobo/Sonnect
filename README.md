@@ -11,6 +11,9 @@
 
 ```bash
 sudo apt-get install libgmp3-dev
+
+python3 -m pip install meson
+python3 -m pip install ninja
 ```
 
 3. (Optional) DOCA support

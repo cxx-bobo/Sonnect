@@ -17,6 +17,7 @@
 
 int sc_util_generate_random_ether_addr(char *addr);
 int sc_util_generate_random_ipv4_addr(uint32_t *addr);
+int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);
 int sc_util_copy_buf_to_pkt(void *buf, unsigned len, struct rte_mbuf *pkt, unsigned offset);
 int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,

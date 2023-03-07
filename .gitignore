@@ -4,3 +4,5 @@
 **/dpdk-21.11
 **/__pycache__
 doca/
+ref/MLNX_OFED_LINUX-5.4-3.6.8.1-ubuntu16.04-x86_64/
+ref/MLNX_OFED_LINUX-5.4-3.6.8.1-ubuntu16.04-x86_64.tgz

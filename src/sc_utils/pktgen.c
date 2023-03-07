@@ -33,9 +33,20 @@ int sc_util_generate_random_ipv4_addr(uint32_t *addr){
 	for(i=0; i<4; i++){
 		sub_addr[i] = sc_util_random_unsigned_int8();
 	}
+	
+	return sc_util_generate_ipv4_addr(sub_addr, addr);
+}
 
-	*addr = IPV4_ADDR(sub_addr[0], sub_addr[1], sub_addr[2], sub_addr[3]);
-
+/*!
+ * \brief   generate specified ipv4 address
+ * \param	specified_addr	specified ipv4 address
+ * \param   result_addr		generated 32-bit ipv4 address
+ * \return  0 for successfully generation
+ */
+int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr){
+	*result_addr = IPV4_ADDR(
+		specified_addr[0], specified_addr[1], specified_addr[2], specified_addr[3]
+	);
 	return SC_SUCCESS;
 }
 

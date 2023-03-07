@@ -187,13 +187,17 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
     }
 
     /* assemble ipv4 header */
-    if(SC_SUCCESS != sc_util_generate_random_ipv4_addr(&src_ipv4_addr)){
-        SC_THREAD_ERROR("failed to generate random source ipv4 address");
+    uint8_t src_ipv4[4] = {192, 168, 10, 1};
+    uint8_t dst_ipv4[4] = {192, 168, 10, 2};
+    if(SC_SUCCESS != sc_util_generate_ipv4_addr(src_ipv4, &src_ipv4_addr)){
+        SC_THREAD_ERROR("failed to generate source ipv4 address %u.%u.%u.%u",
+            src_ipv4[0], src_ipv4[1], src_ipv4[2], src_ipv4[3]);
         result = SC_ERROR_INTERNAL;
         goto process_client_ready_to_exit;
     }
-    if(SC_SUCCESS != sc_util_generate_random_ipv4_addr(&dst_ipv4_addr)){
-        SC_THREAD_ERROR("failed to generate random destination ipv4 address");
+    if(SC_SUCCESS != sc_util_generate_ipv4_addr(dst_ipv4, &dst_ipv4_addr)){
+        SC_THREAD_ERROR("failed to generate destination ipv4 address %u.%u.%u.%u",
+            dst_ipv4[0], dst_ipv4[1], dst_ipv4[2], dst_ipv4[3]);
         result = SC_ERROR_INTERNAL;
         goto process_client_ready_to_exit;
     }
@@ -225,11 +229,11 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
         goto process_client_ready_to_exit;
     }
     
-    /* assembly fininal pkt brust */
+    /* assemble fininal pkt brust */
     // 1 segment per packet
     // packet length: 60 = eth(18) + ipv4(20) + udp(8) + data(14)
     if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
-            sc_config->pktmbuf_pool, send_pkt_bufs, &pkt_eth_hdr, 0, &pkt_ipv4_hdr, 1, IPPROTO_UDP, &pkt_udp_hdr, INTERNAL_CONF(sc_config)->nb_pkt_per_burst, INTERNAL_CONF(sc_config)->pkt_len, 1)){
+            PER_CORE_MBUF_POOL(sc_config), send_pkt_bufs, &pkt_eth_hdr, 0, &pkt_ipv4_hdr, 1, IPPROTO_UDP, &pkt_udp_hdr, INTERNAL_CONF(sc_config)->nb_pkt_per_burst, INTERNAL_CONF(sc_config)->pkt_len, 1)){
         SC_THREAD_ERROR("failed to assemble final packet");
         result = SC_ERROR_INTERNAL;
         goto process_client_ready_to_exit;

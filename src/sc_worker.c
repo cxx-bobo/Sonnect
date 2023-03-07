@@ -1,9 +1,33 @@
 #include "sc_global.h"
 #include "sc_worker.h"
 #include "sc_utils.h"
+#include "sc_mbuf.h"
 #include "sc_log.h"
 
 extern volatile bool sc_force_quit;
+
+/*!
+ * \brief   initialize worker loop after enter it
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully initialization
+ */
+int __worker_loop_init(struct sc_config *sc_config) {
+    int i;
+    struct rte_mempool *pktmbuf_pool;
+    
+    /* allocate memory buffer pool for current thread */
+    pktmbuf_pool = rte_pktmbuf_pool_create(
+        "mbuf_pool", NUM_MBUFS, MEMPOOL_CACHE_SIZE, 0, 
+        RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+    if (!pktmbuf_pool){
+        SC_THREAD_ERROR_DETAILS("failed to allocate memory for mbuf pool");
+        return SC_ERROR_MEMORY;
+    }
+    PER_CORE_MBUF_POOL(sc_config) = pktmbuf_pool;
+
+    return SC_SUCCESS;
+}
+
 
 /*!
  * \brief   function that execute on each lcore threads
@@ -15,6 +39,13 @@ int _worker_loop(void* param){
     uint16_t i, j, queue_id, forward_port_id, nb_rx, nb_tx;
     bool need_forward = false;
     struct sc_config *sc_config = (struct sc_config*)param;
+
+    /* initialize woker loop */
+    result = __worker_loop_init(sc_config);
+    if(result != SC_SUCCESS){
+        SC_THREAD_ERROR("failed to initialize worker loop");
+        goto worker_exit;
+    }
 
     #if defined(ROLE_SERVER)
         static struct rte_mbuf *pkt[SC_MAX_PKT_BURST];
@@ -47,7 +78,7 @@ int _worker_loop(void* param){
         #if defined(ROLE_SERVER)
             for(i=0; i<sc_config->nb_used_ports; i++){
                 for(j=0; j<SC_MAX_PKT_BURST; j++) {
-                    pkt[j] = rte_pktmbuf_alloc(sc_config->pktmbuf_pool);
+                    pkt[j] = rte_pktmbuf_alloc(PER_CORE_MBUF_POOL(sc_config));
                     if(unlikely(!pkt[j])){
                         SC_THREAD_ERROR_DETAILS("failed to allocate memory for pktmbuf");
                         goto worker_exit;
@@ -112,15 +143,18 @@ worker_exit:
  * \param   sc_config   the global configuration
  * \return  zero for successfully initialization
  */
-int init_worker_threads(struct sc_config *sc_config){
+int init_worker_threads(struct sc_config *sc_config){    
     /* initialize the indicator for quiting all worker threads */
     sc_force_quit = false;
 
-    /* make sure the process_pkt function is set */
-    if(!sc_config->app_config->process_pkt){
-        SC_ERROR_DETAILS("empty process_pkt function pointer");
-        return SC_ERROR_INTERNAL;
+    /* allocate per-core memory pool array */
+    struct rte_mempool **per_core_pktmbuf_pool = NULL;
+    per_core_pktmbuf_pool = (struct rte_mempool**)rte_malloc(NULL, sizeof(struct rte_mempool*)*sc_config->nb_used_cores, 0);
+    if(unlikely(!per_core_pktmbuf_pool)){
+        SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_pktmbuf_pool array");
+        return SC_ERROR_MEMORY;
     }
+    sc_config->per_core_pktmbuf_pool = per_core_pktmbuf_pool;
 
     return SC_SUCCESS;
 }
