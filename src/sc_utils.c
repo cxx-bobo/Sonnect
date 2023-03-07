@@ -52,7 +52,7 @@ int sc_util_check_core_id(uint32_t core_id){
 int sc_util_parse_config(
         FILE* fp, struct sc_config* sc_config, 
         int (*parse_kv_pair)(char* key, char *value, struct sc_config* sc_config)){
-    char buf[64];
+    char buf[512];
     char s[64];
     char* delim = "=";
     char ch;
@@ -165,7 +165,7 @@ int sc_util_atoui_32(char *in, uint32_t *out){
  * \brief   generate random unsigned 64-bits integer
  * \return  the generated value
  */
-uint64_t random_unsigned_int64(){
+uint64_t sc_util_random_unsigned_int64(){
     uint16_t i;
     uint64_t r=0;
     for(i=0; i<64; i++)
@@ -174,7 +174,7 @@ uint64_t random_unsigned_int64(){
 }
 
 /*!
- * \brief   generate random unsigned 64-bits integer
+ * \brief   generate random unsigned 32-bits integer
  * \return  the generated value
  */
 uint32_t sc_util_random_unsigned_int32(){
@@ -184,6 +184,31 @@ uint32_t sc_util_random_unsigned_int32(){
         r = r*2+rand()%2;
     return r;
 }
+
+/*!
+ * \brief   generate random unsigned 16-bits integer
+ * \return  the generated value
+ */
+uint16_t sc_util_random_unsigned_int16(){
+    uint16_t i;
+    uint16_t r=0;
+    for(i=0; i<16; i++)
+        r = r*2+rand()%2;
+    return r;
+}
+
+/*!
+ * \brief   generate random unsigned 8-bits integer
+ * \return  the generated value
+ */
+uint8_t sc_util_random_unsigned_int8(){
+    uint16_t i;
+    uint8_t r=0;
+    for(i=0; i<16; i++)
+        r = r*2+rand()%2;
+    return r;
+}
+
 
 /* ========================================================== */
 

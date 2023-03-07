@@ -17,16 +17,6 @@
 int _init_app(struct sc_config *sc_config){
     int i;
     
-    /* allocate per-core metadata */
-    struct _per_core_meta *per_core_meta 
-        = (struct _per_core_meta*)rte_malloc(NULL, sizeof(struct _per_core_meta)*sc_config->nb_used_cores, 0);
-    if(unlikely(!per_core_meta)){
-        SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_meta");
-        return SC_ERROR_MEMORY;
-    }
-    memset(per_core_meta, 0, sizeof(struct _per_core_meta)*sc_config->nb_used_cores);
-    sc_config->per_core_meta = per_core_meta;
-
     /* allocate memory space for sketch */
     /* cm_sketch */
     #if defined(SKETCH_TYPE_CM)
@@ -157,9 +147,11 @@ process_enter_exit:
  * \brief   callback for processing packet
  * \param   pkt         the received packet
  * \param   sc_config   the global configuration
+ * \param   fwd_port_id     specified the forward port index if need to forward packet
+ * \param   need_forward    indicate whether need to forward packet, default to be false
  * \return  zero for successfully processing
  */
-int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
+int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fwd_port_id, bool *need_forward){
     #if defined(MODE_LATENCY)
         struct timeval pkt_process_start, pkt_process_end;
         gettimeofday(&pkt_process_start, NULL);
@@ -255,7 +247,6 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config){
     // fflush(stdout);
 
     /* update sketch */
-    SC_THREAD_LOG("before update");
     if(SC_SUCCESS != INTERNAL_CONF(sc_config)->sketch_core.update(tuple_key, sc_config)){
         goto process_pkt_warning;
     }
@@ -292,10 +283,11 @@ process_pkt_exit:
 /*!
  * \brief   callback for client logic
  * \param   sc_config       the global configuration
+ * \param   queue_id        the index of the queue for current core to tx/rx packet
  * \param   ready_to_exit   indicator for exiting worker loop
  * \return  zero for successfully executing
  */
-int _process_client(struct sc_config *sc_config, bool *ready_to_exit){
+int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     return SC_ERROR_NOT_IMPLEMENTED;
 }
 

@@ -2,13 +2,8 @@
 #define _SC_SKETCH_H_
 
 #include <sys/time.h>
-
-#include <rte_malloc.h>
-#include <rte_mbuf.h>
 #include <rte_ether.h>
-#include <rte_ip.h>
-#include <rte_udp.h>
-#include <rte_tcp.h>
+#include <rte_malloc.h>
 
 #include "sc_global.h"
 #include "sc_utils/map.h"
@@ -73,7 +68,6 @@ struct _per_core_meta {
     #endif
 
 };
-#define PER_CORE_META(scc) ((struct _per_core_meta*)scc->per_core_meta)[rte_lcore_id()]
 
 /* definition of internal config */
 struct _internal_config {
@@ -96,14 +90,13 @@ struct _internal_config {
         struct cm_sketch *cm_sketch;
     #endif
 };
-#define INTERNAL_CONF(scc) ((struct _internal_config*)scc->app_config->internal_config)
 
 /* must-provided interfaces */
 int _init_app(struct sc_config *sc_config);
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config);
 int _process_enter(struct sc_config *sc_config);
-int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config);
-int _process_client(struct sc_config *sc_config, bool *ready_to_exit);
+int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fwd_port_id, bool *need_forward);
+int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
 int _process_exit(struct sc_config *sc_config);
 
 /* ============================================================== */

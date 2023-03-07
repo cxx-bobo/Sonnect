@@ -25,13 +25,6 @@ volatile bool sc_force_quit;
 /* path to the dpdk configuration file */
 const char* dpdk_conf_path = "../conf/dpdk.conf";
 
-/* path to the application configuration file */
-#if defined(APP_SKETCH)
-  const char* app_conf_path = "../conf/sketch.conf";
-#else
-  const char* app_conf_path = "";
-#endif // APP_*
-
 /* path to the doca configuration file */
 #if defined(SC_HAS_DOCA)
   const char* doca_conf_path = "../conf/doca.conf";
@@ -84,6 +77,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("open dpdk configuration file from %s", dpdk_conf_path);
 
   /* parse dpdk configuration file */
   if(sc_util_parse_config(fp, sc_config, _parse_dpdk_kv_pair) != SC_SUCCESS){
@@ -91,6 +85,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("parsed configuration file");
 
   /* check configurations */
   if(_check_configuration(sc_config, argc, argv) != SC_SUCCESS){
@@ -98,6 +93,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("checked configuration file");
 
   /* init environment */
   if(_init_env(sc_config, argc, argv) != SC_SUCCESS){
@@ -105,6 +101,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("initialized dpdk environment");
 
   /* initailize memory */
   if(init_memory(sc_config) != SC_SUCCESS){
@@ -112,6 +109,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("initialized rte memory");
 
   /* initailize ports */
   if(init_ports(sc_config) != SC_SUCCESS){
@@ -119,6 +117,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("initialized rte ports");
 
   /* initailize doca (if necessary) */
   #if defined(SC_HAS_DOCA)
@@ -127,14 +126,16 @@ int main(int argc, char **argv){
       result = EXIT_FAILURE;
       goto sc_exit;
     }
+    SC_LOG("initialized doca");
   #endif
 
   /* initailize application */
-  if(init_app(sc_config, app_conf_path) != SC_SUCCESS){
+  if(init_app(sc_config, APP_CONF_PATH) != SC_SUCCESS){
     SC_ERROR("failed to config application\n");
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("initialized application");
 
   /* initailize lcore threads */
   if(init_worker_threads(sc_config) != SC_SUCCESS){
@@ -142,6 +143,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("initialized worker threads");
 
   /* initailize logging thread */
   if(init_logging_thread(sc_config) != SC_SUCCESS){
@@ -149,6 +151,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("initialized logging threads");
 
   /* launch logging thread */
   if(launch_logging_thread_async(sc_config) != SC_SUCCESS){
@@ -156,6 +159,7 @@ int main(int argc, char **argv){
     result = EXIT_FAILURE;
     goto sc_exit;
   }
+  SC_LOG("launch logging threads");
 
   /* (sync/async) launch worker threads */
   if(launch_worker_threads(sc_config) != SC_SUCCESS){
@@ -179,10 +183,14 @@ sc_exit:
 static int _init_env(struct sc_config *sc_config, int argc, char **argv){
   int i, ret, rte_argc = 0;
   char *rte_argv[SC_RTE_ARGC_MAX];
+  char rte_init_str[256] = {0};
   mpz_t cpu_mask;
   char cpu_mask_buf[SC_MAX_NB_PORTS] = {0};
   char mem_channels_buf[8] = "";
   
+  /* reset the random seed */
+  srand((unsigned)time(NULL));
+
   /* config cpu mask */
   mpz_init(cpu_mask);
   for(i=0; i<sc_config->nb_used_cores; i++){
@@ -219,7 +227,7 @@ static int _init_env(struct sc_config *sc_config, int argc, char **argv){
       return SC_ERROR_MEMORY;
     }
     for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){
-      #define SF_EAL_CONF_STRLEN 64
+      #define SF_EAL_CONF_STRLEN 128
         sf_eal_confs[i] = (char*)malloc(sizeof(char)*SF_EAL_CONF_STRLEN);
         if(unlikely(!sf_eal_confs[i])){
           SC_ERROR_DETAILS("Failed to allocate memory for sf_eal_confs[%d]", i);
@@ -230,11 +238,20 @@ static int _init_env(struct sc_config *sc_config, int argc, char **argv){
           DOCA_CONF(sc_config)->scalable_functions[i]);
       #undef SF_EAL_CONF_STRLEN
 
-      rte_argv[rte_argc+i] = "-a";
-      rte_argv[rte_argc+1+i] = sf_eal_confs[i];
+      rte_argv[rte_argc] = "-a";
+      rte_argv[rte_argc+1] = sf_eal_confs[i];
       rte_argc += 2;
     }
   #endif // SC_HAS_DOCA
+
+  for(i=0; i<rte_argc; i++){
+    if(i!=0){
+      sprintf(rte_init_str, "%s %s", rte_init_str, rte_argv[i]);
+    } else {
+      sprintf(rte_init_str, "%s", rte_argv[i]);
+    }
+  }
+  SC_LOG("EAL initialize parameters:\n\t%s", rte_init_str);
 
   /* initialize rte eal */
   ret = rte_eal_init(rte_argc, rte_argv);
@@ -368,7 +385,11 @@ static int _parse_dpdk_kv_pair(char* key, char *value, struct sc_config* sc_conf
             strcpy(port_mac, p);
             sc_config->port_mac[nb_ports] = port_mac;
             nb_ports += 1;
+            printf("conf port mac: %s\n", port_mac);
         }
+
+        sc_config->nb_conf_ports = nb_ports;
+        printf("nb of conf port mac: %d\n", nb_ports);
 
         goto exit;
 
@@ -529,7 +550,6 @@ invalid_log_core_id:
                 p = strtok(value, delim);
             else
                 p = strtok(NULL, delim);
-            
             if (!p) break;
 
             p = sc_util_del_both_trim(p);
@@ -549,6 +569,7 @@ invalid_log_core_id:
         }
 
         DOCA_CONF(sc_config)->nb_used_sfs = nb_sfs;
+
         goto exit;
 
 free_sfs:

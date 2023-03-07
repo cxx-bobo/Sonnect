@@ -43,7 +43,7 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
         if (doca_result != DOCA_SUCCESS) {
             SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string(result));
             result = SC_ERROR_INTERNAL;
-            goto init_doca_exit;
+            goto sha_init_failed;
         }
         DOCA_CONF(sc_config)->sha_ctx = doca_sha_as_ctx(sha_ctx);
 
@@ -53,16 +53,9 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
             &(DOCA_CONF(sc_config)->sha_dev)
         );
         if (result != SC_SUCCESS) {
-            SC_ERROR_DETAILS("failed to open pci device of sha engine");
-
-            doca_result = doca_sha_destroy(sha_ctx);
-            if(doca_result != DOCA_SUCCESS){
-                SC_ERROR_DETAILS("failed to destory sha engine: %s",
-                    doca_get_error_string(doca_result));
-                result = SC_ERROR_INTERNAL;
-            }
-            
-            goto init_doca_exit;
+            SC_ERROR("failed to open pci device of sha engine");
+            result = SC_ERROR_INTERNAL;
+            goto sha_destory_ctx;
         }
 
         /* initialize doca core object for sha engine */
@@ -78,10 +71,12 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
         if(result != SC_SUCCESS){
             SC_ERROR("failed to initialize core objects for sha engine");
             result = SC_ERROR_INTERNAL;
-            goto sha_cleanup;
+            goto sha_destory_ctx;
         }
 
-sha_cleanup:
+        goto sha_init_successed;
+
+sha_destory_core_objects:
         sc_doca_util_destory_core_objects(
             &(DOCA_CONF(sc_config)->sha_mmap),
             &(DOCA_CONF(sc_config)->sha_dev),
@@ -90,12 +85,18 @@ sha_cleanup:
             &(DOCA_CONF(sc_config)->sha_workq)
         );
 
+sha_destory_ctx:
         doca_result = doca_sha_destroy(sha_ctx);
         if(doca_result != DOCA_SUCCESS){
             SC_ERROR_DETAILS("failed to destroy sha: %s",
                 doca_get_error_string(doca_result));
             result = SC_ERROR_INTERNAL;
         }
+
+sha_init_failed:
+        goto init_doca_exit;
+
+sha_init_successed:
     #endif // SC_NEED_DOCA_SHA
 
 init_doca_exit:
