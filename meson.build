@@ -4,13 +4,13 @@ project('SOCONNECT', 'C',
 		files('./VERSION'), check: true).stdout().strip(),
 )
 
-# project name
-project_name = 'soconnect'
-project_name_abbreviation = 'sc'
-
 # specified which application to use
-app = 'sketch'
+app = 'echo_server'
 add_global_arguments('-DAPP_' + app.to_upper(), language: 'c')
+
+# project name
+project_name = app
+project_name_abbreviation = 'sc'
 
 # set configuration file for the application
 app_conf_path = '"../conf/apps/' + app + '.conf"'
