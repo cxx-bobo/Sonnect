@@ -11,6 +11,12 @@
  * \return  zero for successfully initialization
  */
 int _init_app(struct sc_config *sc_config){
+    #if defined(MODE_LATENCY)
+        if(INTERNAL_CONF(sc_config)->nb_pkt_per_burst != 1){
+            SC_WARNING_DETAILS("suggest to use 1 pkt per brust while testing rtt");
+            return SC_ERROR_INVALID_VALUE;
+        }
+    #endif
     return SC_SUCCESS;
 }
 
@@ -224,25 +230,14 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
     
     struct timeval recv_time;
 
-    if(likely(PER_CORE_APP_META(sc_config).wait_ack)){
+    if(likely(PER_CORE_APP_META(sc_config).wait_ack > 0)){
 try_receive_ack:
-        /* allocate array for pointers to storing recving pkt_bufs */
-        for(i=0; i<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; i++){
-            PER_CORE_APP_META(sc_config).recv_pkt_bufs[i] 
-                = rte_pktmbuf_alloc(PER_CORE_MBUF_POOL(sc_config));
-            if (unlikely(!PER_CORE_APP_META(sc_config).recv_pkt_bufs[i])) {
-                SC_ERROR_DETAILS("failed to allocate memory for rte_mbuf");
-                result = SC_ERROR_MEMORY;
-                goto process_client_ready_to_exit;
-            }
-        }
-
         /* try receive ack */
         for(i=0; i<sc_config->nb_used_ports; i++){
             nb_rx = rte_eth_rx_burst(
                 /* port_id */ sc_config->port_ids[i], 
                 /* queue_id */ queue_id, 
-                /* rx_pkts */ PER_CORE_APP_META(sc_config).recv_pkt_bufs[i], 
+                /* rx_pkts */ PER_CORE_APP_META(sc_config).recv_pkt_bufs, 
                 /* nb_pkts */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst*4
             );
 
@@ -291,9 +286,9 @@ try_receive_ack:
         }
 
         /* return back recv pkt_mbuf */
-        for(j=0; j<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; j++) {
-            if(PER_CORE_APP_META(sc_config).recv_pkt_bufs[j]){ 
-                rte_pktmbuf_free(PER_CORE_APP_META(sc_config).recv_pkt_bufs[j]); 
+        for(i=0; i<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; i++) {
+            if(PER_CORE_APP_META(sc_config).recv_pkt_bufs[i]){
+                rte_pktmbuf_free(PER_CORE_APP_META(sc_config).recv_pkt_bufs[i]); 
             }
         }
 
@@ -309,8 +304,8 @@ try_receive_ack:
         /* if the number of packet to be sent reach the budget 
          the keep trying receiving ack, then exit */
         if(PER_CORE_APP_META(sc_config).nb_pkt_budget_per_core 
-                < PER_CORE_APP_META(sc_config).nb_send_pkt){
-            if(!has_ack && finial_retry_times <= 10000){
+                <= PER_CORE_APP_META(sc_config).nb_send_pkt){
+            if(!has_ack && finial_retry_times <= 100000){
                 finial_retry_times += 1;
                 goto try_receive_ack; 
             } else {
@@ -364,9 +359,7 @@ try_receive_ack:
 
     /* return back send pkt_mbuf */
     for(j=0; j<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; j++) {
-        if(PER_CORE_APP_META(sc_config).send_pkt_bufs[j]){ 
-            rte_pktmbuf_free(PER_CORE_APP_META(sc_config).send_pkt_bufs[j]); 
-        }
+        rte_pktmbuf_free(PER_CORE_APP_META(sc_config).send_pkt_bufs[j]); 
     }
 
     goto process_client_exit;
@@ -375,10 +368,6 @@ process_client_ready_to_exit:
     *ready_to_exit = true;
 
 process_client_exit:
-    if(PER_CORE_APP_META(sc_config).send_pkt_bufs)
-        rte_free(PER_CORE_APP_META(sc_config).send_pkt_bufs);
-    if(PER_CORE_APP_META(sc_config).recv_pkt_bufs)
-        rte_free(PER_CORE_APP_META(sc_config).recv_pkt_bufs);
     return result;
 }
 
@@ -388,8 +377,8 @@ process_client_exit:
  * \return  zero for successfully executing
  */
 int _process_exit(struct sc_config *sc_config){
-    long interval_sec;
-    long interval_usec;
+    long total_interval_sec;
+    long total_interval_usec;
 
     /* initialize the end_time */
     if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).end_time, NULL))){
@@ -397,16 +386,33 @@ int _process_exit(struct sc_config *sc_config){
         return SC_ERROR_INTERNAL;
     }
 
-    interval_sec 
+    /* calculate the total duration */
+    total_interval_sec 
         = PER_CORE_APP_META(sc_config).end_time.tv_sec - PER_CORE_APP_META(sc_config).start_time.tv_sec;
-    interval_usec 
+    total_interval_usec 
         = PER_CORE_APP_META(sc_config).end_time.tv_usec - PER_CORE_APP_META(sc_config).start_time.tv_usec;
-    interval_usec += 1000 * 1000 * interval_sec;    /* duration since last send (us) */
-
-    SC_THREAD_LOG("send %d packets in total, throughput: %f Gbps",
+    SC_THREAD_LOG("send %d packets in total, %d comfirmed",
         PER_CORE_APP_META(sc_config).nb_send_pkt,
-        (float)(PER_CORE_APP_META(sc_config).nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
-        / (float)(interval_usec * 1000)
+        PER_CORE_APP_META(sc_config).nb_confirmed_pkt
     );
+
+    #if defined(MODE_LATENCY)
+        SC_THREAD_LOG("max round-trip-time: %d us", SC_UTIL_TIME_INTERVL_US(
+            PER_CORE_APP_META(sc_config).max_rtt_sec, 
+            PER_CORE_APP_META(sc_config).max_rtt_usec)
+        )
+        SC_THREAD_LOG("min round-trip-time: %d us", SC_UTIL_TIME_INTERVL_US(
+            PER_CORE_APP_META(sc_config).min_rtt_sec, 
+            PER_CORE_APP_META(sc_config).min_rtt_usec)
+        )
+    #endif
+
+    #if defined(MODE_THROUGHPUT)
+        SC_THREAD_LOG("throughput: %f Gbps",
+            (float)(PER_CORE_APP_META(sc_config).nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
+            / (float)(SC_UTIL_TIME_INTERVL_US(total_interval_sec, total_interval_usec) * 1000)
+        );
+    #endif
+
     return SC_SUCCESS;
 }
