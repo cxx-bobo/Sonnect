@@ -42,43 +42,26 @@ int _process_enter(struct sc_config *sc_config){
  * \return  zero for successfully processing
  */
 int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fwd_port_id, bool *need_forward){
-    struct rte_ether_hdr *recv_eth_hdr;
-    struct rte_ether_hdr temp_eth_hdr;
-    
+    struct rte_ether_hdr *recv_eth_hdr, temp_eth_hdr;
+
     /* extract received ethernet header */
     recv_eth_hdr = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr*);
-    rte_ether_addr_copy(&recv_eth_hdr->src_addr, &temp_eth_hdr.src_addr);
-    rte_ether_addr_copy(&recv_eth_hdr->dst_addr, &temp_eth_hdr.dst_addr);
-
-    // printf("recv ether frame\n");
-    // printf("- source MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-    //         " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-    //     recv_eth_hdr->src_addr.addr_bytes[0], recv_eth_hdr->src_addr.addr_bytes[1],
-    //     recv_eth_hdr->src_addr.addr_bytes[2], recv_eth_hdr->src_addr.addr_bytes[3],
-    //     recv_eth_hdr->src_addr.addr_bytes[4], recv_eth_hdr->src_addr.addr_bytes[5]);
-    // printf("- dest MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-    //         " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-    //     recv_eth_hdr->dst_addr.addr_bytes[0], recv_eth_hdr->dst_addr.addr_bytes[1],
-    //     recv_eth_hdr->dst_addr.addr_bytes[2], recv_eth_hdr->dst_addr.addr_bytes[3],
-    //     recv_eth_hdr->dst_addr.addr_bytes[4], recv_eth_hdr->dst_addr.addr_bytes[5]);
-    // fflush(stdout);
+    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+        rte_ether_addr_copy(&recv_eth_hdr->src_addr, &temp_eth_hdr.src_addr);
+        rte_ether_addr_copy(&recv_eth_hdr->dst_addr, &temp_eth_hdr.dst_addr);
+    #else
+        rte_ether_addr_copy(&recv_eth_hdr->s_addr, &temp_eth_hdr.s_addr);
+        rte_ether_addr_copy(&recv_eth_hdr->d_addr, &temp_eth_hdr.d_addr);
+    #endif
 
     /* switch received ethernet header */
-    rte_ether_addr_copy(&temp_eth_hdr.dst_addr, &recv_eth_hdr->src_addr);
-    rte_ether_addr_copy(&temp_eth_hdr.src_addr, &recv_eth_hdr->dst_addr);
-
-    // printf("after switch:\n");
-    // printf("- source MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-    //         " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-    //     recv_eth_hdr->src_addr.addr_bytes[0], recv_eth_hdr->src_addr.addr_bytes[1],
-    //     recv_eth_hdr->src_addr.addr_bytes[2], recv_eth_hdr->src_addr.addr_bytes[3],
-    //     recv_eth_hdr->src_addr.addr_bytes[4], recv_eth_hdr->src_addr.addr_bytes[5]);
-    // printf("- dest MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-    //         " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-    //     recv_eth_hdr->dst_addr.addr_bytes[0], recv_eth_hdr->dst_addr.addr_bytes[1],
-    //     recv_eth_hdr->dst_addr.addr_bytes[2], recv_eth_hdr->dst_addr.addr_bytes[3],
-    //     recv_eth_hdr->dst_addr.addr_bytes[4], recv_eth_hdr->dst_addr.addr_bytes[5]);
-    // fflush(stdout);
+    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+        rte_ether_addr_copy(&temp_eth_hdr.dst_addr, &recv_eth_hdr->src_addr);
+        rte_ether_addr_copy(&temp_eth_hdr.src_addr, &recv_eth_hdr->dst_addr);
+    #else
+        rte_ether_addr_copy(&temp_eth_hdr.d_addr, &recv_eth_hdr->s_addr);
+        rte_ether_addr_copy(&temp_eth_hdr.s_addr, &recv_eth_hdr->d_addr);
+    #endif
 
     /* set as forwarded, default to port 0 */
     *need_forward = true;

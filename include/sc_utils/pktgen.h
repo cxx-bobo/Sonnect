@@ -15,6 +15,8 @@
 #define IPV4_ADDR(a, b, c, d)(((a & 0xff) << 24) | ((b & 0xff) << 16) | \
 		((c & 0xff) << 8) | (d & 0xff))
 
+#define SC_UTIL_TIME_INTERVL_US(sec, usec) usec + sec * 1000 * 1000
+
 int sc_util_generate_random_ether_addr(char *addr);
 int sc_util_generate_random_ipv4_addr(uint32_t *addr);
 int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);

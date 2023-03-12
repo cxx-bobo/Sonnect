@@ -93,7 +93,7 @@ int _worker_loop(void* param){
                 
                 if(nb_rx == 0) goto free_pkt_mbuf;
                 
-                SC_THREAD_LOG("received %u ethernet frames", nb_rx);
+                // SC_THREAD_LOG("received %u ethernet frames", nb_rx);
 
                 for(j=0; j<nb_rx; j++){
                     /* Hook Point: Packet Processing */
@@ -102,12 +102,12 @@ int _worker_loop(void* param){
                     }
 
                     if(need_forward){
-                        nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt, 1);
+                        nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt+j, 1);
                         if(nb_rx == 0){
                             SC_THREAD_WARNING("failed to forward packet to queue %u on port %u",
                                 queue_id, forward_port_id);
                         }
-                        SC_THREAD_LOG("send %d ethernet frames", nb_tx);
+                        // SC_THREAD_LOG("send %d ethernet frames", nb_tx);
                     }
 
                     // reset need forward flag

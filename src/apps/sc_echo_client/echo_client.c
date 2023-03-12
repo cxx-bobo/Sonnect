@@ -24,22 +24,6 @@ int _init_app(struct sc_config *sc_config){
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
     int result = SC_SUCCESS;
 
-    /* meter value */
-    if(!strcmp(key, "meter")){
-        value = sc_util_del_both_trim(value);
-        sc_util_del_change_line(value);
-        uint32_t meter;
-        if(sc_util_atoui_32(value, &meter) != SC_SUCCESS) {
-            result = SC_ERROR_INVALID_VALUE;
-            goto invalid_meter;
-        }
-        INTERNAL_CONF(sc_config)->meter = meter;
-        goto _parse_app_kv_pair_exit;
-
-invalid_meter:
-        SC_ERROR_DETAILS("invalid configuration meter\n");
-    }
-
     /* packet length value */
     if(!strcmp(key, "pkt_len")){
         value = sc_util_del_both_trim(value);
@@ -72,6 +56,22 @@ invalid_nb_pkt_per_burst:
         SC_ERROR_DETAILS("invalid configuration nb_pkt_per_burst\n");
     }
 
+    /* number of packet to be send */
+    if(!strcmp(key, "nb_pkt_budget")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        uint32_t nb_pkt_budget;
+        if(sc_util_atoui_32(value, &nb_pkt_budget) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_nb_pkt_budget;
+        }
+        INTERNAL_CONF(sc_config)->nb_pkt_budget = nb_pkt_budget;
+        goto _parse_app_kv_pair_exit;
+
+invalid_nb_pkt_budget:
+        SC_ERROR_DETAILS("invalid configuration nb_pkt_budget\n");
+    }
+
 _parse_app_kv_pair_exit:
     return result;
 }
@@ -82,24 +82,117 @@ _parse_app_kv_pair_exit:
  * \return  zero for successfully executing
  */
 int _process_enter(struct sc_config *sc_config){
-    /* calculate per-core meter value */
-    PER_CORE_APP_META(sc_config).per_core_meter = 
-        (float)INTERNAL_CONF(sc_config)->meter / (float)sc_config->nb_used_cores;
-    SC_THREAD_LOG("per core meter is %f Gbps", PER_CORE_APP_META(sc_config).per_core_meter);
+    int i, result = SC_SUCCESS;
 
-    /* initialize the last_send_time */
-    if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).last_send_time, NULL))){
-        SC_THREAD_ERROR_DETAILS("failed to obtain current time");
-        return SC_ERROR_INTERNAL;
+    /* initialize the pkt_len as the length of the packet */
+    uint16_t pkt_len 
+        = INTERNAL_CONF(sc_config)->pkt_len - 18 - 20 - 8;
+
+    /* assemble udp header */
+    PER_CORE_APP_META(sc_config).src_port = sc_util_random_unsigned_int16();
+    PER_CORE_APP_META(sc_config).dst_port = sc_util_random_unsigned_int16();
+    if(SC_SUCCESS != sc_util_initialize_udp_header(
+            &PER_CORE_APP_META(sc_config).pkt_udp_hdr, 
+            PER_CORE_APP_META(sc_config).src_port, 
+            PER_CORE_APP_META(sc_config).dst_port, pkt_len, &pkt_len)){
+        SC_THREAD_ERROR("failed to assemble udp header");
+        result = SC_ERROR_INTERNAL;
+        goto _process_enter_exit;
     }
+
+    /* assemble ipv4 header */
+    uint8_t src_ipv4[4] = {192, 168, 10, 1};
+    uint8_t dst_ipv4[4] = {192, 168, 10, 2};
+    if(SC_SUCCESS != sc_util_generate_ipv4_addr(
+            src_ipv4, &PER_CORE_APP_META(sc_config).src_ipv4_addr)){
+        SC_THREAD_ERROR("failed to generate source ipv4 address %u.%u.%u.%u",
+            src_ipv4[0], src_ipv4[1], src_ipv4[2], src_ipv4[3]);
+        result = SC_ERROR_INTERNAL;
+        goto _process_enter_exit;
+    }
+    if(SC_SUCCESS != sc_util_generate_ipv4_addr(
+            dst_ipv4, &PER_CORE_APP_META(sc_config).dst_ipv4_addr)){
+        SC_THREAD_ERROR("failed to generate destination ipv4 address %u.%u.%u.%u",
+            dst_ipv4[0], dst_ipv4[1], dst_ipv4[2], dst_ipv4[3]);
+        result = SC_ERROR_INTERNAL;
+        goto _process_enter_exit;
+    }
+    if(SC_SUCCESS != sc_util_initialize_ipv4_header_proto(
+            &PER_CORE_APP_META(sc_config).pkt_ipv4_hdr, 
+            PER_CORE_APP_META(sc_config).src_ipv4_addr, 
+            PER_CORE_APP_META(sc_config).dst_ipv4_addr, 
+            pkt_len, IPPROTO_UDP, &pkt_len
+    )){
+        SC_THREAD_ERROR("failed to assemble ipv4 header");
+        result = SC_ERROR_INTERNAL;
+        goto _process_enter_exit;
+    }
+
+    /* assemble ethernet header */
+    if(SC_SUCCESS != sc_util_generate_random_ether_addr(
+            PER_CORE_APP_META(sc_config).src_ether_addr)){
+        SC_THREAD_ERROR("failed to generate random source mac address");
+        result = SC_ERROR_INTERNAL;
+        goto _process_enter_exit;
+    }
+    if(SC_SUCCESS != sc_util_generate_random_ether_addr(
+            PER_CORE_APP_META(sc_config).dst_ether_addr)){
+        SC_THREAD_ERROR("failed to generate random destination mac address");
+        result = SC_ERROR_INTERNAL;
+        goto _process_enter_exit;
+    }
+    if(SC_SUCCESS != sc_util_initialize_eth_header(
+        &PER_CORE_APP_META(sc_config).pkt_eth_hdr, 
+        (struct rte_ether_addr *)PER_CORE_APP_META(sc_config).src_ether_addr, 
+        (struct rte_ether_addr *)PER_CORE_APP_META(sc_config).dst_ether_addr,
+        RTE_ETHER_TYPE_IPV4, 0, 0, &pkt_len
+    )){
+        SC_THREAD_ERROR("failed to assemble ethernet header");
+        result = SC_ERROR_INTERNAL;
+        goto _process_enter_exit;
+    }
+
+    /* allocate array for pointers to storing send pkt_bufs */
+    PER_CORE_APP_META(sc_config).send_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
+        sizeof(struct rte_mbuf*)*INTERNAL_CONF(sc_config)->nb_pkt_per_burst, 0);
+    if(unlikely(!PER_CORE_APP_META(sc_config).send_pkt_bufs)){
+        SC_THREAD_ERROR_DETAILS("failed to allocate memory for send_pkt_bufs");
+        result = SC_ERROR_MEMORY;
+        goto _process_enter_exit;
+    }
+
+    /* allocate array for pointers to storing received pkt_bufs */
+    PER_CORE_APP_META(sc_config).recv_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
+        sizeof(struct rte_mbuf*)*INTERNAL_CONF(sc_config)->nb_pkt_per_burst, 0);
+    if(unlikely(!PER_CORE_APP_META(sc_config).recv_pkt_bufs)){
+        SC_THREAD_ERROR_DETAILS("failed to allocate memory for send_pkt_bufs");
+        result = SC_ERROR_MEMORY;
+        goto _process_enter_exit;
+    }
+
+    #if defined(MODE_LATENCY)
+        PER_CORE_APP_META(sc_config).min_rtt_sec = 100;
+        PER_CORE_APP_META(sc_config).min_rtt_usec = 0;
+        PER_CORE_APP_META(sc_config).max_rtt_sec = 0;
+        PER_CORE_APP_META(sc_config).max_rtt_usec = 0;
+    #endif
+
+    /* initialize the waiting confirm indicator */
+    PER_CORE_APP_META(sc_config).wait_ack = 0;
+
+    /* initialize the number of packet to be sent (per core) */
+    PER_CORE_APP_META(sc_config).nb_pkt_budget_per_core
+        = INTERNAL_CONF(sc_config)->nb_pkt_budget / sc_config->nb_used_cores;
 
     /* initialize the start_time */
     if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).start_time, NULL))){
         SC_THREAD_ERROR_DETAILS("failed to obtain current time");
-        return SC_ERROR_INTERNAL;
+        result =  SC_ERROR_INTERNAL;
+        goto _process_enter_exit;
     }
-
-    return SC_SUCCESS;
+    
+_process_enter_exit:
+    return result;
 }
 
 /*!
@@ -123,148 +216,125 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fw
  * \return  zero for successfully executing
  */
 int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
-    int i, nb_tx, nb_rx, result = SC_SUCCESS;
+    int i, j, nb_tx, nb_rx, result = SC_SUCCESS, finial_retry_times = 0;
     bool has_ack = false;
-    struct rte_mbuf **send_pkt_bufs = NULL, **recv_pkt_bufs=NULL;
-    struct rte_ether_hdr pkt_eth_hdr;
-    struct rte_ipv4_hdr pkt_ipv4_hdr;
-    struct rte_udp_hdr pkt_udp_hdr;
-
-    uint32_t src_ipv4_addr, dst_ipv4_addr;
-    char src_ether_addr[6], dst_ether_addr[6];
-
-    uint16_t src_port, dst_port;
-
-    uint16_t pkt_len = INTERNAL_CONF(sc_config)->pkt_len - 18 - 20 - 8;
-
     struct timeval current_time;
     long interval_sec;
     long interval_usec;
-
-    struct timeval send_time;
+    
     struct timeval recv_time;
 
-    /* calculate time intervals */
-    if(unlikely(-1 == gettimeofday(&current_time, NULL))){
-        SC_THREAD_ERROR_DETAILS("failed to obtain current time");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-    interval_sec = current_time.tv_sec - PER_CORE_APP_META(sc_config).last_send_time.tv_sec;
-    interval_usec = current_time.tv_usec - PER_CORE_APP_META(sc_config).last_send_time.tv_usec;
-    interval_usec += 1000000 * interval_sec;    /* duration since last send (us) */
+    if(likely(PER_CORE_APP_META(sc_config).wait_ack)){
+try_receive_ack:
+        /* allocate array for pointers to storing recving pkt_bufs */
+        for(i=0; i<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; i++){
+            PER_CORE_APP_META(sc_config).recv_pkt_bufs[i] 
+                = rte_pktmbuf_alloc(PER_CORE_MBUF_POOL(sc_config));
+            if (unlikely(!PER_CORE_APP_META(sc_config).recv_pkt_bufs[i])) {
+                SC_ERROR_DETAILS("failed to allocate memory for rte_mbuf");
+                result = SC_ERROR_MEMORY;
+                goto process_client_ready_to_exit;
+            }
+        }
 
-    /* meter check */
-    if( INTERNAL_CONF(sc_config)->pkt_len
-        * PER_CORE_APP_META(sc_config).nb_send_pkt_interval
-        * 8 > PER_CORE_APP_META(sc_config).per_core_meter * 1000000000
-    ){
-        goto process_client_exit;
-    }
+        /* try receive ack */
+        for(i=0; i<sc_config->nb_used_ports; i++){
+            nb_rx = rte_eth_rx_burst(
+                /* port_id */ sc_config->port_ids[i], 
+                /* queue_id */ queue_id, 
+                /* rx_pkts */ PER_CORE_APP_META(sc_config).recv_pkt_bufs[i], 
+                /* nb_pkts */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst*4
+            );
 
-    /* allocate array for pointers to storing sending pkt_bufs */
-    send_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
-        sizeof(struct rte_mbuf*)*INTERNAL_CONF(sc_config)->nb_pkt_per_burst, 0);
-    if(unlikely(!send_pkt_bufs)){
-        SC_THREAD_ERROR_DETAILS("failed to allocate memory for send_pkt_bufs");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
+            if(nb_rx == 0) { 
+                continue; 
+            } else {
+                #if defined(MODE_LATENCY)
+                    /* record recv time */
+                    if(unlikely(-1 == gettimeofday(&recv_time, NULL))){
+                        SC_THREAD_ERROR_DETAILS("failed to obtain recv time");
+                        result = SC_ERROR_INTERNAL;
+                        goto process_client_ready_to_exit;
+                    }
 
-    /* allocate array for pointers to storing sending pkt_bufs */
-    recv_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
-        sizeof(struct rte_mbuf*)*INTERNAL_CONF(sc_config)->nb_pkt_per_burst, 0);
-    if(unlikely(!recv_pkt_bufs)){
-        SC_THREAD_ERROR_DETAILS("failed to allocate memory for send_pkt_bufs");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
+                    /* calculate interval time */
+                    interval_sec 
+                        = recv_time.tv_sec - PER_CORE_APP_META(sc_config).last_send_time.tv_sec;
+                    interval_usec 
+                        = recv_time.tv_usec - PER_CORE_APP_META(sc_config).last_send_time.tv_usec;
 
-    /* allocate array for pointers to storing recving pkt_bufs */
-    for(i=0; i<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; i++){
-        recv_pkt_bufs[i] = rte_pktmbuf_alloc(PER_CORE_MBUF_POOL(sc_config));
-        if (unlikely(!recv_pkt_bufs[i])) {
-            SC_ERROR_DETAILS("failed to allocate memory for rte_mbuf");
-            result = SC_ERROR_MEMORY;
-            goto process_client_ready_to_exit;
+                    /* record the minimal interval time */
+                    if(SC_UTIL_TIME_INTERVL_US(interval_sec, interval_usec)  
+                        < SC_UTIL_TIME_INTERVL_US(
+                            PER_CORE_APP_META(sc_config).min_rtt_sec, 
+                            PER_CORE_APP_META(sc_config).min_rtt_usec)
+                    ){
+                        PER_CORE_APP_META(sc_config).min_rtt_sec = interval_sec;
+                        PER_CORE_APP_META(sc_config).min_rtt_usec = interval_usec;
+                    }
+
+                    /* record the maximum interval time */
+                    if(SC_UTIL_TIME_INTERVL_US(interval_sec, interval_usec)  
+                        > SC_UTIL_TIME_INTERVL_US(
+                            PER_CORE_APP_META(sc_config).max_rtt_sec, 
+                            PER_CORE_APP_META(sc_config).max_rtt_usec)
+                    ){
+                        PER_CORE_APP_META(sc_config).max_rtt_sec = interval_sec;
+                        PER_CORE_APP_META(sc_config).max_rtt_usec = interval_usec;
+                    }                    
+                #endif
+
+                PER_CORE_APP_META(sc_config).wait_ack -= nb_rx;
+                PER_CORE_APP_META(sc_config).nb_confirmed_pkt += nb_rx;
+                has_ack = true;
+            }
+        }
+
+        /* return back recv pkt_mbuf */
+        for(j=0; j<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; j++) {
+            if(PER_CORE_APP_META(sc_config).recv_pkt_bufs[j]){ 
+                rte_pktmbuf_free(PER_CORE_APP_META(sc_config).recv_pkt_bufs[j]); 
+            }
+        }
+
+        #if defined(MODE_LATENCY)
+            /* 
+             * under testing latency mode, one should wait 
+             * all sent pkt be confirmed, then try to send
+             * the next brust 
+             */
+            if(!has_ack){ goto try_receive_ack; }
+        #endif
+
+        /* if the number of packet to be sent reach the budget 
+         the keep trying receiving ack, then exit */
+        if(PER_CORE_APP_META(sc_config).nb_pkt_budget_per_core 
+                < PER_CORE_APP_META(sc_config).nb_send_pkt){
+            if(!has_ack && finial_retry_times <= 10000){
+                finial_retry_times += 1;
+                goto try_receive_ack; 
+            } else {
+                goto process_client_ready_to_exit;
+            }
         }
     }
 
-    /* refresh last send time */
-    if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).last_send_time, NULL))){
-        SC_THREAD_ERROR_DETAILS("failed to obtain current time");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-
-    /* refresh number of sent packet within the interval */
-    PER_CORE_APP_META(sc_config).nb_send_pkt_interval = 0;
-
-    /* assemble udp header */
-    src_port = sc_util_random_unsigned_int16();
-    dst_port = sc_util_random_unsigned_int16();
-    if(SC_SUCCESS != sc_util_initialize_udp_header(&pkt_udp_hdr, src_port, dst_port, pkt_len, &pkt_len)){
-        SC_THREAD_ERROR("failed to assemble udp header");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-
-    /* assemble ipv4 header */
-    uint8_t src_ipv4[4] = {192, 168, 10, 1};
-    uint8_t dst_ipv4[4] = {192, 168, 10, 2};
-    if(SC_SUCCESS != sc_util_generate_ipv4_addr(src_ipv4, &src_ipv4_addr)){
-        SC_THREAD_ERROR("failed to generate source ipv4 address %u.%u.%u.%u",
-            src_ipv4[0], src_ipv4[1], src_ipv4[2], src_ipv4[3]);
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-    if(SC_SUCCESS != sc_util_generate_ipv4_addr(dst_ipv4, &dst_ipv4_addr)){
-        SC_THREAD_ERROR("failed to generate destination ipv4 address %u.%u.%u.%u",
-            dst_ipv4[0], dst_ipv4[1], dst_ipv4[2], dst_ipv4[3]);
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-    if(SC_SUCCESS != sc_util_initialize_ipv4_header_proto(
-            &pkt_ipv4_hdr, src_ipv4_addr, dst_ipv4_addr, pkt_len, IPPROTO_UDP, &pkt_len)){
-        SC_THREAD_ERROR("failed to assemble ipv4 header");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-
-    /* assemble ethernet header */
-    if(SC_SUCCESS != sc_util_generate_random_ether_addr(src_ether_addr)){
-        SC_THREAD_ERROR("failed to generate random source mac address");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-    if(SC_SUCCESS != sc_util_generate_random_ether_addr(dst_ether_addr)){
-        SC_THREAD_ERROR("failed to generate random destination mac address");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-    if(SC_SUCCESS != sc_util_initialize_eth_header(&pkt_eth_hdr, 
-        (struct rte_ether_addr *)src_ether_addr, 
-        (struct rte_ether_addr *)dst_ether_addr,
-        RTE_ETHER_TYPE_IPV4, 0, 0, &pkt_len
-    )){
-        SC_THREAD_ERROR("failed to assemble ethernet header");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-    
     /* assemble fininal pkt brust */
-    // 1 segment per packet
-    // packet length: 60 = eth(18) + ipv4(20) + udp(8) + data(14)
+    // TODO: currently only support 1 segment per packet
     if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
-            PER_CORE_MBUF_POOL(sc_config), send_pkt_bufs, &pkt_eth_hdr, 0, &pkt_ipv4_hdr, 1, IPPROTO_UDP, &pkt_udp_hdr, INTERNAL_CONF(sc_config)->nb_pkt_per_burst, INTERNAL_CONF(sc_config)->pkt_len, 1)){
+            /* mp */ PER_CORE_MBUF_POOL(sc_config), 
+            /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
+            /* eth_hdr */ &PER_CORE_APP_META(sc_config).pkt_eth_hdr,
+            /* vlan_enabled */ 0,
+            /* ip_hdr */ &PER_CORE_APP_META(sc_config).pkt_ipv4_hdr,
+            /* ipv4 */ 1,
+            /* proto */ IPPROTO_UDP,
+            /* proto_hdr */ &PER_CORE_APP_META(sc_config).pkt_udp_hdr,
+            /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
+            /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len, 
+            /* nb_pkt_segs */ 1
+    )){
         SC_THREAD_ERROR("failed to assemble final packet");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-
-    /* record send time */
-    if(unlikely(-1 == gettimeofday(&send_time, NULL))){
-        SC_THREAD_ERROR_DETAILS("failed to obtain send time");
         result = SC_ERROR_INTERNAL;
         goto process_client_ready_to_exit;
     }
@@ -273,60 +343,42 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
     nb_tx = 0;
     for(i=0; i<sc_config->nb_used_ports; i++){
         nb_tx += rte_eth_tx_burst(
-            sc_config->port_ids[i], queue_id, send_pkt_bufs, INTERNAL_CONF(sc_config)->nb_pkt_per_burst);
+            /* port_id */ sc_config->port_ids[i],
+            /* queue_id */ queue_id,
+            /* tx_pkts */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
+            /* nb_pkts */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst
+        );
     }
+
+    /* record send time */
+    if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).last_send_time, NULL))){
+        SC_THREAD_ERROR_DETAILS("failed to obtain send time");
+        result = SC_ERROR_INTERNAL;
+        goto process_client_ready_to_exit;
+    }
+
+    /* update metadata */
     PER_CORE_APP_META(sc_config).nb_send_pkt += nb_tx;
-    PER_CORE_APP_META(sc_config).nb_send_pkt_interval += nb_tx;
-    
-    /* try receive ack */
-    while(!has_ack){
-        for(i=0; i<sc_config->nb_used_ports; i++){
-            nb_rx = rte_eth_rx_burst(
-                sc_config->port_ids[i], queue_id, recv_pkt_bufs, INTERNAL_CONF(sc_config)->nb_pkt_per_burst*4);
+    PER_CORE_APP_META(sc_config).nb_last_send_pkt = nb_tx;
+    PER_CORE_APP_META(sc_config).wait_ack += nb_tx;
 
-            if(nb_rx == 0) {
-                SC_THREAD_LOG("no pkt on port %u", sc_config->port_ids[i]);
-                /* get current time */
-                if(unlikely(-1 == gettimeofday(&current_time, NULL))){
-                    SC_THREAD_ERROR_DETAILS("failed to obtain current time");
-                    result = SC_ERROR_INTERNAL;
-                    goto process_client_ready_to_exit;
-                }
-
-                if(current_time.tv_sec - send_time.tv_sec > 5){
-                    SC_THREAD_WARNING_DETAILS("ACK timeout, exit");
-                    result = SC_ERROR_INTERNAL;
-                    goto process_client_ready_to_exit;
-                }
-            } else {
-                /* record recv time */
-                if(unlikely(-1 == gettimeofday(&recv_time, NULL))){
-                    SC_THREAD_ERROR_DETAILS("failed to obtain recv time");
-                    result = SC_ERROR_INTERNAL;
-                    goto process_client_ready_to_exit;
-                }
-
-                interval_sec = recv_time.tv_sec - send_time.tv_sec;
-                interval_usec = recv_time.tv_usec - send_time.tv_usec;
-                interval_usec += interval_sec * 1000 * 1000;
-
-                SC_THREAD_LOG("RTT: %u us, latency: %.2fus, Packet size: %u Bytes",
-                    interval_usec, (float)interval_usec/(float)2, INTERNAL_CONF(sc_config)->pkt_len);
-
-                has_ack = true;
-            }
+    /* return back send pkt_mbuf */
+    for(j=0; j<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; j++) {
+        if(PER_CORE_APP_META(sc_config).send_pkt_bufs[j]){ 
+            rte_pktmbuf_free(PER_CORE_APP_META(sc_config).send_pkt_bufs[j]); 
         }
     }
 
-    // goto process_client_exit;
-    goto process_client_ready_to_exit;
+    goto process_client_exit;
 
 process_client_ready_to_exit:
     *ready_to_exit = true;
 
 process_client_exit:
-    if(send_pkt_bufs)
-        rte_free(send_pkt_bufs);
+    if(PER_CORE_APP_META(sc_config).send_pkt_bufs)
+        rte_free(PER_CORE_APP_META(sc_config).send_pkt_bufs);
+    if(PER_CORE_APP_META(sc_config).recv_pkt_bufs)
+        rte_free(PER_CORE_APP_META(sc_config).recv_pkt_bufs);
     return result;
 }
 
