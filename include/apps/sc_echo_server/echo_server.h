@@ -15,7 +15,7 @@
 #include <rte_mbuf_core.h>
 
 struct _per_core_app_meta {
-    int something;
+    uint64_t nb_forward_pkt;
 };
 
 /* definition of internal config */

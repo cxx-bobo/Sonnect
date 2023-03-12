@@ -11,6 +11,8 @@
 #include <rte_version.h>
 #include <rte_lcore.h>
 
+extern volatile bool sc_force_quit;
+
 /* 
  * the compiler will define SC_CLOSE_MOCK_MACRO 
  * automatically while build the final binary 

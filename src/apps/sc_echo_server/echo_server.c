@@ -42,26 +42,8 @@ int _process_enter(struct sc_config *sc_config){
  * \return  zero for successfully processing
  */
 int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fwd_port_id, bool *need_forward){
-    struct rte_ether_hdr *recv_eth_hdr, temp_eth_hdr;
-
-    /* extract received ethernet header */
-    recv_eth_hdr = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr*);
-    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
-        rte_ether_addr_copy(&recv_eth_hdr->src_addr, &temp_eth_hdr.src_addr);
-        rte_ether_addr_copy(&recv_eth_hdr->dst_addr, &temp_eth_hdr.dst_addr);
-    #else
-        rte_ether_addr_copy(&recv_eth_hdr->s_addr, &temp_eth_hdr.s_addr);
-        rte_ether_addr_copy(&recv_eth_hdr->d_addr, &temp_eth_hdr.d_addr);
-    #endif
-
-    /* switch received ethernet header */
-    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
-        rte_ether_addr_copy(&temp_eth_hdr.dst_addr, &recv_eth_hdr->src_addr);
-        rte_ether_addr_copy(&temp_eth_hdr.src_addr, &recv_eth_hdr->dst_addr);
-    #else
-        rte_ether_addr_copy(&temp_eth_hdr.d_addr, &recv_eth_hdr->s_addr);
-        rte_ether_addr_copy(&temp_eth_hdr.s_addr, &recv_eth_hdr->d_addr);
-    #endif
+    /* count */
+    PER_CORE_APP_META(sc_config).nb_forward_pkt += 1;
 
     /* set as forwarded, default to port 0 */
     *need_forward = true;
@@ -88,5 +70,6 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
  * \return  zero for successfully executing
  */
 int _process_exit(struct sc_config *sc_config){
+    SC_THREAD_LOG("forward %u packets in total", PER_CORE_APP_META(sc_config).nb_forward_pkt);
     return SC_SUCCESS;
 }

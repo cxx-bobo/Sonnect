@@ -232,6 +232,10 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
 
     if(likely(PER_CORE_APP_META(sc_config).wait_ack > 0)){
 try_receive_ack:
+        if(sc_force_quit){
+            goto process_client_ready_to_exit;
+        }
+
         /* try receive ack */
         for(i=0; i<sc_config->nb_used_ports; i++){
             nb_rx = rte_eth_rx_burst(

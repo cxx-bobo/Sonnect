@@ -5,7 +5,6 @@
 char current_time_str[128] = "UNKNOWN TIME";
 pthread_mutex_t thread_log_mutex;
 pthread_mutex_t timer_mutex;
-extern volatile bool sc_force_quit;
 
 /*!
  * \brief   function that execute on the logging thread
