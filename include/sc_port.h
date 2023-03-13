@@ -7,10 +7,10 @@
 #include <rte_version.h>
 
 /*!
- * \brief configurable number of RX/TX ring descriptors
+ * \brief maximum number of RX/TX ring descriptors per queue
  */
-#define RTE_TEST_RX_DESC_DEFAULT 512
-#define RTE_TEST_TX_DESC_DEFAULT 512
+#define MAX_NB_RX_DESC_PER_QUEUE 2048
+#define MAX_NB_TX_DESC_PER_QUEUE 2048
 
 /*!
  * \brief length of the rss hash key, for symmetric RSS

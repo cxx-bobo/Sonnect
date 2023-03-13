@@ -56,7 +56,14 @@ struct sc_config {
     uint16_t nb_used_ports; // number of initialized ports eventually
     uint16_t nb_rx_rings_per_port;
     uint16_t nb_tx_rings_per_port;
+    uint32_t rx_queue_len;
+    uint32_t tx_queue_len;
     bool enable_promiscuous;
+
+    /* rss */
+    bool enable_rss;
+    bool rss_symmetric_mode;    // true: symmetric; false: asymmetric
+    uint64_t rss_hash_field;
 
     /* dpdk memory */
     struct rte_mempool *pktmbuf_pool;
@@ -74,7 +81,7 @@ struct sc_config {
     /* per-core memory buffer pool */
     struct rte_mempool *per_core_pktmbuf_pool;
 
-    /* thread barrier */
+    /* pthread barrier for sync all worker thread */
     pthread_barrier_t pthread_barrier;
 
     /* doca specific configurations */

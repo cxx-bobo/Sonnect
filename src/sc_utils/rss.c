@@ -9,14 +9,28 @@ int sc_util_get_rss_queue_id_ipv4(
         uint16_t sport, uint16_t dport, 
         uint32_t sctp_tag,
         uint32_t nb_queues,
-        uint32_t *queue_id
+        uint32_t *queue_id,
+        uint64_t rss_hash_field
 ){
-    uint32_t rss_l3_original;
+    uint32_t rss_l3_original, rss_l3l4_original;
+    
     sc_util_get_rss_result_ipv4(
-        src_ipv4, dst_ipv4, sport, dport, sctp_tag, &rss_l3_original, NULL);
+        src_ipv4, dst_ipv4, sport, dport, sctp_tag, &rss_l3_original, &rss_l3l4_original);
 
-    /* ref: http://galsagie.github.io/2015/02/26/dpdk-tips-1/ */
-    *queue_id = (rss_l3_original & 0xFF) % nb_queues;
+    /* 
+     * refs: 
+     *   [1] http://galsagie.github.io/2015/02/26/dpdk-tips-1/
+     *   [2] https://learn.microsoft.com/en-us/windows-hardware/drivers/network/introduction-to-receive-side-scaling
+     */
+    #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+        if(rss_hash_field == RTE_ETH_RSS_IP){   /* if only IP need to be hashed */
+    #else
+        if(rss_hash_field == ETH_RSS_IP){          /* if only IP need to be hashed */
+    #endif
+            *queue_id = (rss_l3_original & 0xFF) % nb_queues;
+        } else {
+            *queue_id = (rss_l3l4_original & 0xFF) % nb_queues;
+        }
 
     return SC_SUCCESS;
 }
@@ -49,7 +63,11 @@ int sc_util_get_rss_result_ipv4(
 
     /* 
      * calculate hash with original key using toeplitz hash,
-     * see https://doc.dpdk.org/guides/prog_guide/toeplitz_hash_lib.html for more details
+     * see refs:
+     *   [1] https://doc.dpdk.org/guides/prog_guide/toeplitz_hash_lib.html
+     *   [2] https://stackoverflow.com/questions/64925261/
+     *       how-to-compute-the-queue-id-if-i-can-compute-the-rss-hash-with-software-implemen
+     *   [3] https://docs.nvidia.com/networking/display/MLNXOFEDv5432723/RSS%20Support
      */
     if(rss_l3_original){
         *rss_l3_original = rte_softrss((uint32_t *)&tuple,

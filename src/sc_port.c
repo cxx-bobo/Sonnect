@@ -40,7 +40,7 @@ static const uint8_t _asymmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] =
 static struct rte_eth_conf port_conf_default = {
     #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         .rxmode = {
-            .mq_mode = RTE_ETH_MQ_RX_RSS,
+            .mq_mode = RTE_ETH_MQ_RX_NONE, /* init later */
             .offloads = 0,
         },
         .txmode = {
@@ -48,23 +48,23 @@ static struct rte_eth_conf port_conf_default = {
         },
         .rx_adv_conf = {
 			.rss_conf = {
-				.rss_key = NULL,
+				.rss_key = NULL, /* init later */
                 .rss_key_len = RSS_HASH_KEY_LENGTH,
-				.rss_hf = RTE_ETH_RSS_IP
+				.rss_hf = 0 /* init later */
 			},
 		},
     #else
         .rxmode = {
-            .mq_mode = ETH_MQ_RX_RSS,
+            .mq_mode = ETH_MQ_RX_NONE, /* init later */
         },
         .txmode = {
             .mq_mode = ETH_MQ_TX_NONE,
         },
         .rx_adv_conf = {
             .rss_conf = {
-                .rss_key = NULL,
+                .rss_key = NULL, /* init later */
                 .rss_key_len = RSS_HASH_KEY_LENGTH,
-                .rss_hf = ETH_RSS_IP,
+                .rss_hf = 0, /* init later */
             }
         },
     #endif
@@ -78,9 +78,27 @@ static struct rte_eth_conf port_conf_default = {
 int init_ports(struct sc_config *sc_config){
     uint16_t i, port_index, nb_ports;
     
-    /* specified used rss key type */
-    port_conf_default.rx_adv_conf.rss_conf.rss_key = _symmetric_rss_hash_key;
-    used_rss_hash_key = _symmetric_rss_hash_key;
+    /* configure rss */
+    if(sc_config->enable_rss){
+        /* specify using rss */
+        #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+            port_conf_default.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
+        #else
+            port_conf_default.rxmode.mq_mode = ETH_MQ_RX_RSS;
+        #endif
+
+        /* specify used rss key type */
+        if(sc_config->rss_symmetric_mode){
+            port_conf_default.rx_adv_conf.rss_conf.rss_key = _symmetric_rss_hash_key;
+            used_rss_hash_key = _symmetric_rss_hash_key;
+        } else {
+            port_conf_default.rx_adv_conf.rss_conf.rss_key = _asymmetric_rss_hash_key;
+            used_rss_hash_key = _asymmetric_rss_hash_key;
+        }
+        
+        /* specify rss hash fields */
+        port_conf_default.rx_adv_conf.rss_conf.rss_hf = sc_config->rss_hash_field;
+    }
 
     /* check available ports */
     nb_ports = rte_eth_dev_count_avail();
@@ -148,7 +166,7 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
     /* allocate rx_rings */
     for (i = 0; i < sc_config->nb_rx_rings_per_port; i++) {
         ret = rte_eth_rx_queue_setup(
-            port_index, i, RTE_TEST_RX_DESC_DEFAULT,
+            port_index, i, sc_config->rx_queue_len,
 			rte_eth_dev_socket_id(port_index), NULL, 
             sc_config->pktmbuf_pool);
 		if (ret < 0) {
@@ -161,7 +179,7 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
     /* allocate tx_rings */
     for (i = 0; i < sc_config->nb_tx_rings_per_port; i++) {
         ret = rte_eth_tx_queue_setup(
-            port_index, i, RTE_TEST_TX_DESC_DEFAULT,
+            port_index, i, sc_config->tx_queue_len,
 			rte_eth_dev_socket_id(port_index), NULL);
 		if (ret < 0) {
             printf("failed to setup tx_ring %d for port %d: %s\n", 

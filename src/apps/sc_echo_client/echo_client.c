@@ -223,8 +223,13 @@ try_receive_ack:
                         PER_CORE_APP_META(sc_config).max_rtt_usec = interval_usec;
                     }                    
                 #endif
-
-                PER_CORE_APP_META(sc_config).wait_ack -= nb_rx;
+                
+                if(PER_CORE_APP_META(sc_config).wait_ack >= nb_rx){
+                    PER_CORE_APP_META(sc_config).wait_ack -= nb_rx;
+                } else {
+                    PER_CORE_APP_META(sc_config).wait_ack = 0;
+                }
+                    
                 PER_CORE_APP_META(sc_config).nb_confirmed_pkt += nb_rx;
             }
         }
@@ -362,6 +367,9 @@ int _process_exit(struct sc_config *sc_config){
      * NOTE: wait all work threads to reach here then exit,
      *       to ensure all packets go to the correct core
      */
+    /*
+     * TODO: still have some packets flow to other cores
+     */
     pthread_barrier_wait(&sc_config->pthread_barrier);
 
     return SC_SUCCESS;
@@ -391,7 +399,8 @@ int __reload_pkt_header(struct sc_config *sc_config){
             /* dport */ PER_CORE_APP_META(sc_config).dst_port,
             /* sctp_tag */ 0,
             /* nb_queues */ sc_config->nb_rx_rings_per_port,
-            /* queue_id */ &queue_id
+            /* queue_id */ &queue_id,
+            /* rss_hash_field */ sc_config->rss_hash_field
         );
         if(queue_id == (uint16_t)rte_lcore_index(rte_lcore_id())){ break; }
     }

@@ -17,7 +17,7 @@ int __worker_loop_init(struct sc_config *sc_config) {
     char *mbuf_pool_name;
     struct rte_mempool *pktmbuf_pool;
     
-    /* specified mbuf pool name for current thread */
+    /* specify mbuf pool name for current thread */
     mbuf_pool_name = (char*)malloc(sizeof(char)*MBUF_POOL_NAME_LEM);
     if(unlikely(!mbuf_pool_name)){
         SC_ERROR_DETAILS("failed to allocate memory for mbuf_pool_name");
@@ -28,8 +28,13 @@ int __worker_loop_init(struct sc_config *sc_config) {
 
     /* allocate memory buffer pool for current thread */
     pktmbuf_pool = rte_pktmbuf_pool_create(
-        mbuf_pool_name, NUM_MBUFS, MEMPOOL_CACHE_SIZE, 0, 
-        RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+        /* name */ mbuf_pool_name, 
+        /* n */ SC_NUM_PRIVATE_MBUFS_PER_CORE, 
+        /* cache_size */ MEMPOOL_CACHE_SIZE, 
+        /* priv_size */ 0, 
+        /* data_room_size */ RTE_MBUF_DEFAULT_BUF_SIZE, 
+        /* socket_id */ rte_socket_id()
+    );
     if (!pktmbuf_pool){
         SC_THREAD_ERROR_DETAILS("failed to allocate memory for mbuf pool: %s", rte_strerror(rte_errno));
         return SC_ERROR_MEMORY;

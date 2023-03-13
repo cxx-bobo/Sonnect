@@ -281,58 +281,64 @@ static int _init_env(struct sc_config *sc_config, int argc, char **argv){
  * \return  zero for valid configuration
  */
 static int _check_configuration(struct sc_config *sc_config, int argc, char **argv){
-  uint32_t i;
-  unsigned int socket_id;
-  
-  /* 
-   * 1. check whether the specified lcores are located in the same NUMA socket,
-   *    could be manually check through "numactl -H"
-   * 2. check whether the specified lcores exceed the physical range
-   */
-  for(i=0; i<sc_config->nb_used_cores; i++){
-    // TODO: rte_lcore_to_socket_id always return 0, is that a bug?
-    if (i == 0) {
-      socket_id = rte_lcore_to_socket_id(sc_config->core_ids[i]);
-    } else {
-      if (rte_lcore_to_socket_id(sc_config->core_ids[i]) != socket_id) {
-        SC_ERROR_DETAILS("specified lcores aren't locate at the same NUMA socket");
+    uint32_t i;
+    unsigned int socket_id;
+    
+    /* 
+    * 1. check whether the specified lcores are located in the same NUMA socket,
+    *    could be manually check through "numactl -H"
+    * 2. check whether the specified lcores exceed the physical range
+    */
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        // TODO: rte_lcore_to_socket_id always return 0, is that a bug?
+        if (i == 0) {
+        socket_id = rte_lcore_to_socket_id(sc_config->core_ids[i]);
+        } else {
+        if (rte_lcore_to_socket_id(sc_config->core_ids[i]) != socket_id) {
+            SC_ERROR_DETAILS("specified lcores aren't locate at the same NUMA socket");
+            return SC_ERROR_INVALID_VALUE;
+        }
+        }
+
+        if(sc_util_check_core_id(sc_config->core_ids[i]) != SC_SUCCESS){
         return SC_ERROR_INVALID_VALUE;
-      }
+        }
     }
 
-    if(sc_util_check_core_id(sc_config->core_ids[i]) != SC_SUCCESS){
-      return SC_ERROR_INVALID_VALUE;
+    /* check whether the number of queues per core is equal to the number of lcores */
+    if(sc_config->nb_rx_rings_per_port != sc_config->nb_used_cores ||
+        sc_config->nb_tx_rings_per_port != sc_config->nb_used_cores){
+        SC_ERROR_DETAILS("the number of queues per core (rx: %u, tx: %u) isn't equal to the number of lcores (%u)",
+            sc_config->nb_rx_rings_per_port,
+            sc_config->nb_tx_rings_per_port,
+            sc_config->nb_used_cores
+        );
+        return SC_ERROR_INVALID_VALUE;
     }
-  }
 
-  /* check whether the number of queues per core is equal to the number of lcores */
-  if(sc_config->nb_rx_rings_per_port != sc_config->nb_used_cores ||
-     sc_config->nb_tx_rings_per_port != sc_config->nb_used_cores){
-      SC_ERROR_DETAILS("the number of queues per core (rx: %u, tx: %u) isn't equal to the number of lcores (%u)",
-        sc_config->nb_rx_rings_per_port,
-        sc_config->nb_tx_rings_per_port,
-        sc_config->nb_used_cores
-      );
-      return SC_ERROR_INVALID_VALUE;
-  }
-
-  /* check whether the core for logging is conflict with other worker cores */
-  for(i=0; i<sc_config->nb_used_cores; i++){
-    if(sc_config->core_ids[i] == sc_config->log_core_id){
-      SC_ERROR_DETAILS("the core for logging is conflict with other worker cores");
-      return SC_ERROR_INVALID_VALUE;
+    /* check whether the core for logging is conflict with other worker cores */
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        if(sc_config->core_ids[i] == sc_config->log_core_id){
+            SC_ERROR_DETAILS("the core for logging is conflict with other worker cores");
+            return SC_ERROR_INVALID_VALUE;
+        }
     }
-  }
-
-  #if defined(SC_HAS_DOCA)
-    /* check whether number of scalable functions is valid */
-    if(DOCA_CONF(sc_config)->nb_used_sfs == 0){
-      SC_ERROR_DETAILS("no scalable functions is specified, unbale to initialize rte eal on Bluefield");
-      return SC_ERROR_INVALID_VALUE;
+    
+    /* check whether rss hash field is specified while enabling rss */
+    if(sc_config->enable_rss && (!sc_config->rss_hash_field)){
+        SC_ERROR_DETAILS("must specified rss hash fields while enabling rss");
+        return SC_ERROR_INVALID_VALUE;
     }
-  #endif
 
-  return SC_SUCCESS;
+    #if defined(SC_HAS_DOCA)
+        /* check whether number of scalable functions is valid */
+        if(DOCA_CONF(sc_config)->nb_used_sfs == 0){
+        SC_ERROR_DETAILS("no scalable functions is specified, unbale to initialize rte eal on Bluefield");
+        return SC_ERROR_INVALID_VALUE;
+        }
+    #endif
+
+    return SC_SUCCESS;
 }
 
 /*!
@@ -441,6 +447,50 @@ invalid_nb_tx_rings_per_port:
         SC_ERROR_DETAILS("invalid configuration nb_tx_rings_per_port\n");
     }
 
+    /* config: length of the receive queue */
+    if(!strcmp(key, "rx_queue_len")){
+        uint32_t rx_queue_len;
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (sc_util_atoui_32(value, &rx_queue_len) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_rx_queue_len;
+        }
+            
+        if(rx_queue_len == 0 || rx_queue_len > MAX_NB_RX_DESC_PER_QUEUE) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_rx_queue_len;
+        }
+
+        sc_config->rx_queue_len = rx_queue_len;
+        goto exit;
+
+invalid_rx_queue_len:
+        SC_ERROR_DETAILS("invalid configuration rx_queue_len\n");
+    }
+
+    /* config: length of the send queue */
+    if(!strcmp(key, "tx_queue_len")){
+        uint32_t tx_queue_len;
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (sc_util_atoui_32(value, &tx_queue_len) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_tx_queue_len;
+        }
+            
+        if(tx_queue_len == 0 || tx_queue_len > MAX_NB_TX_DESC_PER_QUEUE) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_tx_queue_len;
+        }
+
+        sc_config->tx_queue_len = tx_queue_len;
+        goto exit;
+
+invalid_tx_queue_len:
+        SC_ERROR_DETAILS("invalid configuration tx_queue_len\n");
+    }
+    
     /* config: whether to enable promiscuous mode */
     if(!strcmp(key, "enable_promiscuous")){
         value = sc_util_del_both_trim(value);
@@ -458,6 +508,104 @@ invalid_nb_tx_rings_per_port:
 
 invalid_enable_promiscuous:
         SC_ERROR_DETAILS("invalid configuration enable_promiscuous\n");
+    }
+
+    /* config: whether to enable rss */
+    if(!strcmp(key, "enable_rss")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (!strcmp(value, "true")){
+            sc_config->enable_rss = true;
+        } else if (!strcmp(value, "false")){
+            sc_config->enable_rss = false;
+        } else {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_enable_rss;
+        }
+
+        goto exit;
+
+invalid_enable_rss:
+        SC_ERROR_DETAILS("invalid configuration enable_rss\n");
+    }
+
+    /* config: rss symmetric mode */
+    if(!strcmp(key, "rss_symmetric_mode")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (!strcmp(value, "symmetric")){
+            sc_config->rss_symmetric_mode = true;
+        } else if (!strcmp(value, "asymmetric")){
+            sc_config->rss_symmetric_mode = false;
+        } else {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_rss_symmetric_mode;
+        }
+
+        goto exit;
+
+invalid_rss_symmetric_mode:
+        SC_ERROR_DETAILS("invalid configuration rss_symmetric_mode\n");
+    }
+
+    /* config: rss hash fileds */
+    if(!strcmp(key, "rss_hash_field")){
+        uint64_t rss_hash_field = 0;
+        uint8_t nb_hash_fields = 0;
+        char *delim = ",";
+        char *hash_field_str;
+
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        
+        for(;;){
+            if(nb_hash_fields == 0)
+                hash_field_str = strtok(value, delim);
+            else
+                hash_field_str = strtok(NULL, delim);
+            
+            if (!hash_field_str) break;
+
+            hash_field_str = sc_util_del_both_trim(hash_field_str);
+            sc_util_del_change_line(hash_field_str);
+
+            if(!strcmp(hash_field_str, "ip") || !strcmp(hash_field_str, "IP")){
+                #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+                    rss_hash_field |= RTE_ETH_RSS_IP;
+                #else
+                    rss_hash_field |= ETH_RSS_IP;
+                #endif
+            } else if(!strcmp(hash_field_str, "tcp") || !strcmp(hash_field_str, "TCP")){
+                #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+                    rss_hash_field |= RTE_ETH_RSS_TCP;
+                #else
+                    rss_hash_field |= ETH_RSS_TCP;
+                #endif
+            } else if(!strcmp(hash_field_str, "udp") || !strcmp(hash_field_str, "UDP")){
+                #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+                    rss_hash_field |= RTE_ETH_RSS_UDP;
+                #else
+                    rss_hash_field |= ETH_RSS_UDP;
+                #endif
+            } else if(!strcmp(hash_field_str, "sctp") || !strcmp(hash_field_str, "SCTP")){
+                #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+                    rss_hash_field |= RTE_ETH_RSS_SCTP;
+                #else
+                    rss_hash_field |= ETH_RSS_SCTP;
+                #endif
+            } else {
+                result = SC_ERROR_INVALID_VALUE;
+                goto invalid_rss_hash_field;
+            }
+
+            nb_hash_fields += 1;
+        }
+
+        sc_config->rss_hash_field = rss_hash_field;
+        goto exit;
+
+invalid_rss_hash_field:
+        SC_ERROR_DETAILS("invalid configuration rss_hash_field\n");
     }
 
     /* config: number of cores to used */

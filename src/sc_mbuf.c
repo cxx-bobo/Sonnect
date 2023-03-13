@@ -12,8 +12,13 @@ int init_memory(struct sc_config *sc_config){
 
     /* allocate mbuf pool */
     pktmbuf_pool = rte_pktmbuf_pool_create(
-        "mbuf_pool", NUM_MBUFS, MEMPOOL_CACHE_SIZE, 0, 
-        RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+        /* name */ "mbuf_pool", 
+        /* n */ (sc_config->rx_queue_len+sc_config->tx_queue_len)*sc_config->nb_used_cores-1, 
+        /* cache_size */ MEMPOOL_CACHE_SIZE, 
+        /* priv_size */ 0, 
+        /* data_room_size */ RTE_MBUF_DEFAULT_BUF_SIZE, 
+        /* socket_id */ rte_socket_id()
+    );
     if (!pktmbuf_pool){
         printf("failed to allocate memory for mbuf pool");
         return SC_ERROR_MEMORY;
