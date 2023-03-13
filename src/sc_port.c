@@ -18,6 +18,12 @@ static struct rte_eth_conf port_conf_default = {
         .txmode = {
             .mq_mode = RTE_ETH_MQ_TX_NONE,
         },
+        .rx_adv_conf = {
+			.rss_conf = {
+				.rss_key = NULL,
+				.rss_hf = RTE_ETH_RSS_IP,
+			},
+		},
     #else
         .rxmode = {
             .mq_mode = ETH_MQ_RX_RSS,
@@ -25,6 +31,12 @@ static struct rte_eth_conf port_conf_default = {
         .txmode = {
             .mq_mode = ETH_MQ_TX_NONE,
         },
+        .rx_adv_conf = {
+			.rss_conf = {
+				.rss_key = NULL,
+				.rss_hf = ETH_RSS_IP,
+			},
+		},
     #endif
 };
 
@@ -52,14 +64,14 @@ int init_ports(struct sc_config *sc_config){
         if(!_is_port_choosed(port_index, sc_config))
             continue;
 
-        /* print detail info of the port */
-        _print_port_info(port_index);
-
         /* initialize the current port */
         if(_init_single_port(port_index, sc_config) != SC_SUCCESS){
             printf("failed to initailize port %d\n", port_index);
             return SC_ERROR_INTERNAL;
         }
+
+        /* print detail info of the port */
+        _print_port_info(port_index);
 
         sc_config->port_ids[i] = port_index; 
         i++;
