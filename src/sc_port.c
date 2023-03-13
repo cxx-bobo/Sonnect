@@ -8,12 +8,40 @@ static void _print_port_info(uint16_t port_index);
 static void _show_offloads(uint64_t offloads, const char *(show_offload)(uint64_t));
 
 /*!
+ * \brief selected rss key
+ */
+uint8_t *used_rss_hash_key;
+
+/*!
+ * \brief hash key for symmetric RSS
+ */
+static const uint8_t _symmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] = {
+    0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
+    0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
+    0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
+    0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
+    0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
+};
+
+/*!
+ * \brief hash key for asymmetric RSS
+ */
+static const uint8_t _asymmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] = 
+	{ 0x6d, 0x5a, 0x56, 0xda, 0x25, 0x5b, 0x0e, 0xc2, 
+      0x41, 0x67, 0x25, 0x3d, 0x43, 0xa3, 0x8f, 0xb0,
+	  0xd0, 0xca, 0x2b, 0xcb, 0xae, 0x7b, 0x30, 0xb4,
+	  0x77, 0xcb, 0x2d, 0xa3, 0x80, 0x30, 0xf2, 0x0c,
+	  0x6a, 0x42, 0xb7, 0x3b, 0xbe, 0xac, 0x01, 0xfa
+}; 
+
+/*!
  * \brief dpdk ethernet port configuration
  */
 static struct rte_eth_conf port_conf_default = {
     #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         .rxmode = {
             .mq_mode = RTE_ETH_MQ_RX_RSS,
+            .offloads = 0,
         },
         .txmode = {
             .mq_mode = RTE_ETH_MQ_TX_NONE,
@@ -21,7 +49,8 @@ static struct rte_eth_conf port_conf_default = {
         .rx_adv_conf = {
 			.rss_conf = {
 				.rss_key = NULL,
-				.rss_hf = RTE_ETH_RSS_IP,
+                .rss_key_len = RSS_HASH_KEY_LENGTH,
+				.rss_hf = RTE_ETH_RSS_IP
 			},
 		},
     #else
@@ -32,11 +61,15 @@ static struct rte_eth_conf port_conf_default = {
             .mq_mode = ETH_MQ_TX_NONE,
         },
         .rx_adv_conf = {
-			.rss_conf = {
-				.rss_key = NULL,
-				.rss_hf = ETH_RSS_IP,
-			},
-		},
+            .rss_conf = {
+                .rss_key = _symmetric_rss_hash_key,
+                .rss_key_len = RSS_HASH_KEY_LENGTH,
+                .rss_hf = ETH_RSS_IP |
+                    ETH_RSS_TCP |
+                    ETH_RSS_UDP |
+                    ETH_RSS_SCTP,
+            }
+        },
     #endif
 };
 
@@ -48,6 +81,10 @@ static struct rte_eth_conf port_conf_default = {
 int init_ports(struct sc_config *sc_config){
     uint16_t i, port_index, nb_ports;
     
+    /* specified used rss key type */
+    port_conf_default.rx_adv_conf.rss_conf.rss_key = _symmetric_rss_hash_key;
+    used_rss_hash_key = _symmetric_rss_hash_key;
+
     /* check available ports */
     nb_ports = rte_eth_dev_count_avail();
     if(nb_ports == 0)
