@@ -74,6 +74,9 @@ struct sc_config {
     /* per-core memory buffer pool */
     struct rte_mempool *per_core_pktmbuf_pool;
 
+    /* thread barrier */
+    pthread_barrier_t pthread_barrier;
+
     /* doca specific configurations */
     #if defined(SC_HAS_DOCA)
         void *doca_config;

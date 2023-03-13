@@ -162,6 +162,9 @@ int init_worker_threads(struct sc_config *sc_config){
     memset(per_core_meta_array, 0, sizeof(struct per_core_meta)*sc_config->nb_used_cores);
     sc_config->per_core_meta = per_core_meta_array;
     
+    /* initialize pthread barrier */
+    pthread_barrier_init(&sc_config->pthread_barrier, NULL, sc_config->nb_used_cores);
+
     return SC_SUCCESS;
 }
 
