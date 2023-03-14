@@ -5,6 +5,10 @@
 #include "sc_sketch/cm_sketch.h"
 #include "sc_sketch/spooky-c.h"
 
+#if defined(SC_HAS_DOCA)
+    DOCA_LOG_REGISTER(SC::APP_SKETCH_CM);
+#endif
+
 /*!
  * \brief   udpate the sketch structre using a specific key
  * \param   key         the hash key for the processed packet
@@ -12,8 +16,8 @@
  * \return  zero for successfully updating
  */
 int __cm_update(const char* key, struct sc_config *sc_config){
-    int i;
-    uint32_t hash_result;
+    int i, j, doca_result;
+    uint32_t hash_result = 0;
     uint32_t cm_nb_rows = INTERNAL_CONF(sc_config)->cm_nb_rows;
     uint32_t cm_nb_counters_per_row = INTERNAL_CONF(sc_config)->cm_nb_counters_per_row;
     rte_spinlock_t *lock = &(INTERNAL_CONF(sc_config)->cm_sketch->lock);
@@ -30,15 +34,63 @@ int __cm_update(const char* key, struct sc_config *sc_config){
         #if defined(MODE_LATENCY)
             gettimeofday(&hash_start, NULL);
         #endif
-        hash_result = spooky_hash32(key, TUPLE_KEY_LENGTH, INTERNAL_CONF(sc_config)->cm_sketch->hash_seeds[i]);
+
+        #if defined(SC_HAS_DOCA)
+            struct doca_event doca_event = {0};
+            uint8_t *resp_head;
+            /* copy the key to SHA source data buffer */
+            memcpy(DOCA_CONF(sc_config)->sha_src_buffer, key, SC_SKETCH_HASH_KEY_LENGTH);
+
+            /* enqueue the result */
+            doca_result = doca_workq_submit(DOCA_CONF(sc_config)->sha_workq, &DOCA_CONF(sc_config)->sha_job->base);
+            if(doca_result != DOCA_SUCCESS){
+                SC_THREAD_ERROR_DETAILS("failed to enqueue SHA job: %s", doca_get_error_string(doca_result));
+                return SC_ERROR_INTERNAL;
+            }
+
+            /* wait for job completion */
+            while((doca_result = doca_workq_progress_retrieve(
+                    /* workq */ DOCA_CONF(sc_config)->sha_workq,
+                    /* ev */ &doca_event,
+                    /* flags */ NULL) == DOCA_ERROR_AGAIN)
+            ){}
+            if(doca_result != DOCA_SUCCESS){
+                SC_THREAD_ERROR_DETAILS("failed to retrieve SHA result: %s", doca_get_error_string(doca_result));
+                return SC_ERROR_INTERNAL;
+            }
+            
+            /* (DEBUG) verify SHA result */
+            if(doca_event.result.u64 != DOCA_SUCCESS){
+                SC_THREAD_ERROR_DETAILS("sha job finished unsuccessfully");
+                return SC_ERROR_INTERNAL;
+            } else if (
+                ((int)(doca_event.type) != (int)DOCA_SHA_JOB_SHA256) ||
+		        (doca_event.user_data.u64 != DOCA_SHA_JOB_SHA256)
+            ){
+                SC_THREAD_ERROR_DETAILS("received wrong event");
+                return SC_ERROR_INTERNAL;
+            }
+
+            /* retrieve SHA result, we only use the LSB 32 bits */
+            doca_buf_get_data(DOCA_CONF(sc_config)->sha_job->resp_buf, (void **)&resp_head);
+            for(j=0; j<4; j++){
+                hash_result += (resp_head[i] << (j*8));
+            }
+        #else
+            /* naive hashing */
+            hash_result = spooky_hash32(
+                key, SC_SKETCH_HASH_KEY_LENGTH, INTERNAL_CONF(sc_config)->cm_sketch->hash_seeds[i]
+            );
+        #endif
         hash_result %= cm_nb_counters_per_row;
+        
         #if defined(MODE_LATENCY)
             gettimeofday(&hash_end, NULL);
             PER_CORE_APP_META(sc_config).overall_hash.tv_usec
                 += (hash_end.tv_sec - hash_start.tv_sec) * 1000000 
                     + (hash_end.tv_usec - hash_start.tv_usec);
         #endif // MODE_LATENCY
-        // SC_THREAD_LOG("hash result: %u", hash_result);
+        SC_THREAD_LOG("hash result: %u", hash_result);
     
         /* step 2: require spin lock */
         #if defined(MODE_LATENCY)
@@ -98,7 +150,7 @@ int __cm_query(const char* key, void *result, struct sc_config *sc_config){
 
     for(i=0; i<cm_nb_rows; i++){
         /* step 1: hashing */
-        hash_result = spooky_hash32(key, TUPLE_KEY_LENGTH, INTERNAL_CONF(sc_config)->cm_sketch->hash_seeds[i]);
+        hash_result = spooky_hash32(key, SC_SKETCH_HASH_KEY_LENGTH, INTERNAL_CONF(sc_config)->cm_sketch->hash_seeds[i]);
         hash_result %= cm_nb_counters_per_row;
 
         /* step 2: require spin lock */
@@ -151,7 +203,7 @@ int __cm_record(const char* key, struct sc_config *sc_config){
         uint64_t flow_count;
         
         /* query the key-value map */
-        ret = query_kv_map(PER_CORE_APP_META(sc_config).kv_map, key, TUPLE_KEY_LENGTH, &queried_flow_count, NULL);
+        ret = query_kv_map(PER_CORE_APP_META(sc_config).kv_map, key, SC_SKETCH_HASH_KEY_LENGTH, &queried_flow_count, NULL);
         if(ret != SC_SUCCESS && ret != SC_ERROR_NOT_EXIST){
             SC_ERROR("error occured during query key-value map");
         }
@@ -160,7 +212,7 @@ int __cm_record(const char* key, struct sc_config *sc_config){
             SC_THREAD_LOG("key %s not found, insert", (const char*)key);
             flow_count = 1;
             if( SC_SUCCESS != insert_kv_map(PER_CORE_APP_META(sc_config).kv_map, 
-                                    key, TUPLE_KEY_LENGTH, &flow_count, sizeof(flow_count))
+                                    key, SC_SKETCH_HASH_KEY_LENGTH, &flow_count, sizeof(flow_count))
             ){
                 SC_ERROR("failed to insert key %s to key-value map", key);
                 return SC_ERROR_INTERNAL;
@@ -169,7 +221,7 @@ int __cm_record(const char* key, struct sc_config *sc_config){
             flow_count = *queried_flow_count + 1;
             SC_THREAD_LOG("key %s found, value %ld", (const char*)key, flow_count);
             if(SC_SUCCESS != update_kv_map(PER_CORE_APP_META(sc_config).kv_map, 
-                                    key, TUPLE_KEY_LENGTH, &flow_count, sizeof(flow_count))
+                                    key, SC_SKETCH_HASH_KEY_LENGTH, &flow_count, sizeof(flow_count))
             ){
                 SC_ERROR("failed to updating key %s to key-value map, flow count: %ld", key, flow_count);
                 return SC_ERROR_INTERNAL;

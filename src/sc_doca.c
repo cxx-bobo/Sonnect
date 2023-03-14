@@ -5,6 +5,7 @@
 DOCA_LOG_REGISTER(SC::DOCA);
 
 static int _parse_doca_kv_pair(char* key, char *value, struct sc_config* sc_config);
+static int _init_doca_flow(struct sc_config *sc_config);
 
 /*!
  * \brief   initialize doca and corresponding resources
@@ -28,6 +29,13 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
     /* parse doca configuration file */
     if(sc_util_parse_config(fp, sc_config, _parse_doca_kv_pair) != SC_SUCCESS){
         SC_ERROR("failed to parse the doca configuration file, exit\n");
+        result = SC_ERROR_INTERNAL;
+        goto init_doca_exit;
+    }
+
+    /* initialize doca flow */
+    if(SC_SUCCESS != _init_doca_flow(sc_config)){
+        SC_ERROR("failed to initialize doca flow\n");
         result = SC_ERROR_INTERNAL;
         goto init_doca_exit;
     }
@@ -100,6 +108,67 @@ sha_init_successed:
     #endif // SC_NEED_DOCA_SHA
 
 init_doca_exit:
+    return result;
+}
+
+/*!
+ * \brief   initilize doca flow, including:
+ *          [1] init the doca flow library;
+ *          [2] init the doca ports;
+ *          [3] construct doca flow pipes;
+ * \param   key         the key of the config pair
+ * \param   value       the value of the config pair
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully parsing
+ */
+static int _init_doca_flow(struct sc_config *sc_config){
+    int i, result = SC_SUCCESS;
+    struct doca_flow_error err = {0};
+    struct doca_flow_port *single_doca_flow_port;
+    struct doca_flow_port **doca_flow_ports;
+    char doca_flow_port_id_str[SC_DOCA_FLOW_MAX_PORT_ID_STRLEN];
+    
+    /* allocate memory for storing doca ports */
+    doca_flow_ports = (struct doca_flow_port**)malloc(
+        sizeof(struct doca_flow_port*) * sc_config->nb_used_ports
+    );
+    if(!doca_flow_ports){
+        SC_ERROR_DETAILS("failed to allocate memory for doca_flow_ports");
+        result = SC_ERROR_MEMORY;
+        goto _init_doca_flow_exit;
+    }
+    DOCA_CONF(sc_config)->doca_flow_ports = doca_flow_ports;
+
+    /* initailzie doca flow configurations */
+    DOCA_CONF(sc_config)->doca_flow_cfg.queues = sc_config->nb_rx_rings_per_port;
+    DOCA_CONF(sc_config)->doca_flow_cfg.mode_args = "vnf,hws";
+    
+    /* initailize doca flow */
+    if (doca_flow_init(&DOCA_CONF(sc_config)->doca_flow_cfg, &err) < 0) {
+        SC_ERROR_DETAILS("failed to init doca flow: %s", err.message);
+        result = SC_ERROR_INTERNAL;
+		goto _init_doca_flow_exit;
+	}
+
+    /* initialize doca ports */
+    for(i=0; i<sc_config->nb_used_ports; i++){
+        /* configure the created port */
+        struct doca_flow_port_cfg _port_cfg = {0};
+        _port_cfg.port_id = i;
+        _port_cfg.type = DOCA_FLOW_PORT_DPDK_BY_ID;
+        snprintf(doca_flow_port_id_str, SC_DOCA_FLOW_MAX_PORT_ID_STRLEN, "%d", _port_cfg.port_id);
+        _port_cfg.devargs = doca_flow_port_id_str;
+
+        /* create doca port */
+        DOCA_CONF(sc_config)->doca_flow_ports[i] = doca_flow_port_start(&_port_cfg, &err);
+        if(!DOCA_CONF(sc_config)->doca_flow_ports[i]){
+            SC_ERROR_DETAILS("failed to create doca flow port %i: %s", i, err.message);
+            result = SC_ERROR_INTERNAL;
+		    goto _init_doca_flow_exit;
+        }
+    }
+
+_init_doca_flow_exit:
     return result;
 }
 

@@ -239,6 +239,23 @@ int sc_doca_util_destory_core_objects(
 
 
 
+/* ==================== DOCA memory operation ==================== */
+
+/*!
+ * \brief   free callback of doca_mmap_populate, free doca_buf allocated pointer
+ * \param   addr    memory range pointer
+ * \param   len     memory range length
+ * \param   opaque  an opaque pointer passed to iterator
+ * \return  zero for successfully freeing
+ */
+void sc_doca_util_mmap_populate_free_cb(void *addr, size_t len, void *opaque){
+	free(addr);
+}
+
+/* =============================================================== */
+
+
+
 
 /* ==================== DOCA device operation ==================== */
 

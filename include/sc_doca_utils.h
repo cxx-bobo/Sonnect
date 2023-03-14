@@ -33,6 +33,13 @@ int sc_doca_util_destory_core_objects(
 /* =============================================================== */
 
 
+
+/* ===================== DOCA memory operation =================== */
+void sc_doca_util_mmap_populate_free_cb(void *addr, size_t len, void *opaque);
+/* =============================================================== */
+
+
+
 /* ==================== DOCA device operation ==================== */
 int sc_doca_util_parse_pci_addr(char const *pci_addr, struct doca_pci_bdf *out_bdf);
 int sc_doca_util_open_doca_device_with_pci(

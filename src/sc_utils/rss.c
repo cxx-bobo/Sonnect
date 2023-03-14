@@ -27,9 +27,9 @@ int sc_util_get_rss_queue_id_ipv4(
     #else
         if(rss_hash_field == ETH_RSS_IP){          /* if only IP need to be hashed */
     #endif
-            *queue_id = (rss_l3_original & 0xFF) % nb_queues;
+            *queue_id = (rss_l3_original & 0x7F) % nb_queues;
         } else {
-            *queue_id = (rss_l3l4_original & 0xFF) % nb_queues;
+            *queue_id = (rss_l3l4_original & 0x7F) % nb_queues;
         }
 
     return SC_SUCCESS;

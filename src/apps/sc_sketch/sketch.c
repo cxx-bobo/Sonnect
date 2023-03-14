@@ -5,6 +5,10 @@
 
 #include "sc_utils/map.h"
 
+#if defined(SC_HAS_DOCA)
+    DOCA_LOG_REGISTER(SC::APP_SKETCH);
+#endif
+
 #if defined(SKETCH_TYPE_CM)
     #include "sc_sketch/cm_sketch.h"
 #endif
@@ -121,11 +125,113 @@ exit:
  * \return  zero for successfully executing
  */
 int _process_enter(struct sc_config *sc_config){
+    /* configure to use DOCA SHA to accelerate the hash calculation */
+    #if defined(SC_HAS_DOCA)
+        char *dst_buffer = NULL;
+        char *src_buffer = NULL;
+        struct doca_sha_job *sha_job;
+
+        /* allocate SHA engine result buffer */
+        dst_buffer = malloc(DOCA_SHA256_BYTE_COUNT);
+        if (dst_buffer == NULL) {
+            SC_THREAD_ERROR_DETAILS("failed to malloc memory for dst_buffer");
+            return SC_ERROR_MEMORY;
+        }
+        memset(dst_buffer, 0, DOCA_SHA256_BYTE_COUNT);
+        DOCA_CONF(sc_config)->sha_dst_buffer = dst_buffer;
+
+        /* allocate buffer for storing input source data */
+        src_buffer = malloc(SC_SKETCH_HASH_KEY_LENGTH);
+        if (src_buffer == NULL) {
+            SC_THREAD_ERROR_DETAILS("failed to malloc memory for src_buffer");
+            return SC_ERROR_MEMORY;
+        }
+        memset(src_buffer, 0, SC_SKETCH_HASH_KEY_LENGTH);
+        DOCA_CONF(sc_config)->sha_src_buffer = src_buffer;
+
+        /* populate dst_buffer to memory map */
+        if(DOCA_SUCCESS != doca_mmap_populate(
+                /* mmap */ DOCA_CONF(sc_config)->sha_mmap,
+                /* addr */ DOCA_CONF(sc_config)->sha_dst_buffer,
+                /* len */ DOCA_SHA256_BYTE_COUNT,
+                /* pg_sz */ sysconf(_SC_PAGESIZE),
+                /* free_cb */ sc_doca_util_mmap_populate_free_cb,
+                /* opaque */ NULL)
+        ){
+            SC_THREAD_ERROR_DETAILS("failed to populate memory dst_buffer to memory map");
+            return SC_ERROR_MEMORY;
+        }
+
+        /* populate src_buffer to memory map */
+        if(DOCA_SUCCESS != doca_mmap_populate(
+                /* mmap */ DOCA_CONF(sc_config)->sha_mmap,
+                /* addr */ DOCA_CONF(sc_config)->sha_src_buffer,
+                /* len */ SC_SKETCH_HASH_KEY_LENGTH,
+                /* pg_sz */ sysconf(_SC_PAGESIZE),
+                /* free_cb */ NULL,
+                /* opaque */ NULL)
+        ){
+            SC_THREAD_ERROR_DETAILS("failed to populate memory src_buffer to memory map");
+            return SC_ERROR_MEMORY;
+        }
+
+        /* acquire DOCA buffer for representing source buffer */
+        if(DOCA_SUCCESS != doca_buf_inventory_buf_by_addr(
+                /* inventory */ DOCA_CONF(sc_config)->sha_buf_inv,
+                /* mmap */ DOCA_CONF(sc_config)->sha_mmap,
+                /* addr */ DOCA_CONF(sc_config)->sha_src_buffer,
+                /* len */ SC_SKETCH_HASH_KEY_LENGTH,
+                /* buf */ &DOCA_CONF(sc_config)->sha_src_doca_buf)
+        ){
+            SC_THREAD_ERROR_DETAILS("failed to acquire DOCA buffer representing source buffer");
+            return SC_ERROR_MEMORY;
+        }
+
+        /* set data address and length in the doca_buf. */
+        if(DOCA_SUCCESS != doca_buf_set_data(
+                /* buf */ DOCA_CONF(sc_config)->sha_src_doca_buf,
+                /* data */ DOCA_CONF(sc_config)->sha_src_buffer,
+                /* data_len */ SC_SKETCH_HASH_KEY_LENGTH)
+        ){
+            SC_THREAD_ERROR_DETAILS("failed to set data address and length in the doca_buf");
+            return SC_ERROR_MEMORY;
+        }
+
+        /* acquire DOCA buffer for representing destination buffer */
+        if(DOCA_SUCCESS != doca_buf_inventory_buf_by_addr(
+                /* inventory */ DOCA_CONF(sc_config)->sha_buf_inv,
+                /* mmap */ DOCA_CONF(sc_config)->sha_mmap,
+                /* addr */ DOCA_CONF(sc_config)->sha_dst_buffer,
+                /* len */ DOCA_SHA256_BYTE_COUNT,
+                /* buf */ &DOCA_CONF(sc_config)->sha_dst_doca_buf)
+        ){
+            SC_THREAD_ERROR_DETAILS("failed to acquire DOCA buffer representing destination buffer");
+            return SC_ERROR_MEMORY;
+        }
+
+        /* construct sha job */
+        sha_job = (struct doca_sha_job*)malloc(sizeof(struct doca_sha_job));
+        if(!sha_job){
+            SC_THREAD_ERROR_DETAILS("failed to allocate memory for sha_job");
+            return SC_ERROR_MEMORY;
+        }
+        sha_job->base = (struct doca_job) {
+			.type = DOCA_SHA_JOB_SHA256,
+			.flags = DOCA_JOB_FLAGS_NONE,
+			.ctx = DOCA_CONF(sc_config)->sha_ctx,
+			.user_data.u64 = DOCA_SHA_JOB_SHA256,
+		},
+        sha_job->resp_buf = DOCA_CONF(sc_config)->sha_dst_doca_buf;
+        sha_job->req_buf = DOCA_CONF(sc_config)->sha_src_doca_buf;
+        sha_job->flags = DOCA_SHA_JOB_FLAGS_NONE;
+        DOCA_CONF(sc_config)->sha_job = sha_job;
+    #endif
+
     #if defined(MODE_ACCURACY)
         /* allocate per-core key-value map for accuracy measurement */
         sc_kv_map_t *kv_map;
         if(new_kv_map(&kv_map) != SC_SUCCESS){
-            SC_ERROR("failed to allocate memory for sc_kv_map_t");
+            SC_THREAD_ERROR_DETAILS("failed to allocate memory for sc_kv_map_t");
             return SC_ERROR_MEMORY;
         }
         PER_CORE_APP_META(sc_config).kv_map = kv_map;
@@ -158,79 +264,52 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fw
     #endif // MODE_LATENCY
 
     /* allocate memory for storing tuple key */
-    char tuple_key[TUPLE_KEY_LENGTH];
+    char tuple_key[SC_SKETCH_HASH_KEY_LENGTH];
     
     /* initialize tuple key */
     struct rte_ether_hdr *_eth_addr 
         = rte_pktmbuf_mtod_offset(pkt, struct rte_ether_hdr*, 0);
-    // struct rte_ipv4_hdr *_ipv4_hdr 
-    //     = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr*, RTE_ETHER_HDR_LEN);
-    // struct rte_udp_hdr *_udp_hdr
-    //     = rte_pktmbuf_mtod_offset(
-    //         pkt, struct rte_udp_hdr*, RTE_ETHER_HDR_LEN+rte_ipv4_hdr_len(_ipv4_hdr));
+    struct rte_ipv4_hdr *_ipv4_hdr 
+        = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr*, RTE_ETHER_HDR_LEN);
+    struct rte_udp_hdr *_udp_hdr
+        = rte_pktmbuf_mtod_offset(
+            pkt, struct rte_udp_hdr*, RTE_ETHER_HDR_LEN+rte_ipv4_hdr_len(_ipv4_hdr));
     
-    /* five-tuples */
-    // sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%u%u%u%u",
-    //     /* source mac address */
-    //     _eth_addr->src_addr.addr_bytes[0],
-    //     _eth_addr->src_addr.addr_bytes[1],
-    //     _eth_addr->src_addr.addr_bytes[2],
-    //     _eth_addr->src_addr.addr_bytes[3],
-    //     _eth_addr->src_addr.addr_bytes[4],
-    //     _eth_addr->src_addr.addr_bytes[5],
-    //     /* destination mac address */
-    //     _eth_addr->dst_addr.addr_bytes[0],
-    //     _eth_addr->dst_addr.addr_bytes[1],
-    //     _eth_addr->dst_addr.addr_bytes[2],
-    //     _eth_addr->dst_addr.addr_bytes[3],
-    //     _eth_addr->dst_addr.addr_bytes[4],
-    //     _eth_addr->dst_addr.addr_bytes[5],
-    //     /* source ipv4 address */
-    //     _ipv4_hdr->src_addr,
-    //     /* destination ipv4 address */
-    //     _ipv4_hdr->dst_addr,
-    //     /* source udp port */
-    //     _udp_hdr->src_port,
-    //     /* destination udp port */
-    //     _udp_hdr->dst_port
-    // );
 
     /* ethernet-tuples */
     #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
-        sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+        /* five-tuples */
+        sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%u%u%u%u",
             /* source mac address */
-            _eth_addr->src_addr.addr_bytes[0],
-            _eth_addr->src_addr.addr_bytes[1],
-            _eth_addr->src_addr.addr_bytes[2],
-            _eth_addr->src_addr.addr_bytes[3],
-            _eth_addr->src_addr.addr_bytes[4],
-            _eth_addr->src_addr.addr_bytes[5],
+            _eth_addr->src_addr.addr_bytes[0], _eth_addr->src_addr.addr_bytes[1],
+            _eth_addr->src_addr.addr_bytes[2], _eth_addr->src_addr.addr_bytes[3],
+            _eth_addr->src_addr.addr_bytes[4], _eth_addr->src_addr.addr_bytes[5],
             /* destination mac address */
-            _eth_addr->dst_addr.addr_bytes[0],
-            _eth_addr->dst_addr.addr_bytes[1],
-            _eth_addr->dst_addr.addr_bytes[2],
-            _eth_addr->dst_addr.addr_bytes[3],
-            _eth_addr->dst_addr.addr_bytes[4],
-            _eth_addr->dst_addr.addr_bytes[5]
+            _eth_addr->dst_addr.addr_bytes[0], _eth_addr->dst_addr.addr_bytes[1],
+            _eth_addr->dst_addr.addr_bytes[2], _eth_addr->dst_addr.addr_bytes[3],
+            _eth_addr->dst_addr.addr_bytes[4], _eth_addr->dst_addr.addr_bytes[5],
+            /* ipv4 address */
+            _ipv4_hdr->src_addr, _ipv4_hdr->dst_addr,
+            /* udp port */
+            _udp_hdr->src_port, _udp_hdr->dst_port
         );
     #else
         sprintf(tuple_key, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
             /* source mac address */
-            _eth_addr->s_addr.addr_bytes[0],
-            _eth_addr->s_addr.addr_bytes[1],
-            _eth_addr->s_addr.addr_bytes[2],
-            _eth_addr->s_addr.addr_bytes[3],
-            _eth_addr->s_addr.addr_bytes[4],
-            _eth_addr->s_addr.addr_bytes[5],
+            _eth_addr->s_addr.addr_bytes[0], _eth_addr->s_addr.addr_bytes[1],
+            _eth_addr->s_addr.addr_bytes[2], _eth_addr->s_addr.addr_bytes[3],
+            _eth_addr->s_addr.addr_bytes[4], _eth_addr->s_addr.addr_bytes[5],
             /* destination mac address */
-            _eth_addr->d_addr.addr_bytes[0],
-            _eth_addr->d_addr.addr_bytes[1],
-            _eth_addr->d_addr.addr_bytes[2],
-            _eth_addr->d_addr.addr_bytes[3],
-            _eth_addr->d_addr.addr_bytes[4],
-            _eth_addr->d_addr.addr_bytes[5]
+            _eth_addr->d_addr.addr_bytes[0], _eth_addr->d_addr.addr_bytes[1],
+            _eth_addr->d_addr.addr_bytes[2], _eth_addr->d_addr.addr_bytes[3],
+            _eth_addr->d_addr.addr_bytes[4], _eth_addr->d_addr.addr_bytes[5],
+            /* ipv4 address */
+            _ipv4_hdr->src_addr, _ipv4_hdr->dst_addr,
+            /* udp port */
+            _udp_hdr->src_port, _udp_hdr->dst_port
         );
     #endif // RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+
     // SC_LOG("tuple key: %s, size: %ld", tuple_key, sizeof(tuple_key));
 
     // printf("recv ether frame\n");

@@ -3,10 +3,17 @@
 
 #include <sys/time.h>
 #include <rte_ether.h>
+#include <rte_ip.h>
+#include <rte_udp.h>
 #include <rte_malloc.h>
 
 #include "sc_global.h"
 #include "sc_utils/map.h"
+
+#if defined(SC_HAS_DOCA)
+    #include "sc_doca.h"
+    #include "sc_doca_utils.h"
+#endif
 
 /* type of the sketch counter */
 typedef uint64_t    l_counter_t;   // 8 bytes
@@ -16,7 +23,7 @@ typedef uint8_t     t_counter_t;   // 1 bytes
 
 typedef m_counter_t counter_t;
 
-#define TUPLE_KEY_LENGTH 57
+#define SC_SKETCH_HASH_KEY_LENGTH 57
 
 /* common sketch components */
 struct _sketch_core {
