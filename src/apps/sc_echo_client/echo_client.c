@@ -264,7 +264,6 @@ try_receive_ack:
     }
 
     /* assemble fininal pkt brust */
-    // TODO: currently only support 1 segment per packet
     if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
             /* mp */ PER_CORE_MBUF_POOL(sc_config), 
             /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
@@ -275,8 +274,7 @@ try_receive_ack:
             /* proto */ IPPROTO_UDP,
             /* proto_hdr */ &PER_CORE_APP_META(sc_config).pkt_udp_hdr,
             /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
-            /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len, 
-            /* nb_pkt_segs */ 1
+            /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len
     )){
         SC_THREAD_ERROR("failed to assemble final packet");
         result = SC_ERROR_INTERNAL;
@@ -375,7 +373,12 @@ int _process_exit(struct sc_config *sc_config){
     return SC_SUCCESS;
 }
 
-
+/*!
+ * \brief   re-generate new random packet, and make sure it belongs to the queue
+ *          that current cpu core used
+ * \param   sc_config       the global configuration
+ * \return  zero for successfully generation
+ */
 int __reload_pkt_header(struct sc_config *sc_config){
     int result = SC_SUCCESS;
     uint32_t queue_id;

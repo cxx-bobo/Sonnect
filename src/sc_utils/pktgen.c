@@ -59,11 +59,11 @@ int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr){
  * \param   offset  copy offset within the destination mbuf
  * \return  0 for successfully copy
  */
-int _sc_util_copy_buf_to_pkt_segs(void *buf, unsigned len, struct rte_mbuf *pkt, unsigned offset){
+int _sc_util_copy_buf_to_pkt_segs(void *buf, uint32_t len, struct rte_mbuf *pkt, uint32_t offset){
 	struct rte_mbuf *seg;
 	void *seg_buf;
 	unsigned copy_len;
-
+	
 	seg = pkt;
 	while (offset >= seg->data_len) {
 		offset -= seg->data_len;
@@ -96,7 +96,7 @@ int _sc_util_copy_buf_to_pkt_segs(void *buf, unsigned len, struct rte_mbuf *pkt,
  * \param   offset  copy offset within the destination mbuf
  * \return  0 for successfully copy
  */
-int sc_util_copy_buf_to_pkt(void *buf, unsigned len, struct rte_mbuf *pkt, unsigned offset){
+int sc_util_copy_buf_to_pkt(void *buf, uint32_t len, struct rte_mbuf *pkt, uint32_t offset){
 	if (offset + len <= pkt->data_len) {
 		rte_memcpy(rte_pktmbuf_mtod_offset(pkt, char *, offset), buf, (size_t) len);
 		return SC_SUCCESS;
@@ -122,15 +122,25 @@ int sc_util_copy_buf_to_pkt(void *buf, unsigned len, struct rte_mbuf *pkt, unsig
 int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 
-		uint8_t pkt_len, uint8_t nb_pkt_segs){
+		uint32_t pkt_len){
 	int i, nb_pkt = 0, result = SC_SUCCESS;
 	size_t eth_hdr_size;
-
 	struct rte_mbuf *pkt_seg;
 	struct rte_mbuf *pkt;
+	uint32_t assembled_pkt_len = 0;
 
-	const uint8_t pkt_seg_data_len = pkt_len / nb_pkt_segs;
-
+	/* determine the number of pkt segments */
+	uint16_t nb_pkt_segs;
+	if(pkt_len > RTE_MBUF_DEFAULT_DATAROOM){
+		if(pkt_len % RTE_MBUF_DEFAULT_DATAROOM == 0){
+			nb_pkt_segs = pkt_len / RTE_MBUF_DEFAULT_DATAROOM;
+		} else {
+			nb_pkt_segs = pkt_len / RTE_MBUF_DEFAULT_DATAROOM + 1;
+		}
+	} else {
+		nb_pkt_segs = 1;
+	}
+	
 	/* produce multiple pkt inside the brust */
 	for (nb_pkt = 0; nb_pkt < nb_pkt_per_burst; nb_pkt++) {
 		pkt = rte_pktmbuf_alloc(mp);
@@ -139,13 +149,21 @@ int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf 
 			result = SC_ERROR_MEMORY;
 			goto generate_packet_burst_proto_exit;
 		}
-		pkt->data_len = pkt_seg_data_len;
-		pkt_seg = pkt;
+		
+		/* assign data_len of the first segment (root segment) of the packet to send */
+		if(pkt_len > RTE_MBUF_DEFAULT_DATAROOM){
+			pkt->data_len = RTE_MBUF_DEFAULT_DATAROOM;
+			assembled_pkt_len += RTE_MBUF_DEFAULT_DATAROOM;
+		} else {
+			pkt->data_len = pkt_len;
+			assembled_pkt_len += pkt_len;
+		}
 		
 		/* assemble multiple segments inside current pkt */
+		pkt_seg = pkt;
 		for (i = 1; i < nb_pkt_segs; i++) {
 			pkt_seg->next = rte_pktmbuf_alloc(mp);
-			if (pkt_seg->next == NULL) {
+			if (unlikely(!pkt_seg->next)) {
 				pkt->nb_segs = i;
 				rte_pktmbuf_free(pkt);
 				SC_ERROR_DETAILS("failed to allocate memory for rte_mbuf");
@@ -153,10 +171,13 @@ int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf 
 				goto generate_packet_burst_proto_exit;
 			}
 			pkt_seg = pkt_seg->next;
-			if (i != nb_pkt_segs - 1){
-				pkt_seg->data_len = pkt_seg_data_len;
+			if (i != nb_pkt_segs){
+				/* not the last segment, the length is still RTE_MBUF_DEFAULT_DATAROOM */
+				pkt_seg->data_len = RTE_MBUF_DEFAULT_DATAROOM;
+				assembled_pkt_len += RTE_MBUF_DEFAULT_DATAROOM;
 			} else {
-				pkt_seg->data_len = pkt_seg_data_len + pkt_len % nb_pkt_segs;
+				/* the last segment */
+				pkt_seg->data_len = pkt_len - assembled_pkt_len;
 			}
 		}
 		pkt_seg->next = NULL; /* Last segment of packet. */
