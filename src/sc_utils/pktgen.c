@@ -2,6 +2,7 @@
 #include "sc_utils/pktgen.h"
 #include "sc_utils.h"
 #include "sc_log.h"
+#include "sc_utils/rss.h"
 
 /*!
  * \brief   generate random ethernet address
@@ -38,6 +39,26 @@ int sc_util_generate_random_ipv4_addr(uint32_t *addr){
 }
 
 /*!
+ * \brief   generate random ipv6 address
+ * \param   addr   	pointer to a 16-bytes long array
+ * \return  0 for successfully generation
+ */
+int sc_util_generate_random_ipv6_addr(uint8_t *addr){
+	int i;
+
+	for(i=0; i<16; i++){
+		if(unlikely(!addr[i])){
+			SC_THREAD_ERROR_DETAILS("invalid addr pointer at %d", i);
+			return SC_ERROR_INVALID_VALUE;
+		} else {
+			addr[i] = sc_util_random_unsigned_int8();
+		}
+	}
+
+	return SC_SUCCESS;
+}
+
+/*!
  * \brief   generate specified ipv4 address
  * \param	specified_addr	specified ipv4 address
  * \param   result_addr		generated 32-bit ipv4 address
@@ -50,6 +71,153 @@ int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr){
 	return SC_SUCCESS;
 }
 
+/*!
+ * \brief   generate random packet header
+ * \param	sc_pkt_hdr		generated packet header
+ * \param	pkt_len			length of the generated packet
+ * \param	nb_queues		number of total queues
+ * \param   used_queue_id	specified queue id to make sure the RSS direct to correct queue
+ * \param	l4_type			type of the layer 4 protocol
+ * \return  0 for successfully generation
+ */
+int sc_util_generate_random_pkt_hdr(
+		struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_len, uint32_t nb_queues, 
+		uint32_t used_queue_id, uint32_t l3_type, uint32_t l4_type, uint64_t rss_hash_field
+){
+	int result = SC_SUCCESS;
+    uint32_t queue_id;
+
+    /* initialize the _pkt_len as the length of the packet */
+    uint16_t _pkt_len = pkt_len -  18 /* l4 len */ - 20 /* l3 len */ - 8 /* ethernet len */;
+
+    /* generate random port and ipv4 address */
+    while(!sc_force_quit){
+		/* generate random layer 4 addresses */
+        sc_pkt_hdr->src_port = sc_util_random_unsigned_int16();
+        sc_pkt_hdr->dst_port = sc_util_random_unsigned_int16();
+
+		/* generate random layer 3 addresses */
+		if(l3_type == RTE_ETHER_TYPE_IPV4){
+			sc_util_generate_random_ipv4_addr(&sc_pkt_hdr->src_ipv4_addr);
+        	sc_util_generate_random_ipv4_addr(&sc_pkt_hdr->dst_ipv4_addr);
+		} else if(l3_type == RTE_ETHER_TYPE_IPV6){
+			sc_util_generate_random_ipv6_addr(&sc_pkt_hdr->src_ipv6_addr);
+        	sc_util_generate_random_ipv6_addr(&sc_pkt_hdr->dst_ipv6_addr);
+		} else {
+			SC_THREAD_ERROR("unknown l3 type %u", l3_type);
+			result = SC_ERROR_INVALID_VALUE;
+			goto sc_util_generate_random_pkt_hdr_exit;
+		}
+        
+		/* 
+		 * calculate rss hash result,
+		 * to ensure the rss result belongs to current core 
+		 */
+		if(l3_type == RTE_ETHER_TYPE_IPV4){
+			sc_util_get_rss_queue_id_ipv4(
+				/* src_ipv4 */ sc_pkt_hdr->src_ipv4_addr,
+				/* dst_ipv4 */ sc_pkt_hdr->dst_ipv4_addr,
+				/* sport */ sc_pkt_hdr->src_port,
+				/* dport */ sc_pkt_hdr->dst_port,
+				/* sctp_tag */ 0,
+				/* nb_queues */ nb_queues,
+				/* queue_id */ &queue_id,
+				/* rss_hash_field */ rss_hash_field
+			);
+		} else {
+			sc_util_get_rss_queue_id_ipv6(
+				/* src_ipv6 */ sc_pkt_hdr->src_ipv6_addr,
+				/* dst_ipv6 */ sc_pkt_hdr->dst_ipv6_addr,
+				/* sport */ sc_pkt_hdr->src_port,
+				/* dport */ sc_pkt_hdr->dst_port,
+				/* sctp_tag */ 0,
+				/* nb_queues */ nb_queues,
+				/* queue_id */ &queue_id,
+				/* rss_hash_field */ rss_hash_field
+			);
+		}
+
+        if(queue_id == (uint16_t)used_queue_id){ break; }
+    }
+    
+    /* assemble layer 4 header */
+	if(l4_type == IPPROTO_UDP){
+		if(SC_SUCCESS != sc_util_initialize_udp_header(
+				&sc_pkt_hdr->pkt_udp_hdr, 
+				sc_pkt_hdr->src_port, 
+				sc_pkt_hdr->dst_port, pkt_len, &pkt_len)){
+			SC_THREAD_ERROR("failed to assemble udp header");
+			result = SC_ERROR_INTERNAL;
+			goto sc_util_generate_random_pkt_hdr_exit;
+		}
+	} else if(l4_type == IPPROTO_TCP){
+		if(SC_SUCCESS != sc_util_initialize_tcp_header(
+				&sc_pkt_hdr->pkt_tcp_hdr, 
+				sc_pkt_hdr->src_port, 
+				sc_pkt_hdr->dst_port, pkt_len, &pkt_len)){
+			SC_THREAD_ERROR("failed to assemble tcp header");
+			result = SC_ERROR_INTERNAL;
+			goto sc_util_generate_random_pkt_hdr_exit;
+		}
+	} else {
+		SC_THREAD_ERROR("unknown l4 type %u", l4_type);
+		result = SC_ERROR_INVALID_VALUE;
+		goto sc_util_generate_random_pkt_hdr_exit;
+	}
+    
+
+    /* assemble l3 header */
+	if(l3_type == RTE_ETHER_TYPE_IPV4){
+		if(SC_SUCCESS != sc_util_initialize_ipv4_header_proto(
+				&sc_pkt_hdr->pkt_ipv4_hdr, 
+				sc_pkt_hdr->src_ipv4_addr, 
+				sc_pkt_hdr->dst_ipv4_addr, 
+				pkt_len, l4_type, &pkt_len)
+		){
+			SC_THREAD_ERROR("failed to assemble ipv4 header");
+			result = SC_ERROR_INTERNAL;
+			goto sc_util_generate_random_pkt_hdr_exit;
+		}
+	} else if (l4_type == RTE_ETHER_TYPE_IPV6){
+		if(SC_SUCCESS != sc_util_initialize_ipv6_header_proto(
+				&sc_pkt_hdr->pkt_ipv6_hdr, 
+				sc_pkt_hdr->src_ipv6_addr, 
+				sc_pkt_hdr->dst_ipv6_addr, 
+				pkt_len, l4_type, &pkt_len)
+		){
+			SC_THREAD_ERROR("failed to assemble ipv6 header");
+			result = SC_ERROR_INTERNAL;
+			goto sc_util_generate_random_pkt_hdr_exit;
+		}
+	}
+    
+    /* assemble ethernet header */
+    if(SC_SUCCESS != sc_util_generate_random_ether_addr(
+            sc_pkt_hdr->src_ether_addr)){
+        SC_THREAD_ERROR("failed to generate random source mac address");
+        result = SC_ERROR_INTERNAL;
+        goto sc_util_generate_random_pkt_hdr_exit;
+    }
+    if(SC_SUCCESS != sc_util_generate_random_ether_addr(
+            sc_pkt_hdr->dst_ether_addr)){
+        SC_THREAD_ERROR("failed to generate random destination mac address");
+        result = SC_ERROR_INTERNAL;
+        goto sc_util_generate_random_pkt_hdr_exit;
+    }
+    if(SC_SUCCESS != sc_util_initialize_eth_header(
+        &sc_pkt_hdr->pkt_eth_hdr, 
+        (struct rte_ether_addr *)sc_pkt_hdr->src_ether_addr, 
+        (struct rte_ether_addr *)sc_pkt_hdr->dst_ether_addr,
+        RTE_ETHER_TYPE_IPV4, 0, 0, &pkt_len
+    )){
+        SC_THREAD_ERROR("failed to assemble ethernet header");
+        result = SC_ERROR_INTERNAL;
+        goto sc_util_generate_random_pkt_hdr_exit;
+    }
+
+sc_util_generate_random_pkt_hdr_exit:
+    return result;
+}
 
 /*!
  * \brief   copy pkt data to mbufs chain, according to given offset

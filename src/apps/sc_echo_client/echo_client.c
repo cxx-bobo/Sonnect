@@ -6,8 +6,6 @@
 #include "sc_utils.h"
 #include "sc_log.h"
 
-int __reload_pkt_header(struct sc_config *sc_config);
-
 /*!
  * \brief   initialize application (internal)
  * \param   sc_config   the global configuration
@@ -94,7 +92,15 @@ int _process_enter(struct sc_config *sc_config){
     int i, result = SC_SUCCESS;
     
     /* generate random packet header */
-    result = __reload_pkt_header(sc_config);
+    result = sc_util_generate_random_pkt_hdr(
+        /* sc_pkt_hdr */ &PER_CORE_APP_META(sc_config).test_pkt,
+        /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
+        /* nb_queues */ sc_config->nb_rx_rings_per_port,
+        /* used_queue_id */ rte_lcore_index(rte_lcore_id()),
+        /* l3_type */ RTE_ETHER_TYPE_IPV4,
+        /* l4_type */ IPPROTO_UDP,
+        /* rss_hash_field */ sc_config->rss_hash_field
+    );
     if(result != SC_SUCCESS){
         SC_THREAD_ERROR("failed to generate new pkt header");
         goto _process_enter_exit;
@@ -267,12 +273,12 @@ try_receive_ack:
     if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
             /* mp */ PER_CORE_MBUF_POOL(sc_config), 
             /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
-            /* eth_hdr */ &PER_CORE_APP_META(sc_config).pkt_eth_hdr,
+            /* eth_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_eth_hdr,
             /* vlan_enabled */ 0,
-            /* ip_hdr */ &PER_CORE_APP_META(sc_config).pkt_ipv4_hdr,
+            /* ip_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_ipv4_hdr,
             /* ipv4 */ 1,
             /* proto */ IPPROTO_UDP,
-            /* proto_hdr */ &PER_CORE_APP_META(sc_config).pkt_udp_hdr,
+            /* proto_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_udp_hdr,
             /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
             /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len
     )){
@@ -371,89 +377,4 @@ int _process_exit(struct sc_config *sc_config){
     pthread_barrier_wait(&sc_config->pthread_barrier);
 
     return SC_SUCCESS;
-}
-
-/*!
- * \brief   re-generate new random packet, and make sure it belongs to the queue
- *          that current cpu core used
- * \param   sc_config       the global configuration
- * \return  zero for successfully generation
- */
-int __reload_pkt_header(struct sc_config *sc_config){
-    int result = SC_SUCCESS;
-    uint32_t queue_id;
-
-    /* initialize the pkt_len as the length of the packet */
-    uint16_t pkt_len 
-        = INTERNAL_CONF(sc_config)->pkt_len - 18 - 20 - 8;
-
-    /* generate random port and ipv4 address */
-    while(1 && !sc_force_quit){
-        PER_CORE_APP_META(sc_config).src_port = sc_util_random_unsigned_int16();
-        PER_CORE_APP_META(sc_config).dst_port = sc_util_random_unsigned_int16();
-        sc_util_generate_random_ipv4_addr(&PER_CORE_APP_META(sc_config).src_ipv4_addr);
-        sc_util_generate_random_ipv4_addr(&PER_CORE_APP_META(sc_config).dst_ipv4_addr);
-
-        /* ensure the rss result belongs to current core */
-        sc_util_get_rss_queue_id_ipv4(
-            /* src_ipv4 */ PER_CORE_APP_META(sc_config).src_ipv4_addr,
-            /* dst_ipv4 */ PER_CORE_APP_META(sc_config).dst_ipv4_addr,
-            /* sport */ PER_CORE_APP_META(sc_config).src_port,
-            /* dport */ PER_CORE_APP_META(sc_config).dst_port,
-            /* sctp_tag */ 0,
-            /* nb_queues */ sc_config->nb_rx_rings_per_port,
-            /* queue_id */ &queue_id,
-            /* rss_hash_field */ sc_config->rss_hash_field
-        );
-        if(queue_id == (uint16_t)rte_lcore_index(rte_lcore_id())){ break; }
-    }
-    
-    /* assemble udp header */
-    if(SC_SUCCESS != sc_util_initialize_udp_header(
-            &PER_CORE_APP_META(sc_config).pkt_udp_hdr, 
-            PER_CORE_APP_META(sc_config).src_port, 
-            PER_CORE_APP_META(sc_config).dst_port, pkt_len, &pkt_len)){
-        SC_THREAD_ERROR("failed to assemble udp header");
-        result = SC_ERROR_INTERNAL;
-        goto __reload_pkt_header_exit;
-    }
-
-    /* assemble ipv4 header */
-    if(SC_SUCCESS != sc_util_initialize_ipv4_header_proto(
-            &PER_CORE_APP_META(sc_config).pkt_ipv4_hdr, 
-            PER_CORE_APP_META(sc_config).src_ipv4_addr, 
-            PER_CORE_APP_META(sc_config).dst_ipv4_addr, 
-            pkt_len, IPPROTO_UDP, &pkt_len
-    )){
-        SC_THREAD_ERROR("failed to assemble ipv4 header");
-        result = SC_ERROR_INTERNAL;
-        goto __reload_pkt_header_exit;
-    }
-
-    /* assemble ethernet header */
-    if(SC_SUCCESS != sc_util_generate_random_ether_addr(
-            PER_CORE_APP_META(sc_config).src_ether_addr)){
-        SC_THREAD_ERROR("failed to generate random source mac address");
-        result = SC_ERROR_INTERNAL;
-        goto __reload_pkt_header_exit;
-    }
-    if(SC_SUCCESS != sc_util_generate_random_ether_addr(
-            PER_CORE_APP_META(sc_config).dst_ether_addr)){
-        SC_THREAD_ERROR("failed to generate random destination mac address");
-        result = SC_ERROR_INTERNAL;
-        goto __reload_pkt_header_exit;
-    }
-    if(SC_SUCCESS != sc_util_initialize_eth_header(
-        &PER_CORE_APP_META(sc_config).pkt_eth_hdr, 
-        (struct rte_ether_addr *)PER_CORE_APP_META(sc_config).src_ether_addr, 
-        (struct rte_ether_addr *)PER_CORE_APP_META(sc_config).dst_ether_addr,
-        RTE_ETHER_TYPE_IPV4, 0, 0, &pkt_len
-    )){
-        SC_THREAD_ERROR("failed to assemble ethernet header");
-        result = SC_ERROR_INTERNAL;
-        goto __reload_pkt_header_exit;
-    }
-
-__reload_pkt_header_exit:
-    return result;
 }

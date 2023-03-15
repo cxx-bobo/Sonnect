@@ -17,15 +17,41 @@
 
 #define SC_UTIL_TIME_INTERVL_US(sec, usec) usec + sec * 1000 * 1000
 
+/* header collection */
+struct sc_pkt_hdr {
+	/* ethernet header */
+    char src_ether_addr[6], dst_ether_addr[6];
+    struct rte_ether_hdr pkt_eth_hdr;
+
+    /* L3 header */
+    uint32_t src_ipv4_addr, dst_ipv4_addr;
+	uint8_t src_ipv6_addr[16], dst_ipv6_addr[16];
+    struct rte_ipv4_hdr pkt_ipv4_hdr;
+	struct rte_ipv6_hdr pkt_ipv6_hdr;
+
+    /* L4 header */
+	uint8_t l4_type;
+    uint16_t src_port, dst_port;
+    struct rte_udp_hdr pkt_udp_hdr;
+	struct rte_tcp_hdr pkt_tcp_hdr;
+
+	/* length of the genearted packet */
+	uint32_t pkt_len;
+};
+
 /* data copier */
 int sc_util_copy_buf_to_pkt(void *buf, unsigned len, struct rte_mbuf *pkt, unsigned offset);
 
 /* header field generator */
 int sc_util_generate_random_ether_addr(char *addr);
 int sc_util_generate_random_ipv4_addr(uint32_t *addr);
+int sc_util_generate_random_ipv6_addr(uint8_t *addr);
+int sc_util_generate_random_pkt_hdr(struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_len, 
+	uint32_t nb_queues, uint32_t used_queue_id, uint32_t l3_type, uint32_t l4_type,
+	uint64_t rss_hash_field);
 int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);
 
-/* header generator */
+/* rte header initializer */
 int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 

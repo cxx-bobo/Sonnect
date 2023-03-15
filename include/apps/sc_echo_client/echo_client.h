@@ -6,6 +6,7 @@
 #include <rte_malloc.h>
 
 #include "sc_utils.h"
+#include "sc_utils/pktgen.h"
 
 struct _per_core_app_meta {
     /* number of packet to be sent (per core) */
@@ -28,17 +29,7 @@ struct _per_core_app_meta {
     struct timeval end_time;
     struct timeval last_send_time;
 
-    /* pre-generated ethernet header */
-    char src_ether_addr[6], dst_ether_addr[6];
-    struct rte_ether_hdr pkt_eth_hdr;
-
-    /* pre-generated ipv4 header */
-    uint32_t src_ipv4_addr, dst_ipv4_addr;
-    struct rte_ipv4_hdr pkt_ipv4_hdr;
-
-    /* pre-generated udp header */
-    uint16_t src_port, dst_port;
-    struct rte_udp_hdr pkt_udp_hdr;
+    struct sc_pkt_hdr test_pkt;
 
     #if defined(MODE_LATENCY)
         long min_rtt_sec;
