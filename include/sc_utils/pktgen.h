@@ -17,10 +17,15 @@
 
 #define SC_UTIL_TIME_INTERVL_US(sec, usec) usec + sec * 1000 * 1000
 
+/* data copier */
+int sc_util_copy_buf_to_pkt(void *buf, unsigned len, struct rte_mbuf *pkt, unsigned offset);
+
+/* header field generator */
 int sc_util_generate_random_ether_addr(char *addr);
 int sc_util_generate_random_ipv4_addr(uint32_t *addr);
 int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);
-int sc_util_copy_buf_to_pkt(void *buf, unsigned len, struct rte_mbuf *pkt, unsigned offset);
+
+/* header generator */
 int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 

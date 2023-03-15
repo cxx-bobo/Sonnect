@@ -294,6 +294,18 @@ int sc_util_initialize_eth_header(struct rte_ether_hdr *eth_hdr,
 	return SC_SUCCESS;
 }
 
+/*!
+ * \brief   initialize RTE ARP header
+ * \param   arp_hdr				RTE ARP header
+ * \param   src_mac  			source MAC address
+ * \param	dst_mac				destination MAC address
+ * \param	src_ip 				source IP address
+ * \param 	dst_ip 				destination IP address
+ * \param	opcode 				ARP operation code
+ * \param	pkt_data_len 		length of upper payload
+ * \param	pkt_len				generated packet length
+ * \return  0 for successfully initialization
+ */
 int sc_util_initialize_arp_header(struct rte_arp_hdr *arp_hdr,
 		struct rte_ether_addr *src_mac, struct rte_ether_addr *dst_mac,
 		uint32_t src_ip, uint32_t dst_ip, uint32_t opcode, 
@@ -313,6 +325,15 @@ int sc_util_initialize_arp_header(struct rte_arp_hdr *arp_hdr,
 	return SC_SUCCESS;
 }
 
+/*!
+ * \brief   initialize RTE UDP header
+ * \param   udp_hdr				RTE UDP header
+ * \param   src_port  			source port
+ * \param	dst_port			destination port
+ * \param	pkt_data_len 		length of upper payload
+ * \param	pkt_len				generated packet length
+ * \return  0 for successfully initialization
+ */
 int sc_util_initialize_udp_header(struct rte_udp_hdr *udp_hdr, uint16_t src_port,
 		uint16_t dst_port, uint16_t pkt_data_len, uint16_t *pkt_len){
 
@@ -326,6 +347,15 @@ int sc_util_initialize_udp_header(struct rte_udp_hdr *udp_hdr, uint16_t src_port
 	return SC_SUCCESS;
 }
 
+/*!
+ * \brief   initialize RTE TCP header
+ * \param   tcp_hdr				RTE TCP header
+ * \param   src_port  			source port
+ * \param	dst_port			destination port
+ * \param	pkt_data_len 		length of upper payload
+ * \param	pkt_len				generated packet length
+ * \return  0 for successfully initialization
+ */
 int sc_util_initialize_tcp_header(struct rte_tcp_hdr *tcp_hdr, uint16_t src_port,
 		uint16_t dst_port, uint16_t pkt_data_len, uint16_t *pkt_len){
 	*pkt_len = (uint16_t) (pkt_data_len + sizeof(struct rte_tcp_hdr));
@@ -338,6 +368,15 @@ int sc_util_initialize_tcp_header(struct rte_tcp_hdr *tcp_hdr, uint16_t src_port
 	return SC_SUCCESS;
 }
 
+/*!
+ * \brief   initialize RTE SCTP header
+ * \param   sctp_hdr			RTE SCTP header
+ * \param   src_port  			source port
+ * \param	dst_port			destination port
+ * \param	pkt_data_len 		length of upper payload
+ * \param	pkt_len				generated packet length
+ * \return  0 for successfully initialization
+ */
 int sc_util_initialize_sctp_header(struct rte_sctp_hdr *sctp_hdr, uint16_t src_port,
 		uint16_t dst_port, uint16_t pkt_data_len, uint16_t *pkt_len){
 	*pkt_len = (uint16_t) (pkt_data_len + sizeof(struct rte_udp_hdr));
@@ -350,6 +389,16 @@ int sc_util_initialize_sctp_header(struct rte_sctp_hdr *sctp_hdr, uint16_t src_p
 	return SC_SUCCESS;
 }
 
+/*!
+ * \brief   initialize RTE IPv6 header
+ * \param   ip_hdr				RTE IPv6 header
+ * \param	src_addr			source IPv6 address
+ * \param	dst_addr			destination IPv6 address
+ * \param	proto				L4 protocol type
+ * \param	pkt_data_len 		length of upper payload
+ * \param	pkt_len				generated packet length
+ * \return  0 for successfully initialization
+ */
 int sc_util_initialize_ipv6_header_proto(struct rte_ipv6_hdr *ip_hdr, uint8_t *src_addr,
 		uint8_t *dst_addr, uint16_t pkt_data_len, uint8_t proto, uint16_t *pkt_len){
 	*pkt_len = (uint16_t) (pkt_data_len + sizeof(struct rte_ipv6_hdr));
@@ -365,6 +414,16 @@ int sc_util_initialize_ipv6_header_proto(struct rte_ipv6_hdr *ip_hdr, uint8_t *s
 	return SC_SUCCESS;
 }
 
+/*!
+ * \brief   initialize RTE IPv4 header
+ * \param   ip_hdr				RTE IPv4 header
+ * \param	src_addr			source IPv4 address
+ * \param	dst_addr			destination IPv4 address
+ * \param	proto				L4 protocol type
+ * \param	pkt_data_len 		length of upper payload
+ * \param	pkt_len				generated packet length
+ * \return  0 for successfully initialization
+ */
 int sc_util_initialize_ipv4_header_proto(struct rte_ipv4_hdr *ip_hdr, uint32_t src_addr,
 		uint32_t dst_addr, uint16_t pkt_data_len, uint8_t proto, uint16_t *pkt_len){
 	unaligned_uint16_t *ptr16;
