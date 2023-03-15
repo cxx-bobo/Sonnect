@@ -15,7 +15,7 @@
 #include <rte_mbuf_core.h>
 
 #define SC_MAX_PKT_BURST 512
-#define SC_NUM_PRIVATE_MBUFS_PER_CORE 8191
+#define SC_NUM_PRIVATE_MBUFS_PER_CORE 32767
 
 int init_worker_threads(struct sc_config *sc_config);
 int launch_worker_threads(struct sc_config *sc_config);

@@ -54,8 +54,12 @@ int __worker_loop_init(struct sc_config *sc_config) {
 int _worker_loop(void* param){
     int result = SC_SUCCESS;
     uint16_t i, j, queue_id, forward_port_id, nb_rx, nb_tx;
+    int lcore_id_from_zero;
     bool need_forward = false;
     struct sc_config *sc_config = (struct sc_config*)param;
+
+    /* record lcore id starts from 0 */
+    lcore_id_from_zero = rte_lcore_index(rte_lcore_id());
 
     /* initialize woker loop */
     result = __worker_loop_init(sc_config);
@@ -85,6 +89,15 @@ int _worker_loop(void* param){
         }
     }
 
+    /* record thread start time while test duration limitation is enabled */
+    if(sc_config->enable_test_duration_limit && lcore_id_from_zero == 0){
+        if(unlikely(-1 == gettimeofday(&sc_config->test_duration_start_time, NULL))){
+            SC_THREAD_ERROR_DETAILS("failed to obtain start time");
+            result = SC_ERROR_INTERNAL;
+            goto worker_exit;
+        }
+    }
+
     /* Hook Point: Enter */
     if(sc_config->app_config->process_enter(sc_config) != SC_SUCCESS){
         SC_THREAD_WARNING("error occurs while executing enter callback\n");
@@ -106,9 +119,10 @@ int _worker_loop(void* param){
                         SC_THREAD_WARNING("failed to process the received frame");
                     }
 
+                    // TODO: exist problems, if forward pkt is too many and too fast, this will failed
                     if(need_forward){
                         nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt+j, 1);
-                        if(nb_rx == 0){
+                        if(nb_tx == 0){
                             SC_THREAD_WARNING("failed to forward packet to queue %u on port %u",
                                 queue_id, forward_port_id);
                         }
@@ -134,6 +148,25 @@ int _worker_loop(void* param){
             }
             if(ready_to_exit){ break; }
         #endif // ROLE_CLIENT
+
+        /* 
+         * use core 0 to shutdown the application while test duration 
+         * limitation is enabled and the limitation is reached
+         */
+        if(sc_config->enable_test_duration_limit && lcore_id_from_zero == 0){
+            /* record current time */
+            if(unlikely(-1 == gettimeofday(&sc_config->test_duration_end_time, NULL))){
+                SC_THREAD_ERROR_DETAILS("failed to obtain end time");
+                result = SC_ERROR_INTERNAL;
+                goto worker_exit;
+            }
+
+            /* reach the duration limitation, quit all threads */
+            if(sc_config->test_duration_end_time.tv_sec - sc_config->test_duration_start_time.tv_sec 
+                >= sc_config->test_duration){
+                    sc_force_quit = true;
+            }
+        }
     }
 
 exit_callback:

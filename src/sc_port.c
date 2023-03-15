@@ -40,11 +40,12 @@ static const uint8_t _asymmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] =
 static struct rte_eth_conf port_conf_default = {
     #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         .rxmode = {
-            .mq_mode = RTE_ETH_MQ_RX_NONE, /* init later */
-            .offloads = 0,
+            .mq_mode = RTE_ETH_MQ_RX_NONE,  /* init later */
+            .offloads = 0,                  /* init later */
         },
         .txmode = {
             .mq_mode = RTE_ETH_MQ_TX_NONE,
+            .offloads = 0,                  /* init later */
         },
         .rx_adv_conf = {
 			.rss_conf = {
@@ -55,10 +56,12 @@ static struct rte_eth_conf port_conf_default = {
 		},
     #else
         .rxmode = {
-            .mq_mode = ETH_MQ_RX_NONE, /* init later */
+            .mq_mode = ETH_MQ_RX_NONE,      /* init later */
+            .offloads = 0,                  /* init later */
         },
         .txmode = {
             .mq_mode = ETH_MQ_TX_NONE,
+            .offloads = 0,                  /* init later */
         },
         .rx_adv_conf = {
             .rss_conf = {
@@ -78,28 +81,6 @@ static struct rte_eth_conf port_conf_default = {
 int init_ports(struct sc_config *sc_config){
     uint16_t i, port_index, nb_ports;
     
-    /* configure rss */
-    if(sc_config->enable_rss){
-        /* specify using rss */
-        #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
-            port_conf_default.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
-        #else
-            port_conf_default.rxmode.mq_mode = ETH_MQ_RX_RSS;
-        #endif
-
-        /* specify used rss key type */
-        if(sc_config->rss_symmetric_mode){
-            port_conf_default.rx_adv_conf.rss_conf.rss_key = _symmetric_rss_hash_key;
-            used_rss_hash_key = _symmetric_rss_hash_key;
-        } else {
-            port_conf_default.rx_adv_conf.rss_conf.rss_key = _asymmetric_rss_hash_key;
-            used_rss_hash_key = _asymmetric_rss_hash_key;
-        }
-        
-        /* specify rss hash fields */
-        port_conf_default.rx_adv_conf.rss_conf.rss_hf = sc_config->rss_hash_field;
-    }
-
     /* check available ports */
     nb_ports = rte_eth_dev_count_avail();
     if(nb_ports == 0)
@@ -144,6 +125,62 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
     uint16_t i;
     struct rte_eth_conf port_conf = port_conf_default;
 	struct rte_ether_addr eth_addr;
+    struct rte_eth_dev_info dev_info;
+
+    /* get device info */
+    ret = rte_eth_dev_info_get(port_index, &dev_info);
+    if(ret != 0){
+        printf("failed to obtain device info of port %d: %s\n", 
+            port_index, rte_strerror(-ret));
+        return SC_ERROR_INTERNAL;
+    }
+
+    /* RX offload capacity check and config */
+    if (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_CHECKSUM){
+        port_conf.rxmode.offloads |= DEV_RX_OFFLOAD_CHECKSUM;
+    }
+
+    /* TX offload capacity check and config */
+    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE){
+        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+    }
+    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MT_LOCKFREE){
+        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MT_LOCKFREE;
+    }
+    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM){
+        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_IPV4_CKSUM;
+    }
+    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM){
+        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_UDP_CKSUM;
+    }
+    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM){
+        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_TCP_CKSUM;
+    }
+    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_SCTP_CKSUM){
+        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_SCTP_CKSUM;
+    }
+
+    /* configure rss */
+    if(sc_config->enable_rss){
+        /* specify using rss */
+        #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+            port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
+        #else
+            port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
+        #endif
+
+        /* specify used rss key type */
+        if(sc_config->rss_symmetric_mode){
+            port_conf.rx_adv_conf.rss_conf.rss_key = _symmetric_rss_hash_key;
+            used_rss_hash_key = _symmetric_rss_hash_key;
+        } else {
+            port_conf.rx_adv_conf.rss_conf.rss_key = _asymmetric_rss_hash_key;
+            used_rss_hash_key = _asymmetric_rss_hash_key;
+        }
+        
+        /* specify rss hash fields */
+        port_conf.rx_adv_conf.rss_conf.rss_hf = sc_config->rss_hash_field;
+    }
 
     /* obtain mac address of the port */
     ret = rte_eth_macaddr_get(port_index, &eth_addr);

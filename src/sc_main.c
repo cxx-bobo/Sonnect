@@ -330,6 +330,12 @@ static int _check_configuration(struct sc_config *sc_config, int argc, char **ar
         return SC_ERROR_INVALID_VALUE;
     }
 
+    /* check whether test duration is specified while enabling test duration limit */
+    if(sc_config->enable_test_duration_limit && (sc_config->test_duration == 0)){
+        SC_ERROR_DETAILS("must specified test duration while enabling test duration limit");
+        return SC_ERROR_INVALID_VALUE;
+    }
+
     #if defined(SC_HAS_DOCA)
         /* check whether number of scalable functions is valid */
         if(DOCA_CONF(sc_config)->nb_used_sfs == 0){
@@ -682,6 +688,41 @@ invalid_nb_memory_channels_per_socket:
 
 invalid_log_core_id:
         SC_ERROR_DETAILS("invalid configuration log_core_id\n");
+    }
+
+    /* config: whether to enable test duration limit */
+    if(!strcmp(key, "enable_test_duration_limit")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (!strcmp(value, "true")){
+            sc_config->enable_test_duration_limit = true;
+        } else if (!strcmp(value, "false")){
+            sc_config->enable_test_duration_limit = false;
+        } else {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_enable_test_duration_limit;
+        }
+
+        goto exit;
+
+invalid_enable_test_duration_limit:
+        SC_ERROR_DETAILS("invalid configuration enable_test_duration_limit\n");
+    }
+
+    /* test duration */
+    if(!strcmp(key, "test_duration")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        uint64_t test_duration;
+        if(sc_util_atoui_64(value, &test_duration) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_test_duration;
+        }
+        sc_config->test_duration = test_duration;
+        goto exit;
+
+invalid_test_duration:
+        SC_ERROR_DETAILS("invalid configuration test_duration\n");
     }
 
     /* DOCA-specific configurations for DPDK */

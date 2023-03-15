@@ -43,7 +43,8 @@ struct _per_core_app_meta {
 struct _internal_config {
     uint32_t nb_pkt_budget;
     uint32_t pkt_len;           /* unit: bytes */
-    uint32_t nb_pkt_per_burst;   
+    uint32_t nb_pkt_per_burst;
+    bool enable_nb_pkt_budget;
 };
 
 int _init_app(struct sc_config *sc_config);

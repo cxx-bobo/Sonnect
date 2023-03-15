@@ -144,10 +144,24 @@ int sc_util_atoui_16(char *in, uint16_t *out){
 /*!
  * \brief   convery string to uint32_t
  * \param   in  given string
- * \param   out output uint16_t
+ * \param   out output uint32_t
  * \return  zero for successfully parsing
  */
 int sc_util_atoui_32(char *in, uint32_t *out){
+    char *p;
+    for(p = in; *p; p++)
+        if (*p > '9' || *p < '0') return SC_ERROR_INVALID_VALUE;
+    *out = strtoul(in, NULL, 10);
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   convery string to uint64_t
+ * \param   in  given string
+ * \param   out output uint64_t
+ * \return  zero for successfully parsing
+ */
+int sc_util_atoui_64(char *in, uint64_t *out){
     char *p;
     for(p = in; *p; p++)
         if (*p > '9' || *p < '0') return SC_ERROR_INVALID_VALUE;

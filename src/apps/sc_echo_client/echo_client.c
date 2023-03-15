@@ -62,6 +62,32 @@ invalid_pkt_len:
 invalid_nb_pkt_per_burst:
         SC_ERROR_DETAILS("invalid configuration nb_pkt_per_burst\n");
     }
+    
+    /* whether to set budget of the number of send packet */
+    if(!strcmp(key, "enable_nb_pkt_budget")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (!strcmp(value, "true")){
+            INTERNAL_CONF(sc_config)->enable_nb_pkt_budget = true;
+        } else if (!strcmp(value, "false")){
+            INTERNAL_CONF(sc_config)->enable_nb_pkt_budget = false;
+        } else {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_enable_nb_pkt_budget;
+        }
+
+        if(INTERNAL_CONF(sc_config)->enable_nb_pkt_budget == sc_config->enable_test_duration_limit){
+            SC_ERROR_DETAILS(
+                "only support either enable_nb_pkt_budget and enable_test_duration_limit be enabled\n"
+            );
+            goto invalid_enable_nb_pkt_budget;
+        }
+
+        goto _parse_app_kv_pair_exit;
+
+invalid_enable_nb_pkt_budget:
+        SC_ERROR_DETAILS("invalid configuration enable_nb_pkt_budget\n");
+    }
 
     /* number of packet to be send */
     if(!strcmp(key, "nb_pkt_budget")){
@@ -241,7 +267,7 @@ try_receive_ack:
         }
 
         /* return back recv pkt_mbuf */
-        for(i=0; i<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; i++) {
+        for(i=0; i<nb_rx; i++) {
             if(PER_CORE_APP_META(sc_config).recv_pkt_bufs[i]){
                 rte_pktmbuf_free(PER_CORE_APP_META(sc_config).recv_pkt_bufs[i]); 
             }
@@ -256,10 +282,12 @@ try_receive_ack:
             if(PER_CORE_APP_META(sc_config).wait_ack){ goto try_receive_ack; }
         #endif
 
-        /* if the number of packet to be sent reach the budget 
-         the keep trying receiving ack, then exit */
-        if(PER_CORE_APP_META(sc_config).nb_send_pkt 
-            >= PER_CORE_APP_META(sc_config).nb_pkt_budget_per_core){
+        /* if the number of packet to be sent reach the budget (if set), 
+         * keep trying receiving ack, then exit 
+         */
+        if( INTERNAL_CONF(sc_config)->enable_nb_pkt_budget &&
+            PER_CORE_APP_META(sc_config).nb_send_pkt >= PER_CORE_APP_META(sc_config).nb_pkt_budget_per_core
+        ){
             if(PER_CORE_APP_META(sc_config).wait_ack && finial_retry_times <= 10000){
                 finial_retry_times += 1;
                 goto try_receive_ack;

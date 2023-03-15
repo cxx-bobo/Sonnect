@@ -1,6 +1,7 @@
 #ifndef _SC_GLOBAL_H_
 #define _SC_GLOBAL_H_
 
+#include <sys/time.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -83,6 +84,12 @@ struct sc_config {
 
     /* pthread barrier for sync all worker thread */
     pthread_barrier_t pthread_barrier;
+
+    /* test duration (of worker) */
+    bool enable_test_duration_limit;
+    uint64_t test_duration;
+    struct timeval test_duration_start_time;
+    struct timeval test_duration_end_time;
 
     /* doca specific configurations */
     #if defined(SC_HAS_DOCA)

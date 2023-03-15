@@ -19,7 +19,7 @@ void* _log_loop(void *args){
     sc_util_stick_this_thread_to_core(sc_config->log_core_id);
 
     while(!sc_force_quit){
-        /* timer */
+        /* update log time */
         pthread_mutex_lock(&timer_mutex);
         time(&time_ptr);
         tmp_ptr = localtime(&time_ptr);

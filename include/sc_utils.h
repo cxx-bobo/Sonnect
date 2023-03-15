@@ -40,6 +40,7 @@ char* sc_util_del_both_trim(char *str);
 void sc_util_del_change_line(char *str);
 int sc_util_atoui_16(char *in, uint16_t *out);
 int sc_util_atoui_32(char *in, uint32_t *out);
+int sc_util_atoui_64(char *in, uint64_t *out);
 
 /* random operation */
 uint32_t sc_util_random_unsigned_int32();
