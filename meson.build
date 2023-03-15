@@ -44,6 +44,10 @@ doca_flow_dep 			= dependency('doca-flow', required: false)
 doca_regex_dep 			= dependency('doca-regex', required: false)
 doca_sha_dep 			= dependency('doca-sha', required: false)
 doca_telemetry_dep 		= dependency('doca-telemetry', required: false)
+
+# DOCA hardware resources disable flag
+doca_disable_sha = true
+
 if doca_common_dep.found() and doca_argp_dep.found() and doca_apsh_dep.found() \
 		and doca_comm_channel_dep.found() and doca_compress_dep.found() \
 		and doca_dma_dep.found() and doca_dpi_dep.found() \
@@ -62,12 +66,14 @@ if doca_common_dep.found() and doca_argp_dep.found() and doca_apsh_dep.found() \
 
 	# specified necessary doca resources according to application
 	if app == 'sketch'
-		add_global_arguments('-DSC_NEED_DOCA_SHA', language: 'c')
+		if doca_disable_sha == false
+			add_global_arguments('-DSC_NEED_DOCA_SHA', language: 'c')
+		endif
 		message('enabled DOCA SHA engine')
 	endif
 endif
 
-#check whether cuda exist
+# check whether cuda exist
 cuda_path 	= '/usr/local/cuda'
 message('assume CUDA is located at ' + cuda_path)
 has_cuda 	= false

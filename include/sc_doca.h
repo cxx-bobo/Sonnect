@@ -1,6 +1,9 @@
 #ifndef _SC_DOCA_H_
 #define _SC_DOCA_H_
 
+#include <rte_malloc.h>
+#include <rte_spinlock.h>
+
 #include "sc_global.h"
 #include "sc_doca_utils.h"
 
@@ -17,7 +20,6 @@
 /* maximum length of name (index) of doca port */
 #define SC_DOCA_FLOW_MAX_PORT_ID_STRLEN 128
 
-
 #include <doca_argp.h>
 #include <doca_error.h>
 #include <doca_dev.h>
@@ -30,6 +32,9 @@
 #include "sc_global.h"
 #include "sc_utils.h"
 #include "sc_log.h"
+
+int init_doca(struct sc_config *sc_config, const char *doca_conf_path);
+struct per_core_doca_meta;
 
 /* 
  * doca specific configuration 
@@ -48,9 +53,27 @@ struct doca_config {
 
     /* sha configurations */
     #if defined(SC_NEED_DOCA_SHA)
+        rte_spinlock_t sha_lock;                /* spinlock use to access SHA engine under multi-thread */
         struct doca_pci_bdf sha_pci_bdf;        /* pci bus-device-function index of sha engine */
-        struct doca_mmap *sha_mmap;             /* memory map for sha engine */
         struct doca_dev *sha_dev;		        /* doca device of sha engine */
+    #endif // SC_HAS_DOCA && SC_NEED_DOCA_SHA
+
+    /* doca per-core meta */
+    struct per_core_doca_meta *per_core_doca_meta;
+};
+#define DOCA_CONF(scc) ((struct doca_config*)scc->doca_config)
+#define PER_CORE_DOCA_META(scc) \
+    ((struct per_core_doca_meta*)((struct doca_config*)scc->doca_config)->per_core_doca_meta)[rte_lcore_index(rte_lcore_id())]
+#define PER_CORE_DOCA_META_BY_CORE_ID(scc, id) \
+    ((struct per_core_doca_meta*)((struct doca_config*)scc->doca_config)->per_core_doca_meta)[id]
+
+/* per-core doca metadata */
+struct per_core_doca_meta {
+    uint8_t something;
+
+    /* SHA engine per-core meta */
+    #if defined(SC_NEED_DOCA_SHA)
+        struct doca_mmap *sha_mmap;             /* memory map for sha engine */
         struct doca_buf_inventory *sha_buf_inv; /* buffer inventory for sha engine */
         struct doca_ctx *sha_ctx;			    /* doca context for sha engine */
         struct doca_workq *sha_workq;           /* work queue for sha engine */
@@ -59,11 +82,11 @@ struct doca_config {
         char *sha_src_buffer;                   /* pointer to the source data buffer */
         char *sha_dst_buffer;                   /* pointer to the SHA result buffer */
         struct doca_sha_job *sha_job;           /* pointer to the SHA job */
-    #endif // SC_HAS_DOCA && SC_NEED_DOCA_SHA
+    #endif
 };
-#define DOCA_CONF(scc) ((struct doca_config*)scc->doca_config)
 
-int init_doca(struct sc_config *sc_config, const char *doca_conf_path);
+
+
 
 #endif // SC_HAS_DOCA
 

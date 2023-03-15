@@ -33,76 +33,94 @@ int sc_doca_util_init_core_objects(
 	int result = SC_SUCCESS;
 	doca_error_t doca_result;
 	struct doca_workq *_workq;
+	bool is_first_init = false;
 
 	/* allocate doca memory map */
-	doca_result = doca_mmap_create(NULL, mmap);
-	if (doca_result != DOCA_SUCCESS) {
-		SC_ERROR_DETAILS("unable to create mmap: %s", doca_get_error_string(doca_result));
-		result = SC_ERROR_INTERNAL;
-		goto init_core_objects_exit;
+	if(!(*mmap)){
+		doca_result = doca_mmap_create(NULL, mmap);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to create mmap: %s", doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+			goto init_core_objects_exit;
+		}
+		is_first_init = true;
 	}
-
+	
 	/* create doca buffer inventory */
-	doca_result = doca_buf_inventory_create(NULL, max_chunks, extensions, buf_inv);
-	if (doca_result != DOCA_SUCCESS) {
-		SC_ERROR_DETAILS("unable to create buffer inventory: %s", 
-			doca_get_error_string(doca_result));
-		result = SC_ERROR_INTERNAL;
-		goto destory_doca_mmap;
-	}	
-
+	if(is_first_init){
+		doca_result = doca_buf_inventory_create(NULL, max_chunks, extensions, buf_inv);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to create buffer inventory: %s", 
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+			goto destory_doca_mmap;
+		}	
+	}
+	
 	/* set the maximum number of chunks */
-	doca_result = doca_mmap_set_max_num_chunks(*mmap, max_chunks);
-	if (doca_result != DOCA_SUCCESS) {
-		SC_ERROR_DETAILS("unable to set memory map nb chunks: %s",
-			doca_get_error_string(doca_result));
-		result = SC_ERROR_INTERNAL;
-		goto destory_doca_buf_inv;
+	if(is_first_init){
+		doca_result = doca_mmap_set_max_num_chunks(*mmap, max_chunks);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to set memory map nb chunks: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+			goto destory_doca_buf_inv;
+		}
 	}
 
 	/* start doca memory map */
-	doca_result = doca_mmap_start(*mmap);
-	if (doca_result != DOCA_SUCCESS) {
-		SC_ERROR_DETAILS("unable to start memory map: %s",
-			doca_get_error_string(doca_result));
-		result = SC_ERROR_INTERNAL;
-		goto destory_doca_buf_inv;
+	if(is_first_init){
+		doca_result = doca_mmap_start(*mmap);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to start memory map: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+			goto destory_doca_buf_inv;
+		}
 	}
     
 	/* add device to the allocated memory map */
-	doca_result = doca_mmap_dev_add(*mmap, dev);
-	if (doca_result != DOCA_SUCCESS) {
-		SC_ERROR_DETAILS("unable to add device to mmap: %s",
-			doca_get_error_string(doca_result));
-		result = SC_ERROR_INTERNAL;
-		goto destory_doca_buf_inv;
+	if(is_first_init){
+		doca_result = doca_mmap_dev_add(*mmap, dev);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to add device to mmap: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+			goto destory_doca_buf_inv;
+		}
 	}
 
 	/* start the buffer inventory */
-	doca_result = doca_buf_inventory_start(*buf_inv);
-	if (doca_result != DOCA_SUCCESS) {
-		SC_ERROR_DETAILS("unable to start buffer inventory: %s",
-			doca_get_error_string(doca_result));
-		result = SC_ERROR_INTERNAL;
-		goto destory_doca_buf_inv;
+	if(is_first_init){
+		doca_result = doca_buf_inventory_start(*buf_inv);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to start buffer inventory: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+			goto destory_doca_buf_inv;
+		}
 	}
 
 	/* add device to the context */
-	doca_result = doca_ctx_dev_add(ctx, dev);
-	if (doca_result != DOCA_SUCCESS) {
-		SC_ERROR_DETAILS("unable to register device with lib context: %s",
-			doca_get_error_string(doca_result));
-		result = SC_ERROR_INTERNAL;
-		goto destory_doca_buf_inv;
+	if(is_first_init){
+		doca_result = doca_ctx_dev_add(ctx, dev);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to register device with lib context: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+			goto destory_doca_buf_inv;
+		}
 	}
 
 	/* start the context */
-	doca_result = doca_ctx_start(ctx);
-	if (doca_result != DOCA_SUCCESS) {
-		SC_ERROR_DETAILS("unable to start lib context: %s",
-			doca_get_error_string(doca_result));
-		result = SC_ERROR_INTERNAL;
-		goto remove_ctx_dev;
+	if(is_first_init){
+		doca_result = doca_ctx_start(ctx);
+		if (doca_result != DOCA_SUCCESS) {
+			SC_ERROR_DETAILS("unable to start lib context: %s",
+				doca_get_error_string(doca_result));
+			result = SC_ERROR_INTERNAL;
+			goto remove_ctx_dev;
+		}
 	}
 
 	/* create work queue */

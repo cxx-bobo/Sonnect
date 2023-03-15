@@ -126,7 +126,9 @@ exit:
  */
 int _process_enter(struct sc_config *sc_config){
     /* configure to use DOCA SHA to accelerate the hash calculation */
-    #if defined(SC_HAS_DOCA)
+    #if defined(SC_HAS_DOCA) && defined(SC_NEED_DOCA_SHA)
+        int doca_result;
+
         char *dst_buffer = NULL;
         char *src_buffer = NULL;
         struct doca_sha_job *sha_job;
@@ -138,7 +140,7 @@ int _process_enter(struct sc_config *sc_config){
             return SC_ERROR_MEMORY;
         }
         memset(dst_buffer, 0, DOCA_SHA256_BYTE_COUNT);
-        DOCA_CONF(sc_config)->sha_dst_buffer = dst_buffer;
+        PER_CORE_DOCA_META(sc_config).sha_dst_buffer = dst_buffer;
 
         /* allocate buffer for storing input source data */
         src_buffer = malloc(SC_SKETCH_HASH_KEY_LENGTH);
@@ -147,65 +149,75 @@ int _process_enter(struct sc_config *sc_config){
             return SC_ERROR_MEMORY;
         }
         memset(src_buffer, 0, SC_SKETCH_HASH_KEY_LENGTH);
-        DOCA_CONF(sc_config)->sha_src_buffer = src_buffer;
+        PER_CORE_DOCA_META(sc_config).sha_src_buffer = src_buffer;
 
         /* populate dst_buffer to memory map */
-        if(DOCA_SUCCESS != doca_mmap_populate(
-                /* mmap */ DOCA_CONF(sc_config)->sha_mmap,
-                /* addr */ DOCA_CONF(sc_config)->sha_dst_buffer,
-                /* len */ DOCA_SHA256_BYTE_COUNT,
-                /* pg_sz */ sysconf(_SC_PAGESIZE),
-                /* free_cb */ sc_doca_util_mmap_populate_free_cb,
-                /* opaque */ NULL)
-        ){
-            SC_THREAD_ERROR_DETAILS("failed to populate memory dst_buffer to memory map");
+        doca_result = doca_mmap_populate(
+            /* mmap */ PER_CORE_DOCA_META(sc_config).sha_mmap,
+            /* addr */ PER_CORE_DOCA_META(sc_config).sha_dst_buffer,
+            /* len */ DOCA_SHA256_BYTE_COUNT,
+            /* pg_sz */ sysconf(_SC_PAGESIZE),
+            /* free_cb */ sc_doca_util_mmap_populate_free_cb,
+            /* opaque */ NULL
+        );
+        if(doca_result != DOCA_SUCCESS){
+            SC_THREAD_ERROR_DETAILS("failed to populate memory dst_buffer to memory map: %s", 
+                doca_get_error_string(doca_result));
             return SC_ERROR_MEMORY;
         }
 
         /* populate src_buffer to memory map */
-        if(DOCA_SUCCESS != doca_mmap_populate(
-                /* mmap */ DOCA_CONF(sc_config)->sha_mmap,
-                /* addr */ DOCA_CONF(sc_config)->sha_src_buffer,
-                /* len */ SC_SKETCH_HASH_KEY_LENGTH,
-                /* pg_sz */ sysconf(_SC_PAGESIZE),
-                /* free_cb */ NULL,
-                /* opaque */ NULL)
-        ){
-            SC_THREAD_ERROR_DETAILS("failed to populate memory src_buffer to memory map");
+        doca_result = doca_mmap_populate(
+            /* mmap */ PER_CORE_DOCA_META(sc_config).sha_mmap,
+            /* addr */ PER_CORE_DOCA_META(sc_config).sha_src_buffer,
+            /* len */ SC_SKETCH_HASH_KEY_LENGTH,
+            /* pg_sz */ sysconf(_SC_PAGESIZE),
+            /* free_cb */ NULL,
+            /* opaque */ NULL
+        );
+        if(doca_result != DOCA_SUCCESS){
+            SC_THREAD_ERROR_DETAILS("failed to populate memory src_buffer to memory map: %s",
+                doca_get_error_string(doca_result));
             return SC_ERROR_MEMORY;
         }
 
         /* acquire DOCA buffer for representing source buffer */
-        if(DOCA_SUCCESS != doca_buf_inventory_buf_by_addr(
-                /* inventory */ DOCA_CONF(sc_config)->sha_buf_inv,
-                /* mmap */ DOCA_CONF(sc_config)->sha_mmap,
-                /* addr */ DOCA_CONF(sc_config)->sha_src_buffer,
-                /* len */ SC_SKETCH_HASH_KEY_LENGTH,
-                /* buf */ &DOCA_CONF(sc_config)->sha_src_doca_buf)
-        ){
-            SC_THREAD_ERROR_DETAILS("failed to acquire DOCA buffer representing source buffer");
+        doca_result = doca_buf_inventory_buf_by_addr(
+            /* inventory */ PER_CORE_DOCA_META(sc_config).sha_buf_inv,
+            /* mmap */ PER_CORE_DOCA_META(sc_config).sha_mmap,
+            /* addr */ PER_CORE_DOCA_META(sc_config).sha_src_buffer,
+            /* len */ SC_SKETCH_HASH_KEY_LENGTH,
+            /* buf */ &(PER_CORE_DOCA_META(sc_config).sha_src_doca_buf)
+        );
+        if(doca_result != DOCA_SUCCESS){
+            SC_THREAD_ERROR_DETAILS("failed to acquire DOCA buffer representing source buffer: %s",
+                doca_get_error_string(doca_result));
             return SC_ERROR_MEMORY;
         }
 
         /* set data address and length in the doca_buf. */
-        if(DOCA_SUCCESS != doca_buf_set_data(
-                /* buf */ DOCA_CONF(sc_config)->sha_src_doca_buf,
-                /* data */ DOCA_CONF(sc_config)->sha_src_buffer,
-                /* data_len */ SC_SKETCH_HASH_KEY_LENGTH)
-        ){
-            SC_THREAD_ERROR_DETAILS("failed to set data address and length in the doca_buf");
+        doca_result = doca_buf_set_data(
+            /* buf */ PER_CORE_DOCA_META(sc_config).sha_src_doca_buf,
+            /* data */ PER_CORE_DOCA_META(sc_config).sha_src_buffer,
+            /* data_len */ SC_SKETCH_HASH_KEY_LENGTH
+        );
+        if(doca_result != DOCA_SUCCESS){
+            SC_THREAD_ERROR_DETAILS("failed to set data address and length in the doca_buf: %s",
+                doca_get_error_string(doca_result));
             return SC_ERROR_MEMORY;
         }
 
         /* acquire DOCA buffer for representing destination buffer */
-        if(DOCA_SUCCESS != doca_buf_inventory_buf_by_addr(
-                /* inventory */ DOCA_CONF(sc_config)->sha_buf_inv,
-                /* mmap */ DOCA_CONF(sc_config)->sha_mmap,
-                /* addr */ DOCA_CONF(sc_config)->sha_dst_buffer,
-                /* len */ DOCA_SHA256_BYTE_COUNT,
-                /* buf */ &DOCA_CONF(sc_config)->sha_dst_doca_buf)
-        ){
-            SC_THREAD_ERROR_DETAILS("failed to acquire DOCA buffer representing destination buffer");
+        doca_result = doca_buf_inventory_buf_by_addr(
+            /* inventory */ PER_CORE_DOCA_META(sc_config).sha_buf_inv,
+            /* mmap */ PER_CORE_DOCA_META(sc_config).sha_mmap,
+            /* addr */ PER_CORE_DOCA_META(sc_config).sha_dst_buffer,
+            /* len */ DOCA_SHA256_BYTE_COUNT,
+            /* buf */ &(PER_CORE_DOCA_META(sc_config).sha_dst_doca_buf)
+        );
+        if(doca_result != DOCA_SUCCESS){
+            SC_THREAD_ERROR_DETAILS("failed to acquire DOCA buffer representing destination buffer: %s",
+                doca_get_error_string(doca_result));
             return SC_ERROR_MEMORY;
         }
 
@@ -218,13 +230,13 @@ int _process_enter(struct sc_config *sc_config){
         sha_job->base = (struct doca_job) {
 			.type = DOCA_SHA_JOB_SHA256,
 			.flags = DOCA_JOB_FLAGS_NONE,
-			.ctx = DOCA_CONF(sc_config)->sha_ctx,
+			.ctx = PER_CORE_DOCA_META(sc_config).sha_ctx,
 			.user_data.u64 = DOCA_SHA_JOB_SHA256,
 		},
-        sha_job->resp_buf = DOCA_CONF(sc_config)->sha_dst_doca_buf;
-        sha_job->req_buf = DOCA_CONF(sc_config)->sha_src_doca_buf;
+        sha_job->resp_buf = PER_CORE_DOCA_META(sc_config).sha_dst_doca_buf;
+        sha_job->req_buf = PER_CORE_DOCA_META(sc_config).sha_src_doca_buf;
         sha_job->flags = DOCA_SHA_JOB_FLAGS_NONE;
-        DOCA_CONF(sc_config)->sha_job = sha_job;
+        PER_CORE_DOCA_META(sc_config).sha_job = sha_job;
     #endif
 
     #if defined(MODE_ACCURACY)
@@ -275,7 +287,6 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fw
         = rte_pktmbuf_mtod_offset(
             pkt, struct rte_udp_hdr*, RTE_ETHER_HDR_LEN+rte_ipv4_hdr_len(_ipv4_hdr));
     
-
     /* ethernet-tuples */
     #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         /* five-tuples */

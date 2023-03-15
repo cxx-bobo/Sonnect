@@ -35,14 +35,20 @@ int __cm_update(const char* key, struct sc_config *sc_config){
             gettimeofday(&hash_start, NULL);
         #endif
 
-        #if defined(SC_HAS_DOCA)
+        #if defined(SC_HAS_DOCA) && defined(SC_NEED_DOCA_SHA)
             struct doca_event doca_event = {0};
             uint8_t *resp_head;
             /* copy the key to SHA source data buffer */
-            memcpy(DOCA_CONF(sc_config)->sha_src_buffer, key, SC_SKETCH_HASH_KEY_LENGTH);
+            memcpy(PER_CORE_DOCA_META(sc_config).sha_src_buffer, key, SC_SKETCH_HASH_KEY_LENGTH);
+
+            /* lock the belonging of SHA engine */
+            rte_spinlock_lock(&DOCA_CONF(sc_config)->sha_lock);
 
             /* enqueue the result */
-            doca_result = doca_workq_submit(DOCA_CONF(sc_config)->sha_workq, &DOCA_CONF(sc_config)->sha_job->base);
+            doca_result = doca_workq_submit(
+                /* workq */ PER_CORE_DOCA_META(sc_config).sha_workq, 
+                /* job */ &PER_CORE_DOCA_META(sc_config).sha_job->base
+            );
             if(doca_result != DOCA_SUCCESS){
                 SC_THREAD_ERROR_DETAILS("failed to enqueue SHA job: %s", doca_get_error_string(doca_result));
                 return SC_ERROR_INTERNAL;
@@ -50,7 +56,7 @@ int __cm_update(const char* key, struct sc_config *sc_config){
 
             /* wait for job completion */
             while((doca_result = doca_workq_progress_retrieve(
-                    /* workq */ DOCA_CONF(sc_config)->sha_workq,
+                    /* workq */ PER_CORE_DOCA_META(sc_config).sha_workq,
                     /* ev */ &doca_event,
                     /* flags */ NULL) == DOCA_ERROR_AGAIN)
             ){}
@@ -59,6 +65,9 @@ int __cm_update(const char* key, struct sc_config *sc_config){
                 return SC_ERROR_INTERNAL;
             }
             
+            /* release the belonging of SHA engine */
+            rte_spinlock_unlock(&DOCA_CONF(sc_config)->sha_lock);
+
             /* (DEBUG) verify SHA result */
             if(doca_event.result.u64 != DOCA_SUCCESS){
                 SC_THREAD_ERROR_DETAILS("sha job finished unsuccessfully");
@@ -72,7 +81,7 @@ int __cm_update(const char* key, struct sc_config *sc_config){
             }
 
             /* retrieve SHA result, we only use the LSB 32 bits */
-            doca_buf_get_data(DOCA_CONF(sc_config)->sha_job->resp_buf, (void **)&resp_head);
+            doca_buf_get_data(PER_CORE_DOCA_META(sc_config).sha_job->resp_buf, (void **)&resp_head);
             for(j=0; j<4; j++){
                 hash_result += (resp_head[i] << (j*8));
             }
@@ -90,7 +99,7 @@ int __cm_update(const char* key, struct sc_config *sc_config){
                 += (hash_end.tv_sec - hash_start.tv_sec) * 1000000 
                     + (hash_end.tv_usec - hash_start.tv_usec);
         #endif // MODE_LATENCY
-        SC_THREAD_LOG("hash result: %u", hash_result);
+        // SC_THREAD_LOG("hash result: %u", hash_result);
     
         /* step 2: require spin lock */
         #if defined(MODE_LATENCY)
