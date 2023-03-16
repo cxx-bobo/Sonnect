@@ -2,6 +2,7 @@
 #define _SC_ECHO_CLIENT_H_
 
 #include <sys/time.h>
+#include <rte_ethdev.h>
 #include <rte_ether.h>
 #include <rte_malloc.h>
 
@@ -44,6 +45,12 @@ struct _internal_config {
     uint32_t nb_pkt_budget;
     uint32_t pkt_len;           /* unit: bytes */
     uint32_t nb_pkt_per_burst;
+
+    /* used echo ports */
+    uint32_t nb_send_ports, nb_recv_ports;
+    uint32_t send_port_idx[SC_MAX_NB_PORTS], recv_port_idx[SC_MAX_NB_PORTS];
+    char *send_port_mac_address[SC_MAX_NB_PORTS];
+    char *recv_port_mac_address[SC_MAX_NB_PORTS];
 };
 
 int _init_app(struct sc_config *sc_config);

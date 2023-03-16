@@ -31,6 +31,108 @@ int _init_app(struct sc_config *sc_config){
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
     int result = SC_SUCCESS;
 
+    /* used send port */
+    if(!strcmp(key, "send_port_mac")){
+        int nb_send_ports = 0, i;
+        uint32_t port_id;
+        char *delim = ",";
+        char *p, *port_mac;
+
+        for(;;){
+            if(sc_force_quit){ break; }
+
+            if(nb_send_ports == 0)
+                p = strtok(value, delim);
+            else
+                p = strtok(NULL, delim);
+            
+            if (!p) break;
+
+            p = sc_util_del_both_trim(p);
+            sc_util_del_change_line(p);
+
+            port_mac = (char*)malloc(strlen(p)+1);
+            if(unlikely(!port_mac)){
+                SC_ERROR_DETAILS("Failed to allocate memory for port_mac");
+                result = SC_ERROR_MEMORY;
+                goto free_send_port_mac;
+            }
+            memset(port_mac, 0, strlen(p)+1);
+
+            strcpy(port_mac, p);
+            if(SC_SUCCESS != sc_util_get_port_id_by_mac(sc_config, port_mac, &port_id)){
+                SC_ERROR_DETAILS("failed to get port id by mac %s", port_mac);
+                result = SC_ERROR_INVALID_VALUE;
+                goto free_send_port_mac;
+            }
+
+            INTERNAL_CONF(sc_config)->send_port_idx[nb_send_ports] = port_id;
+            INTERNAL_CONF(sc_config)->send_port_mac_address[nb_send_ports] = port_mac;
+            nb_send_ports += 1;
+        }
+
+        INTERNAL_CONF(sc_config)->nb_send_ports = nb_send_ports;
+
+        goto _parse_app_kv_pair_exit;
+
+free_send_port_mac:
+        for(i=0; i<nb_send_ports; i++) free(INTERNAL_CONF(sc_config)->send_port_mac_address[i]);
+
+invalid_send_port_mac:
+        SC_ERROR_DETAILS("invalid send port mac address\n");
+    }
+
+    /* used recv port */
+    if(!strcmp(key, "recv_port_mac")){
+        int nb_recv_ports = 0, i;
+        uint32_t port_id;
+        char *delim = ",";
+        char *p, *port_mac;
+
+        for(;;){
+            if(sc_force_quit){ break; }
+
+            if(nb_recv_ports == 0)
+                p = strtok(value, delim);
+            else
+                p = strtok(NULL, delim);
+            
+            if (!p) break;
+
+            p = sc_util_del_both_trim(p);
+            sc_util_del_change_line(p);
+
+            port_mac = (char*)malloc(strlen(p)+1);
+            if(unlikely(!port_mac)){
+                SC_ERROR_DETAILS("Failed to allocate memory for port_mac");
+                result = SC_ERROR_MEMORY;
+                goto free_recv_port_mac;
+            }
+            memset(port_mac, 0, strlen(p)+1);
+
+            strcpy(port_mac, p);
+            if(SC_SUCCESS != sc_util_get_port_id_by_mac(sc_config, port_mac, &port_id)){
+                SC_ERROR_DETAILS("failed to get port id by mac %s", port_mac);
+                result = SC_ERROR_INVALID_VALUE;
+                goto free_recv_port_mac;
+            }
+
+            INTERNAL_CONF(sc_config)->recv_port_idx[nb_recv_ports] = port_id;
+            INTERNAL_CONF(sc_config)->recv_port_mac_address[nb_recv_ports] = port_mac;
+            nb_recv_ports += 1;
+        }
+
+        INTERNAL_CONF(sc_config)->nb_recv_ports = nb_recv_ports;
+
+        goto _parse_app_kv_pair_exit;
+
+free_recv_port_mac:
+        for(i=0; i<nb_recv_ports; i++) free(INTERNAL_CONF(sc_config)->recv_port_mac_address[i]);
+
+invalid_recv_port_mac:
+        SC_ERROR_DETAILS("invalid recv port mac address\n");
+    }
+
     /* packet length value */
     if(!strcmp(key, "pkt_len")){
         value = sc_util_del_both_trim(value);
@@ -170,7 +272,8 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fw
  * \return  zero for successfully executing
  */
 int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
-    int i, j, nb_tx, nb_rx, result = SC_SUCCESS, finial_retry_times = 0;
+    int i, j, nb_tx = 0, nb_rx = 0, 
+        result = SC_SUCCESS, finial_retry_times = 0;
     struct timeval current_time;
     long interval_sec;
     long interval_usec;
@@ -184,9 +287,9 @@ try_receive_ack:
         }
 
         /* try receive ack */
-        for(i=0; i<sc_config->nb_used_ports; i++){
+        for(i=0; i<INTERNAL_CONF(sc_config)->nb_recv_ports; i++){
             nb_rx = rte_eth_rx_burst(
-                /* port_id */ sc_config->port_ids[i], 
+                /* port_id */ INTERNAL_CONF(sc_config)->recv_port_idx[i], 
                 /* queue_id */ queue_id, 
                 /* rx_pkts */ PER_CORE_APP_META(sc_config).recv_pkt_bufs, 
                 /* nb_pkts */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst*4
@@ -293,9 +396,9 @@ try_receive_ack:
 
     /* send packet */
     nb_tx = 0;
-    for(i=0; i<sc_config->nb_used_ports; i++){
+    for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
         nb_tx += rte_eth_tx_burst(
-            /* port_id */ sc_config->port_ids[i],
+            /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
             /* queue_id */ queue_id,
             /* tx_pkts */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
             /* nb_pkts */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst
@@ -390,7 +493,7 @@ int _process_exit(struct sc_config *sc_config){
  */
 int _all_exit(struct sc_config *sc_config){
     int i;
-    size_t nb_send_pkt, nb_confirmed_pkt;
+    size_t nb_send_pkt = 0, nb_confirmed_pkt = 0;
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         /* reduce number of packet */

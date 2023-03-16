@@ -40,6 +40,46 @@ int sc_util_check_core_id(uint32_t core_id){
 /* ======================================================== */
 
 
+
+/* ==================== port operation ==================== */
+
+/*!
+ * \brief   obtain port id by MAC address
+ * \param   sc_config       the global configuration
+ * \param   port_mac        mac address of the port
+ * \param   port_id         result port id
+ * \return  zero for successfully searching
+ */
+int sc_util_get_port_id_by_mac(struct sc_config *sc_config, char* port_mac, uint32_t *port_id){
+    int i, ret, result = SC_ERROR_NOT_EXIST;
+    struct rte_ether_addr mac;
+    char ebuf[RTE_ETHER_ADDR_FMT_SIZE];
+
+    for(i=0; i<sc_config->nb_used_ports; i++){
+        /* get mac address */
+        ret = rte_eth_macaddr_get(sc_config->port_ids[i], &mac);
+        if (ret == 0) {
+            rte_ether_format_addr(ebuf, sizeof(ebuf), &mac);
+
+            /* compare mac address */
+            if(!strcmp(ebuf, port_mac)){
+                *port_id = sc_config->port_ids[i];
+                result = SC_SUCCESS;
+                break;
+            }
+        } else {
+            result = SC_ERROR_INTERNAL;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+/* ======================================================== */
+
+
+
 /* ==================== file operation ==================== */
 
 /*!

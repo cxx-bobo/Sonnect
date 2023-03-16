@@ -10,7 +10,11 @@
 #include <sched.h>
 #include <unistd.h>
 
+#include <rte_ethdev.h>
+#include <rte_ether.h>
+
 #include "sc_global.h"
+#include "sc_log.h"
 
 /*!
  * \brief all return status
@@ -27,6 +31,9 @@ enum {
 /* core operation */
 int sc_util_stick_this_thread_to_core(uint32_t core_id);
 int sc_util_check_core_id(uint32_t core_id);
+
+/* port operation */
+int sc_util_get_port_id_by_mac(struct sc_config *sc_config, char* port_mac, uint32_t *port_id);
 
 /* file operation */
 int sc_util_parse_config(FILE* fp, struct sc_config* sc_config, 

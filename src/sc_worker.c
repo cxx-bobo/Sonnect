@@ -132,7 +132,8 @@ int _worker_loop(void* param){
                     // reset need forward flag
                     need_forward = false;
                 }
-
+            
+            // TODO: try not free these mbufs? 
             free_pkt_mbuf:
                 for(j=0; j<nb_rx; j++) {
                     if(pkt[j]){ rte_pktmbuf_free(pkt[j]); }
