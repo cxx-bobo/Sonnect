@@ -119,7 +119,6 @@ int _worker_loop(void* param){
                         SC_THREAD_WARNING("failed to process the received frame");
                     }
 
-                    // TODO: exist problems, if forward pkt is too many and too fast, this will failed
                     if(need_forward){
                         nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt+j, 1);
                         if(nb_tx == 0){
