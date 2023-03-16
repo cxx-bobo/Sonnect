@@ -59,7 +59,7 @@ int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf 
 int sc_util_initialize_eth_header(struct rte_ether_hdr *eth_hdr,
 		struct rte_ether_addr *src_mac, struct rte_ether_addr *dst_mac, 
 		uint16_t ether_type, uint8_t vlan_enabled, uint16_t vlan_id, 
-		uint16_t *pkt_len);
+		uint16_t pkt_data_len, uint16_t *pkt_len);
 int sc_util_initialize_arp_header(struct rte_arp_hdr *arp_hdr,
 		struct rte_ether_addr *src_mac, struct rte_ether_addr *dst_mac,
 		uint32_t src_ip, uint32_t dst_ip, uint32_t opcode, 

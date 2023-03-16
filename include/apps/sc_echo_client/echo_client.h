@@ -44,7 +44,6 @@ struct _internal_config {
     uint32_t nb_pkt_budget;
     uint32_t pkt_len;           /* unit: bytes */
     uint32_t nb_pkt_per_burst;
-    bool enable_nb_pkt_budget;
 };
 
 int _init_app(struct sc_config *sc_config);
@@ -53,5 +52,6 @@ int _process_enter(struct sc_config *sc_config);
 int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fwd_port_id, bool *need_forward);
 int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
 int _process_exit(struct sc_config *sc_config);
+int _all_exit(struct sc_config *sc_config);
 
 #endif

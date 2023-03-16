@@ -63,33 +63,7 @@ invalid_nb_pkt_per_burst:
         SC_ERROR_DETAILS("invalid configuration nb_pkt_per_burst\n");
     }
     
-    /* whether to set budget of the number of send packet */
-    if(!strcmp(key, "enable_nb_pkt_budget")){
-        value = sc_util_del_both_trim(value);
-        sc_util_del_change_line(value);
-        if (!strcmp(value, "true")){
-            INTERNAL_CONF(sc_config)->enable_nb_pkt_budget = true;
-        } else if (!strcmp(value, "false")){
-            INTERNAL_CONF(sc_config)->enable_nb_pkt_budget = false;
-        } else {
-            result = SC_ERROR_INVALID_VALUE;
-            goto invalid_enable_nb_pkt_budget;
-        }
-
-        if(INTERNAL_CONF(sc_config)->enable_nb_pkt_budget == sc_config->enable_test_duration_limit){
-            SC_ERROR_DETAILS(
-                "only support either enable_nb_pkt_budget and enable_test_duration_limit be enabled\n"
-            );
-            goto invalid_enable_nb_pkt_budget;
-        }
-
-        goto _parse_app_kv_pair_exit;
-
-invalid_enable_nb_pkt_budget:
-        SC_ERROR_DETAILS("invalid configuration enable_nb_pkt_budget\n");
-    }
-
-    /* number of packet to be send */
+    /* number of packet to be send (enabled only there's no duration limitation) */
     if(!strcmp(key, "nb_pkt_budget")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
@@ -282,10 +256,12 @@ try_receive_ack:
             if(PER_CORE_APP_META(sc_config).wait_ack){ goto try_receive_ack; }
         #endif
 
-        /* if the number of packet to be sent reach the budget (if set), 
-         * keep trying receiving ack, then exit 
+        /* 
+         * if the number of packet to be sent reach the budget, 
+         * keep trying receiving ack, then exit (p.s. work only
+         * duration limitation isn't set)
          */
-        if( INTERNAL_CONF(sc_config)->enable_nb_pkt_budget &&
+        if( !sc_config->enable_test_duration_limit &&
             PER_CORE_APP_META(sc_config).nb_send_pkt >= PER_CORE_APP_META(sc_config).nb_pkt_budget_per_core
         ){
             if(PER_CORE_APP_META(sc_config).wait_ack && finial_retry_times <= 10000){
@@ -403,6 +379,90 @@ int _process_exit(struct sc_config *sc_config){
      * TODO: still have some packets flow to other cores
      */
     pthread_barrier_wait(&sc_config->pthread_barrier);
+
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   callback while all worker thread exit
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully executing
+ */
+int _all_exit(struct sc_config *sc_config){
+    int i;
+    size_t nb_send_pkt, nb_confirmed_pkt;
+
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        /* reduce number of packet */
+        nb_send_pkt += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_send_pkt;
+        nb_confirmed_pkt += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_confirmed_pkt;
+    }
+    SC_LOG("[TOTAL] number of send packet: %ld, number of confirm packet: %ld",
+        nb_send_pkt, nb_confirmed_pkt
+    );
+
+    #if defined(MODE_LATENCY)
+        long max_rtt_sec = 0, max_rtt_usec = 0;
+        long min_rtt_sec = 100, min_rtt_usec = 0;
+
+        for(i=0; i<sc_config->nb_used_cores; i++){
+            /* record the minimul interval time */
+            if(SC_UTIL_TIME_INTERVL_US(min_rtt_sec, min_rtt_usec)  
+                > SC_UTIL_TIME_INTERVL_US(
+                    PER_CORE_APP_META_BY_CORE_ID(sc_config, i).min_rtt_sec, 
+                    PER_CORE_APP_META_BY_CORE_ID(sc_config, i).min_rtt_usec)
+            ){
+                min_rtt_sec = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).min_rtt_sec;
+                min_rtt_usec = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).min_rtt_usec;
+            }      
+
+            /* record the maximum interval time */
+            if(SC_UTIL_TIME_INTERVL_US(max_rtt_sec, max_rtt_usec)  
+                < SC_UTIL_TIME_INTERVL_US(
+                    PER_CORE_APP_META_BY_CORE_ID(sc_config, i).max_rtt_sec, 
+                    PER_CORE_APP_META_BY_CORE_ID(sc_config, i).max_rtt_usec)
+            ){
+                max_rtt_sec = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).max_rtt_sec;
+                max_rtt_usec = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).max_rtt_usec;
+            }
+        }
+        
+        SC_LOG("[TOTAL] max round-trip-time: %d us", 
+            SC_UTIL_TIME_INTERVL_US(max_rtt_sec, max_rtt_usec)
+        );
+        SC_LOG("[TOTAL] min round-trip-time: %d us",
+            SC_UTIL_TIME_INTERVL_US(min_rtt_sec, min_rtt_usec)
+        );
+    #endif
+
+    #if defined(MODE_THROUGHPUT)
+        long worker_max_interval_sec = 0, worker_max_interval_usec = 0;
+
+        for(i=0; i<sc_config->nb_used_cores; i++){
+            /* record maximum duration */
+            long interval_sec, interval_usec;
+            interval_sec
+                = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).end_time.tv_sec 
+                - PER_CORE_APP_META_BY_CORE_ID(sc_config, i).start_time.tv_sec;
+            interval_usec
+                = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).end_time.tv_usec 
+                - PER_CORE_APP_META_BY_CORE_ID(sc_config, i).start_time.tv_usec;
+            if(SC_UTIL_TIME_INTERVL_US(interval_sec, interval_usec) >
+                    SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)){
+                worker_max_interval_sec = interval_sec;
+                worker_max_interval_usec = interval_usec;
+            }
+        }
+
+        SC_THREAD_LOG("[TOTAL] send throughput: %f Gbps",
+            (float)(nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
+            / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec) * 1000)
+        );
+        SC_THREAD_LOG("[TOTAL] confirm throughput: %f Gbps",
+            (float)(nb_confirmed_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
+            / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec) * 1000)
+        );
+    #endif
 
     return SC_SUCCESS;
 }

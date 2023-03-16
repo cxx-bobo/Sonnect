@@ -222,7 +222,7 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
     if(SC_SUCCESS != sc_util_initialize_eth_header(&pkt_eth_hdr, 
         (struct rte_ether_addr *)src_ether_addr, 
         (struct rte_ether_addr *)dst_ether_addr,
-        RTE_ETHER_TYPE_IPV4, 0, 0, &pkt_len
+        RTE_ETHER_TYPE_IPV4, 0, 0, pkt_len, &pkt_len
     )){
         SC_THREAD_ERROR("failed to assemble ethernet header");
         result = SC_ERROR_INTERNAL;
@@ -284,4 +284,13 @@ int _process_exit(struct sc_config *sc_config){
         / (float)(interval_usec * 1000)
     );
     return SC_SUCCESS;
+}
+
+/*!
+ * \brief   callback while all worker thread exit
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully executing
+ */
+int _all_exit(struct sc_config *sc_config){
+    return SC_ERROR_NOT_IMPLEMENTED;
 }

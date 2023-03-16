@@ -85,10 +85,15 @@ int sc_util_generate_random_pkt_hdr(
 		uint32_t used_queue_id, uint32_t l3_type, uint32_t l4_type, uint64_t rss_hash_field
 ){
 	int result = SC_SUCCESS;
+	uint16_t _pkt_len;
     uint32_t queue_id;
 
-    /* initialize the _pkt_len as the length of the packet */
-    uint16_t _pkt_len = pkt_len -  18 /* l4 len */ - 20 /* l3 len */ - 8 /* ethernet len */;
+	if(pkt_len <= 18 /* l4 len */ + 20 /* l3 len */ + 8 /* ethernet len */){
+		SC_THREAD_ERROR_DETAILS("pakcet length is too small, should be larger than %d", 18+20+8);
+	}
+
+	/* initialize the _pkt_len as the length of the l4 payload */
+    _pkt_len = pkt_len -  18 /* l4 len */ - 20 /* l3 len */ - 8 /* ethernet len */;
 
     /* generate random port and ipv4 address */
     while(!sc_force_quit){
@@ -145,7 +150,7 @@ int sc_util_generate_random_pkt_hdr(
 		if(SC_SUCCESS != sc_util_initialize_udp_header(
 				&sc_pkt_hdr->pkt_udp_hdr, 
 				sc_pkt_hdr->src_port, 
-				sc_pkt_hdr->dst_port, pkt_len, &pkt_len)){
+				sc_pkt_hdr->dst_port, _pkt_len, &_pkt_len)){
 			SC_THREAD_ERROR("failed to assemble udp header");
 			result = SC_ERROR_INTERNAL;
 			goto sc_util_generate_random_pkt_hdr_exit;
@@ -154,7 +159,7 @@ int sc_util_generate_random_pkt_hdr(
 		if(SC_SUCCESS != sc_util_initialize_tcp_header(
 				&sc_pkt_hdr->pkt_tcp_hdr, 
 				sc_pkt_hdr->src_port, 
-				sc_pkt_hdr->dst_port, pkt_len, &pkt_len)){
+				sc_pkt_hdr->dst_port, _pkt_len, &_pkt_len)){
 			SC_THREAD_ERROR("failed to assemble tcp header");
 			result = SC_ERROR_INTERNAL;
 			goto sc_util_generate_random_pkt_hdr_exit;
@@ -172,7 +177,7 @@ int sc_util_generate_random_pkt_hdr(
 				&sc_pkt_hdr->pkt_ipv4_hdr, 
 				sc_pkt_hdr->src_ipv4_addr, 
 				sc_pkt_hdr->dst_ipv4_addr, 
-				pkt_len, l4_type, &pkt_len)
+				_pkt_len, l4_type, &_pkt_len)
 		){
 			SC_THREAD_ERROR("failed to assemble ipv4 header");
 			result = SC_ERROR_INTERNAL;
@@ -183,7 +188,7 @@ int sc_util_generate_random_pkt_hdr(
 				&sc_pkt_hdr->pkt_ipv6_hdr, 
 				sc_pkt_hdr->src_ipv6_addr, 
 				sc_pkt_hdr->dst_ipv6_addr, 
-				pkt_len, l4_type, &pkt_len)
+				_pkt_len, l4_type, &_pkt_len)
 		){
 			SC_THREAD_ERROR("failed to assemble ipv6 header");
 			result = SC_ERROR_INTERNAL;
@@ -208,7 +213,7 @@ int sc_util_generate_random_pkt_hdr(
         &sc_pkt_hdr->pkt_eth_hdr, 
         (struct rte_ether_addr *)sc_pkt_hdr->src_ether_addr, 
         (struct rte_ether_addr *)sc_pkt_hdr->dst_ether_addr,
-        RTE_ETHER_TYPE_IPV4, 0, 0, &pkt_len
+        RTE_ETHER_TYPE_IPV4, 0, 0, _pkt_len, &_pkt_len
     )){
         SC_THREAD_ERROR("failed to assemble ethernet header");
         result = SC_ERROR_INTERNAL;
@@ -431,12 +436,14 @@ generate_packet_burst_proto_exit:
  * \param   ether_type  	copy offset within the destination mbuf
  * \param   vlan_enabled  	copy offset within the destination mbuf
  * \param   vlan_id  		copy offset within the destination mbuf
+ * \param	pkt_data_len 		length of upper payload
+ * \param	pkt_len				generated packet length
  * \return  0 for successfully copy
  */
 int sc_util_initialize_eth_header(struct rte_ether_hdr *eth_hdr,
 		struct rte_ether_addr *src_mac, struct rte_ether_addr *dst_mac, 
 		uint16_t ether_type, uint8_t vlan_enabled, uint16_t vlan_id, 
-		uint16_t *pkt_len){
+		uint16_t pkt_data_len, uint16_t *pkt_len){
 	#if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
 		rte_ether_addr_copy(dst_mac, &eth_hdr->dst_addr);
 		rte_ether_addr_copy(src_mac, &eth_hdr->src_addr);
@@ -457,7 +464,7 @@ int sc_util_initialize_eth_header(struct rte_ether_hdr *eth_hdr,
 		eth_hdr->ether_type = rte_cpu_to_be_16(ether_type);
 	}
 
-	*pkt_len = (uint16_t)(sizeof(struct rte_ether_hdr));
+	*pkt_len = pkt_data_len + (uint16_t)(sizeof(struct rte_ether_hdr));
 
 	return SC_SUCCESS;
 }

@@ -70,3 +70,12 @@ int _process_exit(struct sc_config *sc_config){
     SC_WARNING_DETAILS("_process_exit not implemented");
     return SC_ERROR_NOT_IMPLEMENTED;
 }
+
+/*!
+ * \brief   callback while all worker thread exit
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully executing
+ */
+int _all_exit(struct sc_config *sc_config){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}

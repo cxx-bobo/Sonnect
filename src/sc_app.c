@@ -42,6 +42,9 @@ int init_app(struct sc_config *sc_config, const char *app_conf_path){
     /* specify pkt exiting callback function */
     sc_config->app_config->process_exit = _process_exit;
 
+    /* specify the all exit callback function */
+    sc_config->app_config->all_exit = _all_exit;
+
     /* open application configuration file */
     fp = fopen(app_conf_path, "r");
     if(!fp){

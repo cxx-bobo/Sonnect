@@ -214,6 +214,12 @@ int init_worker_threads(struct sc_config *sc_config){
 int launch_worker_threads(struct sc_config *sc_config){
     launch_worker_threads_async(sc_config);
     rte_eal_mp_wait_lcore();
+
+    /* Hook Point: all exit */
+    if(sc_config->app_config->all_exit(sc_config) != SC_SUCCESS){
+        SC_THREAD_WARNING("error occured while executing all exit callbacks");
+    }
+
     return SC_SUCCESS;
 }
 

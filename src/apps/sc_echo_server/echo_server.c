@@ -73,3 +73,12 @@ int _process_exit(struct sc_config *sc_config){
     SC_THREAD_LOG("forward %u packets in total", PER_CORE_APP_META(sc_config).nb_forward_pkt);
     return SC_SUCCESS;
 }
+
+/*!
+ * \brief   callback while all worker thread exit
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully executing
+ */
+int _all_exit(struct sc_config *sc_config){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}

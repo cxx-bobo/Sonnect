@@ -21,6 +21,8 @@ extern volatile bool sc_force_quit;
 #if !defined(SC_CLOSE_MOCK_MACRO)
     #define SC_HAS_DOCA
     #define SC_NEED_DOCA_SHA
+    #define MODE_THROUGHPUT
+    #define MODE_LATENCY
 #endif // SC_CLOSE_MOCK_MACRO
 
 /* maximum number of parameters to init rte eal */
@@ -79,9 +81,6 @@ struct sc_config {
     /* per-core metadata */
     struct per_core_meta *per_core_meta;
 
-    /* per-core memory buffer pool */
-    struct rte_mempool *per_core_pktmbuf_pool;
-
     /* pthread barrier for sync all worker thread */
     pthread_barrier_t pthread_barrier;
 
@@ -97,20 +96,32 @@ struct sc_config {
     #endif
 };
 #define PER_CORE_META(scc) ((struct per_core_meta*)scc->per_core_meta)[rte_lcore_index(rte_lcore_id())]
+#define PER_CORE_META_BY_CORE_ID(scc, id) ((struct per_core_meta*)scc->per_core_meta)[id]
+
 #define PER_CORE_MBUF_POOL(scc) (PER_CORE_META(scc)).pktmbuf_pool
+#define PER_CORE_MBUF_POOL_BY_CORE_ID(scc, id) (PER_CORE_META_BY_CORE_ID(scc,id)).pktmbuf_pool
+
 #define PER_CORE_APP_META(scc) ((struct _per_core_app_meta*)scc->per_core_app_meta)[rte_lcore_index(rte_lcore_id())]
+#define PER_CORE_APP_META_BY_CORE_ID(scc, id) ((struct _per_core_app_meta*)scc->per_core_app_meta)[id]
+
 #define INTERNAL_CONF(scc) ((struct _internal_config*)scc->app_config->internal_config)
 
 /* application specific configuration */
 struct app_config {
-    /* callback function: operations while entering the worker loop */
+    /* callback function (worker thread): operations while entering the worker loop */
     int (*process_enter)(struct sc_config *sc_config);
-    /* callback function: processing single received packet (server mode) */
+    
+    /* callback function (worker thread): processing single received packet (server mode) */
     int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fwd_port_id, bool *need_forward);
-    /* callback function: client logic (client mode) */
+    
+    /* callback function (worker thread): client logic (client mode) */
     int (*process_client)(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
-    /* callback function: operations while exiting the worker loop */
+    
+    /* callback function (worker thread): operations while exiting the worker loop */
     int (*process_exit)(struct sc_config *sc_config);
+    
+    /* callback function (main thread): operations while all thread exits */
+    int (*all_exit)(struct sc_config *sc_config);
 
     /* internal configuration of the application */
     void *internal_config;
