@@ -69,7 +69,7 @@ int _worker_loop(void* param){
     }
 
     #if defined(ROLE_SERVER)
-        static struct rte_mbuf *pkt[SC_MAX_PKT_BURST];
+        struct rte_mbuf *pkt[SC_MAX_PKT_BURST];
     #endif // ROLE_SERVER
 
     #if defined(ROLE_CLIENT)
@@ -109,7 +109,7 @@ int _worker_loop(void* param){
             for(i=0; i<sc_config->nb_used_ports; i++){
                 nb_rx = rte_eth_rx_burst(i, queue_id, pkt, SC_MAX_PKT_BURST);
                 
-                if(nb_rx == 0) goto free_pkt_mbuf;
+                if(nb_rx == 0) continue;
                 
                 // SC_THREAD_LOG("received %u ethernet frames", nb_rx);
 
@@ -123,6 +123,7 @@ int _worker_loop(void* param){
                     if(need_forward){
                         nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt+j, 1);
                         if(nb_tx == 0){
+                            rte_pktmbuf_free(pkt[j]);
                             SC_THREAD_WARNING("failed to forward packet to queue %u on port %u",
                                 queue_id, forward_port_id);
                         }
@@ -131,12 +132,6 @@ int _worker_loop(void* param){
 
                     // reset need forward flag
                     need_forward = false;
-                }
-            
-            // TODO: try not free these mbufs? 
-            free_pkt_mbuf:
-                for(j=0; j<nb_rx; j++) {
-                    if(pkt[j]){ rte_pktmbuf_free(pkt[j]); }
                 }
             }
         #endif // ROLE_SERVER

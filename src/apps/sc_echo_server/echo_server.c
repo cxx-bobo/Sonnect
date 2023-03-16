@@ -80,5 +80,5 @@ int _process_exit(struct sc_config *sc_config){
  * \return  zero for successfully executing
  */
 int _all_exit(struct sc_config *sc_config){
-    return SC_ERROR_NOT_IMPLEMENTED;
+    return SC_SUCCESS;
 }

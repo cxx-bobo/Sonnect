@@ -6,7 +6,7 @@
 #include <rte_mbuf_core.h>
 
 #define NUM_MBUFS 8191
-#define MEMPOOL_CACHE_SIZE 256
+#define MEMPOOL_CACHE_SIZE 512
 
 int init_memory(struct sc_config *sc_config);
 
