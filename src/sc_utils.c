@@ -76,6 +76,66 @@ int sc_util_get_port_id_by_mac(struct sc_config *sc_config, char* port_mac, uint
     return result;
 }
 
+/*!
+ * \brief   obtain MAC address by port id
+ * \param   sc_config       the global configuration
+ * \param   port_id         given port id
+ * \param   port_mac        result mac address of the port
+ * \return  zero for successfully searching
+ */
+int sc_util_get_mac_by_port_id(struct sc_config *sc_config, uint32_t port_id, char* port_mac){
+    int ret, result = SC_SUCCESS;
+    char ebuf[RTE_ETHER_ADDR_FMT_SIZE];
+
+    /* get mac */
+    ret = rte_eth_macaddr_get(port_id, ebuf);
+    if (ret == 0) {
+        memcpy(port_mac, ebuf, RTE_ETHER_ADDR_FMT_SIZE);
+    } else {
+        result = SC_ERROR_NOT_EXIST;
+    }
+
+    return result;
+}
+
+/*!
+ * \brief   obtain port index by given logical port index
+ * \param   sc_config           the global configuration
+ * \param   logical_port_id     given logical port id
+ * \param   port_id             result port id
+ * \return  zero for successfully searching
+ */
+int sc_util_get_port_id_by_logical_port_id(struct sc_config *sc_config,  uint32_t logical_port_id, uint32_t *port_id){
+    if(logical_port_id >= sc_config->nb_used_ports){
+        SC_ERROR_DETAILS("given logical id (%u) is larger than overall number of initialized port (%u)",
+            logical_port_id, sc_config->nb_used_ports);
+        return SC_ERROR_INVALID_VALUE;
+    }
+    *port_id = sc_config->sc_port[logical_port_id].port_id;
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   obtain port index by given logical port index
+ * \param   sc_config           the global configuration
+ * \param   port_id             given port id
+ * \param   logical_port_id     result logical port id
+ * \return  zero for successfully searching
+ */
+int sc_util_get_logical_port_id_by_port_id(struct sc_config *sc_config, uint32_t port_id, uint32_t *logical_port_id){
+    int i, ret, result = SC_ERROR_NOT_EXIST;
+
+    for(i=0; i<sc_config->nb_used_ports; i++){
+        if (sc_config->sc_port[i].port_id == port_id) {
+            *logical_port_id = sc_config->sc_port[i].logical_port_id;
+            result = SC_SUCCESS;
+            break;
+        }
+    }
+    
+    return result;
+}
+
 /* ======================================================== */
 
 

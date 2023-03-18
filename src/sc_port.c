@@ -1,8 +1,9 @@
 #include "sc_global.h"
 #include "sc_utils.h"
 #include "sc_port.h"
+#include "sc_mbuf.h"
 
-int _init_single_port(uint16_t port_index, struct sc_config *sc_config);
+int _init_single_port(uint16_t port_index, uint16_t port_logical_index, struct sc_config *sc_config);
 static bool _is_port_choosed(uint16_t port_index, struct sc_config *sc_config);
 static void _print_port_info(uint16_t port_index);
 static void _show_offloads(uint64_t offloads, const char *(show_offload)(uint64_t));
@@ -74,6 +75,73 @@ static struct rte_eth_conf port_conf_default = {
 };
 
 /*!
+ * \brief: RX queue configuration
+ */
+static struct rte_eth_rxconf rx_queue_conf = {
+    .rx_thresh = {
+        .pthresh = 8,
+        .hthresh = 8,
+        .wthresh = 4,
+    },
+    .rx_free_thresh = 32,
+};
+
+/*!
+ * \brief: TX queue configuration
+ */
+static struct rte_eth_txconf tx_queue_conf = {
+    .tx_thresh = {
+        .pthresh = 36,
+        .hthresh = 0,
+        .wthresh = 0,
+    },
+    .tx_free_thresh = 0,
+};
+
+/*!
+ * \brief   obtain the number of used ports
+ * \param   sc_config       the global configuration
+ * \param   nb_used_ports   the obtain number of used port result
+ * \param   port_indices    pointer to an array to store actual index of used ports
+ * \return  zero for successfully initialization
+ */
+int get_used_ports_id(struct sc_config *sc_config, uint16_t *nb_used_ports, uint16_t *port_indices){
+    uint16_t i, port_index, nb_ports;
+
+    /* check available ports */
+    nb_ports = rte_eth_dev_count_avail();
+    if(nb_ports == 0){
+        SC_ERROR_DETAILS("no ethernet port available");
+        return SC_ERROR_INTERNAL;
+    }
+
+    for(i=0, port_index=0; port_index<nb_ports; port_index++){
+        /* skip the port if it's unused */
+        if (!rte_eth_dev_is_valid_port(port_index)){
+            SC_WARNING_DETAILS("port %d is not valid\n", port_index);
+            continue;
+        }
+
+        /* skip the port if not specified in the configuratio file */
+        if(!_is_port_choosed(port_index, sc_config))
+            continue;
+        
+        if(i > SC_MAX_USED_PORTS){
+            SC_ERROR_DETAILS(
+                "too many used port (%d), try modify macro SC_MAX_USED_PORTS (%d)", i, SC_MAX_USED_PORTS)
+        }
+ 
+        port_indices[i] = port_index;
+        
+        i++;
+    }
+
+    *nb_used_ports = i;
+
+    return SC_SUCCESS;
+}
+
+/*!
  * \brief   initialize all available dpdk port
  * \param   sc_config   the global configuration
  * \return  zero for successfully initialization
@@ -98,7 +166,7 @@ int init_ports(struct sc_config *sc_config){
             continue;
 
         /* initialize the current port */
-        if(_init_single_port(port_index, sc_config) != SC_SUCCESS){
+        if(_init_single_port(port_index, i, sc_config) != SC_SUCCESS){
             printf("failed to initailize port %d\n", port_index);
             return SC_ERROR_INTERNAL;
         }
@@ -107,6 +175,14 @@ int init_ports(struct sc_config *sc_config){
         _print_port_info(port_index);
 
         sc_config->port_ids[i] = port_index; 
+
+        sc_config->sc_port[i].logical_port_id = i;
+        sc_config->sc_port[i].port_id = port_index;
+        if(SC_SUCCESS != sc_util_get_mac_by_port_id(sc_config, port_index, sc_config->sc_port[i].port_mac)){
+            SC_ERROR_DETAILS("failed to obtain port MAC address, something's wrong");
+            return SC_ERROR_INTERNAL;
+        }
+
         i++;
     }
 
@@ -116,11 +192,12 @@ int init_ports(struct sc_config *sc_config){
 
 /*!
  * \brief   initialize a specified port
- * \param   port_index  the index of the init port
- * \param   sc_config   the global configuration
+ * \param   port_index          the actual index of the init port
+ * \param   port_logical_index  the logical index of the init port
+ * \param   sc_config           the global configuration
  * \return  zero for successfully initialization
  */
-int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
+int _init_single_port(uint16_t port_index, uint16_t port_logical_index, struct sc_config *sc_config){
     int ret;
     uint16_t i;
     struct rte_eth_conf port_conf = port_conf_default;
@@ -185,7 +262,7 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
     /* obtain mac address of the port */
     ret = rte_eth_macaddr_get(port_index, &eth_addr);
     if (ret < 0) {
-        printf("failed to obtain mac address of port %d: %s\n", 
+        SC_ERROR_DETAILS("failed to obtain mac address of port %d: %s\n", 
             port_index, rte_strerror(-ret));
         return SC_ERROR_INTERNAL;
     }
@@ -195,7 +272,7 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
         port_index, sc_config->nb_rx_rings_per_port, 
         sc_config->nb_tx_rings_per_port, &port_conf);
 	if (ret != 0) {
-        printf("failed to configure port %d: %s\n",
+        SC_ERROR_DETAILS("failed to configure port %d: %s\n",
             port_index, rte_strerror(-ret));
         return SC_ERROR_INTERNAL;
     }
@@ -203,11 +280,15 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
     /* allocate rx_rings */
     for (i = 0; i < sc_config->nb_rx_rings_per_port; i++) {
         ret = rte_eth_rx_queue_setup(
-            port_index, i, sc_config->rx_queue_len,
-			rte_eth_dev_socket_id(port_index), NULL, 
-            sc_config->pktmbuf_pool);
+            /* port_id */ port_index,
+            /* rx_queue_id */ i,
+            /* nb_rx_desc */ sc_config->rx_queue_len,
+            /* socket_id */ rte_eth_dev_socket_id(port_index),
+            /* rx_conf */ &rx_queue_conf, 
+            /* mb_pool */ sc_config->rx_pktmbuf_pool[RX_QUEUE_MEMORY_POOL_ID(sc_config, port_logical_index, i)]
+        );
 		if (ret < 0) {
-            printf("failed to setup rx_ring %d for port %d: %s\n", 
+            SC_ERROR_DETAILS("failed to setup rx queue %d for port %d: %s\n", 
                 i, port_index, rte_strerror(-ret));
             return SC_ERROR_INTERNAL;
         }
@@ -216,10 +297,14 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
     /* allocate tx_rings */
     for (i = 0; i < sc_config->nb_tx_rings_per_port; i++) {
         ret = rte_eth_tx_queue_setup(
-            port_index, i, sc_config->tx_queue_len,
-			rte_eth_dev_socket_id(port_index), NULL);
+            /* port_id */ port_index, 
+            /* tx_queue_id */ i, 
+            /* nb_tx_desc */ sc_config->tx_queue_len,
+			/* socket_id */ rte_eth_dev_socket_id(port_index), 
+            /* tx_conf */ &tx_queue_conf
+        );
 		if (ret < 0) {
-            printf("failed to setup tx_ring %d for port %d: %s\n", 
+            SC_ERROR_DETAILS("failed to setup tx_ring %d for port %d: %s\n", 
                 i, port_index, rte_strerror(-ret));
             return SC_ERROR_INTERNAL;
         }
@@ -228,7 +313,7 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
     /* start the port */
     ret = rte_eth_dev_start(port_index);
 	if (ret < 0) {
-        printf("failed to start port %d: %s\n", 
+        SC_ERROR_DETAILS("failed to start port %d: %s\n", 
             port_index, rte_strerror(-ret));
         return SC_ERROR_INTERNAL;
     }
@@ -237,7 +322,7 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
     if(sc_config->enable_promiscuous){
 		ret = rte_eth_promiscuous_enable(port_index);
 		if (ret != 0) {
-            printf("failed to set port %d as promiscuous mode: %s\n", 
+            SC_ERROR_DETAILS("failed to set port %d as promiscuous mode: %s\n", 
                 port_index, rte_strerror(-ret));
             return SC_ERROR_INTERNAL;
         }
@@ -245,11 +330,11 @@ int _init_single_port(uint16_t port_index, struct sc_config *sc_config){
 
     /* print finish message */
     #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
-        printf("finish init port %u, MAC address: " RTE_ETHER_ADDR_PRT_FMT "\n\n",
+        SC_LOG("finish init port %u, MAC address: " RTE_ETHER_ADDR_PRT_FMT "\n\n",
             port_index,
             RTE_ETHER_ADDR_BYTES(&eth_addr));
     #else
-        printf("finish init port %u\n\n", port_index);
+        SC_LOG("finish init port %u\n\n", port_index);
     #endif // RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         
     return SC_SUCCESS;

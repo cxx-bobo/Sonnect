@@ -11,6 +11,7 @@
 #include <rte_mempool.h>
 #include <rte_version.h>
 #include <rte_lcore.h>
+#include <rte_ethdev.h>
 
 extern volatile bool sc_force_quit;
 
@@ -37,9 +38,24 @@ extern volatile bool sc_force_quit;
 /* maximum number of lcores to used */
 #define SC_MAX_NB_CORES RTE_MAX_LCORE
 
+#define RX_QUEUE_MEMORY_POOL_ID(scc, logical_port_id, core_id) \
+    logical_port_id*scc->nb_rx_rings_per_port+core_id
+
+#define TX_QUEUE_MEMORY_POOL_ID(scc, logical_port_id, core_id) \
+    logical_port_id*scc->nb_tx_rings_per_port+core_id
+
 struct app_config;
 struct doca_config;
 struct per_core_meta;
+
+/*!
+ * \brief meta of a dpdk port
+ */
+struct sc_port {
+    uint16_t port_id;
+    uint16_t logical_port_id;
+    char port_mac[RTE_ETHER_ADDR_FMT_SIZE];
+};
 
 /* global configuration of SoConnect */
 struct sc_config {
@@ -54,6 +70,7 @@ struct sc_config {
 
     /* dpdk port */
     char* port_mac[SC_MAX_NB_PORTS];
+    struct sc_port sc_port[SC_MAX_NB_PORTS];
     uint16_t port_ids[SC_MAX_NB_PORTS];
     uint16_t nb_conf_ports; // number of ports specified inside configuration file
     uint16_t nb_used_ports; // number of initialized ports eventually
@@ -70,6 +87,8 @@ struct sc_config {
 
     /* dpdk memory */
     struct rte_mempool *pktmbuf_pool;
+    struct rte_mempool **rx_pktmbuf_pool;  // index: port_id * nb_rx_rings_per_port + queue_id
+    struct rte_mempool **tx_pktmbuf_pool;  // index: port_id * nb_tx_rings_per_port + queue_id
     uint16_t nb_memory_channels_per_socket;
 
     /* application global configuration */
@@ -100,6 +119,10 @@ struct sc_config {
 
 #define PER_CORE_MBUF_POOL(scc) (PER_CORE_META(scc)).pktmbuf_pool
 #define PER_CORE_MBUF_POOL_BY_CORE_ID(scc, id) (PER_CORE_META_BY_CORE_ID(scc,id)).pktmbuf_pool
+#define PER_CORE_RX_MBUF_POOL(scc, logical_port_id) \
+    scc->rx_pktmbuf_pool[RX_QUEUE_MEMORY_POOL_ID(scc,logical_port_id,rte_lcore_index(rte_lcore_id()))]
+#define PER_CORE_TX_MBUF_POOL(scc, logical_port_id) \
+    scc->tx_pktmbuf_pool[TX_QUEUE_MEMORY_POOL_ID(scc,logical_port_id,rte_lcore_index(rte_lcore_id()))]
 
 #define PER_CORE_APP_META(scc) ((struct _per_core_app_meta*)scc->per_core_app_meta)[rte_lcore_index(rte_lcore_id())]
 #define PER_CORE_APP_META_BY_CORE_ID(scc, id) ((struct _per_core_app_meta*)scc->per_core_app_meta)[id]

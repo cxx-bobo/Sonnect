@@ -34,7 +34,7 @@ int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
     /* used send port */
     if(!strcmp(key, "send_port_mac")){
         int nb_send_ports = 0, i;
-        uint32_t port_id;
+        uint32_t port_id, logical_port_id;
         char *delim = ",";
         char *p, *port_mac;
 
@@ -59,6 +59,7 @@ int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
             }
             memset(port_mac, 0, strlen(p)+1);
 
+            /* obtain port id by given mac address */
             strcpy(port_mac, p);
             if(SC_SUCCESS != sc_util_get_port_id_by_mac(sc_config, port_mac, &port_id)){
                 SC_ERROR_DETAILS("failed to get port id by mac %s", port_mac);
@@ -66,8 +67,18 @@ int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
                 goto free_send_port_mac;
             }
 
+            /* obtain logical port id by port id */
+            if(SC_SUCCESS != sc_util_get_logical_port_id_by_port_id(sc_config, port_id, &logical_port_id)){
+                SC_ERROR_DETAILS("failed to get logical port id by port id %u", port_id);
+                result = SC_ERROR_INVALID_VALUE;
+                goto free_send_port_mac;
+            }
+
+            /* we record all id info in previous for fatser indexing while sending packets */
             INTERNAL_CONF(sc_config)->send_port_idx[nb_send_ports] = port_id;
+            INTERNAL_CONF(sc_config)->send_port_logical_idx[nb_send_ports] = logical_port_id;
             INTERNAL_CONF(sc_config)->send_port_mac_address[nb_send_ports] = port_mac;
+            
             nb_send_ports += 1;
         }
 
@@ -85,7 +96,7 @@ invalid_send_port_mac:
     /* used recv port */
     if(!strcmp(key, "recv_port_mac")){
         int nb_recv_ports = 0, i;
-        uint32_t port_id;
+        uint32_t port_id, logical_port_id;
         char *delim = ",";
         char *p, *port_mac;
 
@@ -110,6 +121,7 @@ invalid_send_port_mac:
             }
             memset(port_mac, 0, strlen(p)+1);
 
+            /* obtain port id by given mac address */
             strcpy(port_mac, p);
             if(SC_SUCCESS != sc_util_get_port_id_by_mac(sc_config, port_mac, &port_id)){
                 SC_ERROR_DETAILS("failed to get port id by mac %s", port_mac);
@@ -117,8 +129,18 @@ invalid_send_port_mac:
                 goto free_recv_port_mac;
             }
 
+            /* obtain logical port id by port id */
+            if(SC_SUCCESS != sc_util_get_logical_port_id_by_port_id(sc_config, port_id, &logical_port_id)){
+                SC_ERROR_DETAILS("failed to get logical port id by port id %u", port_id);
+                result = SC_ERROR_INVALID_VALUE;
+                goto free_send_port_mac;
+            }
+
+            /* we record all id info in previous for fatser indexing while sending packets */
             INTERNAL_CONF(sc_config)->recv_port_idx[nb_recv_ports] = port_id;
+            INTERNAL_CONF(sc_config)->recv_port_logical_idx[nb_recv_ports] = logical_port_id;
             INTERNAL_CONF(sc_config)->recv_port_mac_address[nb_recv_ports] = port_mac;
+
             nb_recv_ports += 1;
         }
 
@@ -376,27 +398,27 @@ try_receive_ack:
         }
     }
 
-    /* assemble fininal pkt brust */
-    if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
-            /* mp */ PER_CORE_MBUF_POOL(sc_config), 
-            /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
-            /* eth_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_eth_hdr,
-            /* vlan_enabled */ 0,
-            /* ip_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_ipv4_hdr,
-            /* ipv4 */ 1,
-            /* proto */ IPPROTO_UDP,
-            /* proto_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_udp_hdr,
-            /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
-            /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len
-    )){
-        SC_THREAD_ERROR("failed to assemble final packet");
-        result = SC_ERROR_INTERNAL;
-        goto process_client_ready_to_exit;
-    }
-
     /* send packet */
     nb_tx = 0;
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
+        /* assemble fininal pkt brust */
+        if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
+                /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
+                /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
+                /* eth_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_eth_hdr,
+                /* vlan_enabled */ 0,
+                /* ip_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_ipv4_hdr,
+                /* ipv4 */ 1,
+                /* proto */ IPPROTO_UDP,
+                /* proto_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_udp_hdr,
+                /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
+                /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len
+        )){
+            SC_THREAD_ERROR("failed to assemble final packet");
+            result = SC_ERROR_INTERNAL;
+            goto process_client_ready_to_exit;
+        }
+
         nb_tx += rte_eth_tx_burst(
             /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
             /* queue_id */ queue_id,

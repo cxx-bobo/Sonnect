@@ -49,6 +49,7 @@ struct _internal_config {
     /* used echo ports */
     uint32_t nb_send_ports, nb_recv_ports;
     uint32_t send_port_idx[SC_MAX_NB_PORTS], recv_port_idx[SC_MAX_NB_PORTS];
+    uint32_t send_port_logical_idx[SC_MAX_NB_PORTS], recv_port_logical_idx[SC_MAX_NB_PORTS];
     char *send_port_mac_address[SC_MAX_NB_PORTS];
     char *recv_port_mac_address[SC_MAX_NB_PORTS];
 };

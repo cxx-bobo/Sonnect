@@ -292,7 +292,7 @@ static int _check_configuration(struct sc_config *sc_config, int argc, char **ar
     for(i=0; i<sc_config->nb_used_cores; i++){
         // TODO: rte_lcore_to_socket_id always return 0, is that a bug?
         if (i == 0) {
-        socket_id = rte_lcore_to_socket_id(sc_config->core_ids[i]);
+            socket_id = rte_lcore_to_socket_id(sc_config->core_ids[i]);
         } else {
         if (rte_lcore_to_socket_id(sc_config->core_ids[i]) != socket_id) {
             SC_ERROR_DETAILS("specified lcores aren't locate at the same NUMA socket");

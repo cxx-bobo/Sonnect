@@ -34,6 +34,9 @@ int sc_util_check_core_id(uint32_t core_id);
 
 /* port operation */
 int sc_util_get_port_id_by_mac(struct sc_config *sc_config, char* port_mac, uint32_t *port_id);
+int sc_util_get_mac_by_port_id(struct sc_config *sc_config, uint32_t port_id, char* port_mac);
+int sc_util_get_port_id_by_logical_port_id(struct sc_config *sc_config,  uint32_t logical_port_id, uint32_t *port_id);
+int sc_util_get_logical_port_id_by_port_id(struct sc_config *sc_config, uint32_t port_id, uint32_t *logical_port_id);
 
 /* file operation */
 int sc_util_parse_config(FILE* fp, struct sc_config* sc_config, 
