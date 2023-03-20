@@ -135,7 +135,7 @@ struct app_config {
     int (*process_enter)(struct sc_config *sc_config);
     
     /* callback function (worker thread): processing single received packet (server mode) */
-    int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t *fwd_port_id, bool *need_forward);
+    int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, bool *need_forward);
     
     /* callback function (worker thread): client logic (client mode) */
     int (*process_client)(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);

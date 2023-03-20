@@ -115,7 +115,7 @@ int _worker_loop(void* param){
 
                 for(j=0; j<nb_rx; j++){
                     /* Hook Point: Packet Processing */
-                    if(sc_config->app_config->process_pkt(pkt[j], sc_config, &forward_port_id, &need_forward) != SC_SUCCESS){
+                    if(sc_config->app_config->process_pkt(pkt[j], sc_config, i, &forward_port_id, &need_forward) != SC_SUCCESS){
                         SC_THREAD_WARNING("failed to process the received frame");
                     }
 
