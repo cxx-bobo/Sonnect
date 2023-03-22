@@ -535,6 +535,25 @@ invalid_enable_rss:
         SC_ERROR_DETAILS("invalid configuration enable_rss\n");
     }
 
+    /* config: whether to enable offload */
+    if(!strcmp(key, "enable_offload")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if (!strcmp(value, "true")){
+            sc_config->enable_offload = true;
+        } else if (!strcmp(value, "false")){
+            sc_config->enable_offload = false;
+        } else {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_enable_offload;
+        }
+
+        goto exit;
+
+invalid_enable_offload:
+        SC_ERROR_DETAILS("invalid configuration enable_offload\n");
+    }
+
     /* config: rss symmetric mode */
     if(!strcmp(key, "rss_symmetric_mode")){
         value = sc_util_del_both_trim(value);
@@ -580,6 +599,26 @@ invalid_rss_symmetric_mode:
                     rss_hash_field |= RTE_ETH_RSS_IP;
                 #else
                     rss_hash_field |= ETH_RSS_IP;
+                #endif
+            } else if(!strcmp(hash_field_str, "ipv4") || !strcmp(hash_field_str, "IPv4")){
+                /*! 
+                 * \note
+                 * to suit those NICs that don't support RTE_ETH_RSS_NONFRAG_IPV4_OTHER
+                 */
+                #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+                    rss_hash_field |= RTE_ETH_RSS_IPV4;
+                #else
+                    rss_hash_field |= ETH_RSS_IPV4;
+                #endif
+            } else if(!strcmp(hash_field_str, "ipv6") || !strcmp(hash_field_str, "IPv6")){
+                /*! 
+                 * \note
+                 * to suit those NICs that don't support RTE_ETH_RSS_NONFRAG_IPV6_OTHER
+                 */
+                #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+                    rss_hash_field |= RTE_ETH_RSS_IPV6;
+                #else
+                    rss_hash_field |= ETH_RSS_IPV6;
                 #endif
             } else if(!strcmp(hash_field_str, "tcp") || !strcmp(hash_field_str, "TCP")){
                 #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)

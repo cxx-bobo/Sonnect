@@ -79,6 +79,7 @@ struct sc_config {
     uint32_t rx_queue_len;
     uint32_t tx_queue_len;
     bool enable_promiscuous;
+    bool enable_offload;
 
     /* rss */
     bool enable_rss;

@@ -212,29 +212,31 @@ int _init_single_port(uint16_t port_index, uint16_t port_logical_index, struct s
         return SC_ERROR_INTERNAL;
     }
 
-    /* RX offload capacity check and config */
-    if (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_CHECKSUM){
-        port_conf.rxmode.offloads |= DEV_RX_OFFLOAD_CHECKSUM;
-    }
+    if(sc_config->enable_offload){
+        /* RX offload capacity check and config */
+        if (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_CHECKSUM){
+            port_conf.rxmode.offloads |= DEV_RX_OFFLOAD_CHECKSUM;
+        }
 
-    /* TX offload capacity check and config */
-    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE){
-        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MBUF_FAST_FREE;
-    }
-    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MT_LOCKFREE){
-        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MT_LOCKFREE;
-    }
-    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM){
-        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_IPV4_CKSUM;
-    }
-    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM){
-        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_UDP_CKSUM;
-    }
-    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM){
-        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_TCP_CKSUM;
-    }
-    if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_SCTP_CKSUM){
-        port_conf.txmode.offloads |= DEV_TX_OFFLOAD_SCTP_CKSUM;
+        /* TX offload capacity check and config */
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE){
+            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+        }
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MT_LOCKFREE){
+            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MT_LOCKFREE;
+        }
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM){
+            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_IPV4_CKSUM;
+        }
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM){
+            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_UDP_CKSUM;
+        }
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM){
+            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_TCP_CKSUM;
+        }
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_SCTP_CKSUM){
+            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_SCTP_CKSUM;
+        }
     }
 
     /* configure rss */
