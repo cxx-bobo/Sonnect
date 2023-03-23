@@ -3,6 +3,7 @@
 #include "sc_log.h"
 #include "sc_utils/pktgen.h"
 #include "sc_utils/tail_latency.h"
+#include "sc_utils/sort.h"
 
 int __bubble_sort(long *data, uint64_t length, bool is_increament);
 
@@ -29,7 +30,11 @@ int sc_util_tail_latency(
         // SC_THREAD_LOG("latency_usec[%d]: %ld", i, latency_usec[i]);
     }
 
-    __bubble_sort(latency, nb_latency, true);
+    if(SC_SUCCESS != sc_util_merge_sort_long(latency, nb_latency, true)){
+        SC_THREAD_ERROR("failed to sort latency result");
+        result = SC_ERROR_INTERNAL;
+        goto free_latency;
+    }
 
     *p_latency = latency[p_nb_latency];
 
@@ -38,27 +43,4 @@ free_latency:
 
 sc_util_tail_latency_exit:
     return result;
-}
-
-int __bubble_sort(long *data, uint64_t length, bool is_increament){
-    for(uint64_t i=length-1; i>=0; i--){
-        bool sorted = false;
-        for(uint64_t j=0; j<i; j++){
-            // this is a XNOR operator, the truth table is:
-            // | is_increament | j is larger |     opeartion    |
-            // |      T        |      T      |   switch j & j+1 |
-            // |      F        |      F      |   switch j & j+1 |
-            // |      T        |      F      |     do nothing   |
-            // |      F        |      T      |     do nothing   |
-            if(is_increament == (data[j] > data[j+1])){
-                long temp = data[j+1];
-                data[j+1] = data[j];
-                data[j] = temp;
-                sorted = true;
-            }
-        }
-        if(!sorted) break;
-    }
-
-    return SC_SUCCESS;
 }

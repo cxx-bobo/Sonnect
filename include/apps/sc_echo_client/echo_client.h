@@ -9,6 +9,10 @@
 #include "sc_utils.h"
 #include "sc_utils/pktgen.h"
 
+#if defined(MODE_LATENCY)
+    #define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 24)-1
+#endif
+
 struct _per_core_app_meta {
     /* number of packet to be sent (per core) */
     uint32_t nb_pkt_budget_per_core;
@@ -30,13 +34,25 @@ struct _per_core_app_meta {
     struct timeval end_time;
     struct timeval last_send_time;
 
-    struct sc_pkt_hdr test_pkt;
+    uint64_t last_used_flow;
+    struct sc_pkt_hdr *test_pkts;
 
     #if defined(MODE_LATENCY)
         long min_rtt_sec;
         long min_rtt_usec;
         long max_rtt_sec;
         long max_rtt_usec;
+
+        /* calculate tail latency */
+        uint64_t nb_latency_data;
+        uint64_t latency_data_pointer;
+        long latency_sec[SC_ECHO_CLIENT_MAX_LATENCY_NB];
+        long latency_usec[SC_ECHO_CLIENT_MAX_LATENCY_NB];
+
+        long tail_latency_p99;
+        long tail_latency_p80;
+        long tail_latency_p50;
+        long tail_latency_p10;
     #endif
 };
 
@@ -45,6 +61,7 @@ struct _internal_config {
     uint32_t nb_pkt_budget;
     uint32_t pkt_len;           /* unit: bytes */
     uint32_t nb_pkt_per_burst;
+    uint64_t nb_flow_per_core;
 
     /* used echo ports */
     uint32_t nb_send_ports, nb_recv_ports;

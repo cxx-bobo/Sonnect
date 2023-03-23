@@ -3,6 +3,7 @@
 #include "sc_echo_client/echo_client.h"
 #include "sc_utils/pktgen.h"
 #include "sc_utils/rss.h"
+#include "sc_utils/tail_latency.h"
 #include "sc_utils.h"
 #include "sc_log.h"
 
@@ -187,6 +188,27 @@ invalid_nb_pkt_per_burst:
         SC_ERROR_DETAILS("invalid configuration nb_pkt_per_burst\n");
     }
     
+    /* number of flow per core */
+    if(!strcmp(key, "nb_flow_per_core")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        uint64_t nb_flow_per_core;
+        if(sc_util_atoui_64(value, &nb_flow_per_core) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_nb_flow_per_core;
+        }
+        if(nb_flow_per_core == 0){
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_nb_flow_per_core;
+        }
+
+        INTERNAL_CONF(sc_config)->nb_flow_per_core = nb_flow_per_core;
+        goto _parse_app_kv_pair_exit;
+
+invalid_nb_flow_per_core:
+        SC_ERROR_DETAILS("invalid configuration nb_flow_per_core\n");
+    }
+
     /* number of packet to be send (enabled only there's no duration limitation) */
     if(!strcmp(key, "nb_pkt_budget")){
         value = sc_util_del_both_trim(value);
@@ -215,21 +237,35 @@ _parse_app_kv_pair_exit:
 int _process_enter(struct sc_config *sc_config){
     int i, result = SC_SUCCESS;
     
-    /* generate random packet header */
-    result = sc_util_generate_random_pkt_hdr(
-        /* sc_pkt_hdr */ &PER_CORE_APP_META(sc_config).test_pkt,
-        /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
-        /* nb_queues */ sc_config->nb_rx_rings_per_port,
-        /* used_queue_id */ rte_lcore_index(rte_lcore_id()),
-        /* l3_type */ RTE_ETHER_TYPE_IPV4,
-        /* l4_type */ IPPROTO_UDP,
-        /* rss_hash_field */ sc_config->rss_hash_field
-    );
-    if(result != SC_SUCCESS){
-        SC_THREAD_ERROR("failed to generate new pkt header");
+    /* allocate memory for storing generated packet headers */
+    struct sc_pkt_hdr *pkt_hdrs = (struct sc_pkt_hdr*)rte_malloc(
+        NULL, sizeof(struct sc_pkt_hdr)*INTERNAL_CONF(sc_config)->nb_flow_per_core, 0);
+    if(unlikely(!pkt_hdrs)){
+        SC_THREAD_ERROR_DETAILS("failed to allocate memory for pkt_hdrs");
+        result = SC_ERROR_MEMORY;
         goto _process_enter_exit;
     }
+    memset(pkt_hdrs, 0, sizeof(struct sc_pkt_hdr)*INTERNAL_CONF(sc_config)->nb_flow_per_core);
+    PER_CORE_APP_META(sc_config).test_pkts = pkt_hdrs;
+    PER_CORE_APP_META(sc_config).last_used_flow = 0;
 
+    /* generate random packet header */
+    for(i=0; i<INTERNAL_CONF(sc_config)->nb_flow_per_core; i++){
+        result = sc_util_generate_random_pkt_hdr(
+            /* sc_pkt_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[i],
+            /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
+            /* nb_queues */ sc_config->nb_rx_rings_per_port,
+            /* used_queue_id */ rte_lcore_index(rte_lcore_id()),
+            /* l3_type */ RTE_ETHER_TYPE_IPV4,
+            /* l4_type */ IPPROTO_UDP,
+            /* rss_hash_field */ sc_config->rss_hash_field
+        );
+        if(result != SC_SUCCESS){
+            SC_THREAD_ERROR("failed to generate new pkt header");
+            goto _process_enter_exit;
+        }
+    }
+    
     /* allocate array for pointers to storing send pkt_bufs */
     PER_CORE_APP_META(sc_config).send_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
         sizeof(struct rte_mbuf*)*INTERNAL_CONF(sc_config)->nb_pkt_per_burst, 0);
@@ -253,6 +289,8 @@ int _process_enter(struct sc_config *sc_config){
         PER_CORE_APP_META(sc_config).min_rtt_usec = 0;
         PER_CORE_APP_META(sc_config).max_rtt_sec = 0;
         PER_CORE_APP_META(sc_config).max_rtt_usec = 0;
+        PER_CORE_APP_META(sc_config).nb_latency_data = 0;
+        PER_CORE_APP_META(sc_config).latency_data_pointer = 0;
     #endif
 
     /* initialize the waiting confirm indicator */
@@ -353,7 +391,22 @@ try_receive_ack:
                     ){
                         PER_CORE_APP_META(sc_config).max_rtt_sec = interval_sec;
                         PER_CORE_APP_META(sc_config).max_rtt_usec = interval_usec;
-                    }                    
+                    }
+
+                    /* record the latency to calculate tail latency */
+                    if(PER_CORE_APP_META(sc_config).latency_data_pointer == SC_ECHO_CLIENT_MAX_LATENCY_NB){
+                        PER_CORE_APP_META(sc_config).latency_data_pointer = 0;
+                    }
+
+                    PER_CORE_APP_META(sc_config).latency_sec[PER_CORE_APP_META(sc_config).latency_data_pointer] 
+                        = interval_sec;
+                    PER_CORE_APP_META(sc_config).latency_usec[PER_CORE_APP_META(sc_config).latency_data_pointer] 
+                        = interval_usec;
+
+                    PER_CORE_APP_META(sc_config).latency_data_pointer += 1;
+                    if(PER_CORE_APP_META(sc_config).nb_latency_data < SC_ECHO_CLIENT_MAX_LATENCY_NB){
+                        PER_CORE_APP_META(sc_config).nb_latency_data += 1;
+                    }
                 #endif
                 
                 if(PER_CORE_APP_META(sc_config).wait_ack >= nb_rx){
@@ -406,12 +459,18 @@ try_receive_ack:
         if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
                 /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
                 /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
-                /* eth_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_eth_hdr,
+                /* eth_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[
+                                    PER_CORE_APP_META(sc_config).last_used_flow
+                                ].pkt_eth_hdr,
                 /* vlan_enabled */ 0,
-                /* ip_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_ipv4_hdr,
+                /* ip_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[
+                                    PER_CORE_APP_META(sc_config).last_used_flow
+                                ].pkt_ipv4_hdr,
                 /* ipv4 */ 1,
                 /* proto */ IPPROTO_UDP,
-                /* proto_hdr */ &PER_CORE_APP_META(sc_config).test_pkt.pkt_udp_hdr,
+                /* proto_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[
+                                    PER_CORE_APP_META(sc_config).last_used_flow
+                                ].pkt_udp_hdr,
                 /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
                 /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len
         )){
@@ -439,6 +498,11 @@ try_receive_ack:
     PER_CORE_APP_META(sc_config).nb_send_pkt += nb_tx;
     PER_CORE_APP_META(sc_config).nb_last_send_pkt = nb_tx;
     PER_CORE_APP_META(sc_config).wait_ack += nb_tx;
+    if(PER_CORE_APP_META(sc_config).last_used_flow == INTERNAL_CONF(sc_config)->nb_flow_per_core){
+        PER_CORE_APP_META(sc_config).last_used_flow = 0;
+    } else {
+        PER_CORE_APP_META(sc_config).last_used_flow += 1;
+    }
 
     /* return back send pkt_mbuf */
     for(j=0; j<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; j++) {
@@ -460,6 +524,8 @@ process_client_exit:
  * \return  zero for successfully executing
  */
 int _process_exit(struct sc_config *sc_config){
+    int result = SC_SUCCESS;
+
     long total_interval_sec;
     long total_interval_usec;
 
@@ -480,6 +546,8 @@ int _process_exit(struct sc_config *sc_config){
     );
 
     #if defined(MODE_LATENCY)
+        long p99 = 0,  p80 = 0, p50 = 0, p10 = 0;
+
         SC_THREAD_LOG("max round-trip-time: %d us", SC_UTIL_TIME_INTERVL_US(
             PER_CORE_APP_META(sc_config).max_rtt_sec, 
             PER_CORE_APP_META(sc_config).max_rtt_usec)
@@ -488,6 +556,70 @@ int _process_exit(struct sc_config *sc_config){
             PER_CORE_APP_META(sc_config).min_rtt_sec, 
             PER_CORE_APP_META(sc_config).min_rtt_usec)
         )
+        
+        if(PER_CORE_APP_META(sc_config).nb_latency_data == 0){
+            goto _process_exit_exit;
+        }
+
+        if(SC_SUCCESS != sc_util_tail_latency(
+            /* latency_sec */ PER_CORE_APP_META(sc_config).latency_sec,
+            /* latency_usec */ PER_CORE_APP_META(sc_config).latency_usec,
+            /* p_latency */ &p99,
+            /* nb_latency */ PER_CORE_APP_META(sc_config).nb_latency_data,
+            /* percent */ 0.99
+        )){
+            SC_THREAD_ERROR("failed to obtain p99 tail latency");
+            result = SC_ERROR_INTERNAL;
+            goto _process_exit_exit;
+        }
+        PER_CORE_APP_META(sc_config).tail_latency_p99 = p99;
+
+        if(SC_SUCCESS != sc_util_tail_latency(
+            /* latency_sec */ PER_CORE_APP_META(sc_config).latency_sec,
+            /* latency_usec */ PER_CORE_APP_META(sc_config).latency_usec,
+            /* p_latency */ &p80,
+            /* nb_latency */ PER_CORE_APP_META(sc_config).nb_latency_data,
+            /* percent */ 0.80
+        )){
+            SC_THREAD_ERROR("failed to obtain p80 tail latency");
+            result = SC_ERROR_INTERNAL;
+            goto _process_exit_exit;
+        }
+        PER_CORE_APP_META(sc_config).tail_latency_p80 = p80;
+
+        if(SC_SUCCESS != sc_util_tail_latency(
+            /* latency_sec */ PER_CORE_APP_META(sc_config).latency_sec,
+            /* latency_usec */ PER_CORE_APP_META(sc_config).latency_usec,
+            /* p_latency */ &p50,
+            /* nb_latency */ PER_CORE_APP_META(sc_config).nb_latency_data,
+            /* percent */ 0.50
+        )){
+            SC_THREAD_ERROR("failed to obtain p50 tail latency");
+            result = SC_ERROR_INTERNAL;
+            goto _process_exit_exit;
+        }
+        PER_CORE_APP_META(sc_config).tail_latency_p50 = p50;
+
+        if(SC_SUCCESS != sc_util_tail_latency(
+            /* latency_sec */ PER_CORE_APP_META(sc_config).latency_sec,
+            /* latency_usec */ PER_CORE_APP_META(sc_config).latency_usec,
+            /* p_latency */ &p10,
+            /* nb_latency */ PER_CORE_APP_META(sc_config).nb_latency_data,
+            /* percent */ 0.10
+        )){
+            SC_THREAD_ERROR("failed to obtain p10 tail latency");
+            result = SC_ERROR_INTERNAL;
+            goto _process_exit_exit;
+        }
+        PER_CORE_APP_META(sc_config).tail_latency_p10 = p10;
+
+        SC_THREAD_LOG("tail latency: \
+                \n\r\tp99: %ld us \
+                \n\r\tp80: %ld us \
+                \n\r\tp50: %ld us \
+                \n\r\tp10: %ld us", 
+            p99, p80, p50, p10
+        );
     #endif
 
     #if defined(MODE_THROUGHPUT)
@@ -497,16 +629,8 @@ int _process_exit(struct sc_config *sc_config){
         );
     #endif
 
-    /* 
-     * NOTE: wait all work threads to reach here then exit,
-     *       to ensure all packets go to the correct core
-     */
-    /*
-     * TODO: still have some packets flow to other cores
-     */
-    pthread_barrier_wait(&sc_config->pthread_barrier);
-
-    return SC_SUCCESS;
+_process_exit_exit:
+    return result;
 }
 
 /*!
@@ -530,6 +654,7 @@ int _all_exit(struct sc_config *sc_config){
     #if defined(MODE_LATENCY)
         long max_rtt_sec = 0, max_rtt_usec = 0;
         long min_rtt_sec = 100, min_rtt_usec = 0;
+        long overall_p99 = 0, overall_p80 = 0, overall_p50 = 0, overall_p10 = 0; 
 
         for(i=0; i<sc_config->nb_used_cores; i++){
             /* record the minimul interval time */
@@ -552,13 +677,31 @@ int _all_exit(struct sc_config *sc_config){
                 max_rtt_usec = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).max_rtt_usec;
             }
         }
-        
+
+        for(i=0; i<sc_config->nb_used_cores; i++){
+            overall_p99 += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).tail_latency_p99;
+            overall_p80 += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).tail_latency_p80;
+            overall_p50 += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).tail_latency_p50;
+            overall_p10 += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).tail_latency_p10;
+        }
+
         SC_LOG("[TOTAL] max round-trip-time: %d us", 
             SC_UTIL_TIME_INTERVL_US(max_rtt_sec, max_rtt_usec)
         );
         SC_LOG("[TOTAL] min round-trip-time: %d us",
             SC_UTIL_TIME_INTERVL_US(min_rtt_sec, min_rtt_usec)
         );
+        SC_THREAD_LOG(
+                    "[TOTAL] average tail latency: \
+                    \n\r\tp99: %lf us \
+                    \n\r\tp80: %lf us \
+                    \n\r\tp50: %lf us \
+                    \n\r\tp10: %lf us", 
+                (double)overall_p99 / (double)sc_config->nb_used_cores,
+                (double)overall_p80 / (double)sc_config->nb_used_cores,
+                (double)overall_p50 / (double)sc_config->nb_used_cores,
+                (double)overall_p10 / (double)sc_config->nb_used_cores
+            );
     #endif
 
     #if defined(MODE_THROUGHPUT)
@@ -579,7 +722,12 @@ int _all_exit(struct sc_config *sc_config){
                 worker_max_interval_usec = interval_usec;
             }
         }
-
+        SC_THREAD_LOG("[TOTAL] duration: %lu us",
+            SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)
+        );
+        SC_THREAD_LOG("[TOTAL] packet length: %u",
+            INTERNAL_CONF(sc_config)->pkt_len
+        );
         SC_THREAD_LOG("[TOTAL] send throughput: %f Gbps",
             (float)(nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
             / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec) * 1000)
@@ -587,6 +735,14 @@ int _all_exit(struct sc_config *sc_config){
         SC_THREAD_LOG("[TOTAL] confirm throughput: %f Gbps",
             (float)(nb_confirmed_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
             / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec) * 1000)
+        );
+        SC_THREAD_LOG("[TOTAL] send throughput: %f Mpps",
+            (float)(nb_send_pkt) 
+            / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
+        );
+        SC_THREAD_LOG("[TOTAL] confirm throughput: %f Mpps",
+            (float)(nb_confirmed_pkt) 
+            / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
         );
     #endif
 

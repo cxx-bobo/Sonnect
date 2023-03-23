@@ -104,6 +104,26 @@ int _worker_loop(void* param){
     }
     
     while(!sc_force_quit){
+        /* 
+         * use core 0 to shutdown the application while test duration 
+         * limitation is enabled and the limitation is reached
+         */
+        if(sc_config->enable_test_duration_limit && lcore_id_from_zero == 0){
+            /* record current time */
+            if(unlikely(-1 == gettimeofday(&sc_config->test_duration_end_time, NULL))){
+                SC_THREAD_ERROR_DETAILS("failed to obtain end time");
+                result = SC_ERROR_INTERNAL;
+                goto worker_exit;
+            }
+
+            /* reach the duration limitation, quit all threads */
+            if(sc_config->test_duration_end_time.tv_sec - sc_config->test_duration_start_time.tv_sec 
+                >= sc_config->test_duration){
+                    sc_force_quit = true;
+                    break;
+            }
+        }
+
         /* role: server */
         #if defined(ROLE_SERVER)
             for(i=0; i<sc_config->nb_used_ports; i++){
@@ -143,25 +163,6 @@ int _worker_loop(void* param){
             }
             if(ready_to_exit){ break; }
         #endif // ROLE_CLIENT
-
-        /* 
-         * use core 0 to shutdown the application while test duration 
-         * limitation is enabled and the limitation is reached
-         */
-        if(sc_config->enable_test_duration_limit && lcore_id_from_zero == 0){
-            /* record current time */
-            if(unlikely(-1 == gettimeofday(&sc_config->test_duration_end_time, NULL))){
-                SC_THREAD_ERROR_DETAILS("failed to obtain end time");
-                result = SC_ERROR_INTERNAL;
-                goto worker_exit;
-            }
-
-            /* reach the duration limitation, quit all threads */
-            if(sc_config->test_duration_end_time.tv_sec - sc_config->test_duration_start_time.tv_sec 
-                >= sc_config->test_duration){
-                    sc_force_quit = true;
-            }
-        }
     }
 
 exit_callback:
