@@ -8,9 +8,11 @@
     #include "sc_doca_utils.h"
 #endif
 
-#define SC_SHA_HASH_KEY_LENGTH 57
+#define SC_SHA_HASH_KEY_LENGTH 64
 
-#define SC_SHA_MAX_LATENCY_NB (1UL << 24)-1
+#if defined(MODE_LATENCY)
+    #define SC_SHA_MAX_LATENCY_NB (1UL << 24)-1
+#endif
 
 struct _per_core_app_meta {
     uint32_t sha_state[8];
@@ -20,14 +22,14 @@ struct _per_core_app_meta {
         uint64_t latency_data_pointer;
         long latency_sec[SC_SHA_MAX_LATENCY_NB];
         long latency_usec[SC_SHA_MAX_LATENCY_NB];
+
+        long tail_latency_p99;
+        long tail_latency_p80;
+        long tail_latency_p50;
+        long tail_latency_p10;
     #endif
 
     uint64_t nb_processed_pkt;
-
-    long tail_latency_p99;
-    long tail_latency_p80;
-    long tail_latency_p50;
-    long tail_latency_p10;
 };
 
 /* definition of internal config */
