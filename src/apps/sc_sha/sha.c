@@ -524,7 +524,7 @@ int _process_exit(struct sc_config *sc_config){
 
         #if defined(SC_HAS_DOCA) && defined(SC_NEED_DOCA_SHA)
             SC_THREAD_LOG(
-                    "tail latency with SHA engine: \
+                    "tail latency with Bluefield SHA engine: \
                     \n\r\tp99: %ld us \
                     \n\r\tp80: %ld us \
                     \n\r\tp50: %ld us \
@@ -532,7 +532,23 @@ int _process_exit(struct sc_config *sc_config){
                 p99, p80, p50, p10
             );
         #elif defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
-
+            SC_THREAD_LOG(
+                    "tail latency with ARM NEON: \
+                    \n\r\tp99: %ld us \
+                    \n\r\tp80: %ld us \
+                    \n\r\tp50: %ld us \
+                    \n\r\tp10: %ld us", 
+                p99, p80, p50, p10
+            );
+        #else
+            SC_THREAD_LOG(
+                    "tail latency with x86 SSE: \
+                    \n\r\tp99: %ld us \
+                    \n\r\tp80: %ld us \
+                    \n\r\tp50: %ld us \
+                    \n\r\tp10: %ld us", 
+                p99, p80, p50, p10
+            );
         #endif // SC_HAS_DOCA, SC_NEED_DOCA_SHA
     
     #endif // MODE_LATENCY
@@ -568,7 +584,7 @@ int _all_exit(struct sc_config *sc_config){
 
         #if defined(SC_HAS_DOCA) && defined(SC_NEED_DOCA_SHA)
             SC_THREAD_LOG(
-                    "[TOTAL] average tail latency with SHA engine: \
+                    "[TOTAL] average tail latency with ARM SHA engine: \
                     \n\r\tp99: %lf us \
                     \n\r\tp80: %lf us \
                     \n\r\tp50: %lf us \
@@ -579,7 +595,29 @@ int _all_exit(struct sc_config *sc_config){
                 (double)overall_p10 / (double)sc_config->nb_used_cores
             );
         #elif defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
-
+            SC_THREAD_LOG(
+                    "[TOTAL] average tail latency with ARM NEON: \
+                    \n\r\tp99: %lf us \
+                    \n\r\tp80: %lf us \
+                    \n\r\tp50: %lf us \
+                    \n\r\tp10: %lf us", 
+                (double)overall_p99 / (double)sc_config->nb_used_cores,
+                (double)overall_p80 / (double)sc_config->nb_used_cores,
+                (double)overall_p50 / (double)sc_config->nb_used_cores,
+                (double)overall_p10 / (double)sc_config->nb_used_cores
+            );
+        #else
+            SC_THREAD_LOG(
+                    "[TOTAL] average tail latency with x86 SSE: \
+                    \n\r\tp99: %lf us \
+                    \n\r\tp80: %lf us \
+                    \n\r\tp50: %lf us \
+                    \n\r\tp10: %lf us", 
+                (double)overall_p99 / (double)sc_config->nb_used_cores,
+                (double)overall_p80 / (double)sc_config->nb_used_cores,
+                (double)overall_p50 / (double)sc_config->nb_used_cores,
+                (double)overall_p10 / (double)sc_config->nb_used_cores
+            );
         #endif // SC_HAS_DOCA, SC_NEED_DOCA_SHA
     
     #endif // MODE_LATENCY
