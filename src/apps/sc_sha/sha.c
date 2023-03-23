@@ -1,7 +1,11 @@
 #include "sc_global.h"
 #include "sc_sha/sha.h"
 #include "sc_utils.h"
+#include "sc_utils/pktgen.h"
+#include "sc_utils/tail_latency.h"
 #include "sc_log.h"
+
+int __reload_sha_state(struct sc_config *sc_config);
 
 /*!
  * \brief   initialize application (internal)
@@ -9,16 +13,6 @@
  * \return  zero for successfully initialization
  */
 int _init_app(struct sc_config *sc_config){
-    /* initialize sha state (for calculation on ARM/x86 cores) */
-    INTERNAL_CONF(sc_config)->sha_state[0] = 0x6a09e667;
-    INTERNAL_CONF(sc_config)->sha_state[1] = 0xbb67ae85;
-    INTERNAL_CONF(sc_config)->sha_state[2] = 0x3c6ef372;
-    INTERNAL_CONF(sc_config)->sha_state[3] = 0xa54ff53a;
-    INTERNAL_CONF(sc_config)->sha_state[4] = 0x510e527f;
-    INTERNAL_CONF(sc_config)->sha_state[5] = 0x9b05688c;
-    INTERNAL_CONF(sc_config)->sha_state[6] = 0x1f83d9ab;
-    INTERNAL_CONF(sc_config)->sha_state[7] = 0x5be0cd19;
-
     return SC_SUCCESS;
 }
 
@@ -30,8 +24,133 @@ int _init_app(struct sc_config *sc_config){
  * \return  zero for successfully parsing
  */
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
-    int result = SC_ERROR_NOT_IMPLEMENTED;
-    SC_WARNING_DETAILS("_parse_app_kv_pair not implemented");
+    int result = SC_SUCCESS;
+
+    /* used send port */
+    if(!strcmp(key, "send_port_mac")){
+        int nb_send_ports = 0, i;
+        uint32_t port_id, logical_port_id;
+        char *delim = ",";
+        char *p, *port_mac;
+
+        for(;;){
+            if(sc_force_quit){ break; }
+
+            if(nb_send_ports == 0)
+                p = strtok(value, delim);
+            else
+                p = strtok(NULL, delim);
+            
+            if (!p) break;
+
+            p = sc_util_del_both_trim(p);
+            sc_util_del_change_line(p);
+
+            port_mac = (char*)malloc(strlen(p)+1);
+            if(unlikely(!port_mac)){
+                SC_ERROR_DETAILS("Failed to allocate memory for port_mac");
+                result = SC_ERROR_MEMORY;
+                goto free_send_port_mac;
+            }
+            memset(port_mac, 0, strlen(p)+1);
+
+            /* obtain port id by given mac address */
+            strcpy(port_mac, p);
+            if(SC_SUCCESS != sc_util_get_port_id_by_mac(sc_config, port_mac, &port_id)){
+                SC_ERROR_DETAILS("failed to get port id by mac %s", port_mac);
+                result = SC_ERROR_INVALID_VALUE;
+                goto free_send_port_mac;
+            }
+
+            /* obtain logical port id by port id */
+            if(SC_SUCCESS != sc_util_get_logical_port_id_by_port_id(sc_config, port_id, &logical_port_id)){
+                SC_ERROR_DETAILS("failed to get logical port id by port id %u", port_id);
+                result = SC_ERROR_INVALID_VALUE;
+                goto free_send_port_mac;
+            }
+
+            /* we record all id info in previous for fatser indexing while sending packets */
+            INTERNAL_CONF(sc_config)->send_port_idx[nb_send_ports] = port_id;
+            INTERNAL_CONF(sc_config)->send_port_logical_idx[nb_send_ports] = logical_port_id;
+            INTERNAL_CONF(sc_config)->send_port_mac_address[nb_send_ports] = port_mac;
+            
+            nb_send_ports += 1;
+        }
+
+        INTERNAL_CONF(sc_config)->nb_send_ports = nb_send_ports;
+
+        goto _parse_app_kv_pair_exit;
+
+free_send_port_mac:
+        for(i=0; i<nb_send_ports; i++) free(INTERNAL_CONF(sc_config)->send_port_mac_address[i]);
+
+invalid_send_port_mac:
+        SC_ERROR_DETAILS("invalid send port mac address\n");
+    }
+
+    /* used recv port */
+    if(!strcmp(key, "recv_port_mac")){
+        int nb_recv_ports = 0, i;
+        uint32_t port_id, logical_port_id;
+        char *delim = ",";
+        char *p, *port_mac;
+
+        for(;;){
+            if(sc_force_quit){ break; }
+
+            if(nb_recv_ports == 0)
+                p = strtok(value, delim);
+            else
+                p = strtok(NULL, delim);
+            
+            if (!p) break;
+
+            p = sc_util_del_both_trim(p);
+            sc_util_del_change_line(p);
+
+            port_mac = (char*)malloc(strlen(p)+1);
+            if(unlikely(!port_mac)){
+                SC_ERROR_DETAILS("Failed to allocate memory for port_mac");
+                result = SC_ERROR_MEMORY;
+                goto free_recv_port_mac;
+            }
+            memset(port_mac, 0, strlen(p)+1);
+
+            /* obtain port id by given mac address */
+            strcpy(port_mac, p);
+            if(SC_SUCCESS != sc_util_get_port_id_by_mac(sc_config, port_mac, &port_id)){
+                SC_ERROR_DETAILS("failed to get port id by mac %s", port_mac);
+                result = SC_ERROR_INVALID_VALUE;
+                goto free_recv_port_mac;
+            }
+
+            /* obtain logical port id by port id */
+            if(SC_SUCCESS != sc_util_get_logical_port_id_by_port_id(sc_config, port_id, &logical_port_id)){
+                SC_ERROR_DETAILS("failed to get logical port id by port id %u", port_id);
+                result = SC_ERROR_INVALID_VALUE;
+                goto free_send_port_mac;
+            }
+
+            /* we record all id info in previous for fatser indexing while sending packets */
+            INTERNAL_CONF(sc_config)->recv_port_idx[nb_recv_ports] = port_id;
+            INTERNAL_CONF(sc_config)->recv_port_logical_idx[nb_recv_ports] = logical_port_id;
+            INTERNAL_CONF(sc_config)->recv_port_mac_address[nb_recv_ports] = port_mac;
+
+            nb_recv_ports += 1;
+        }
+
+        INTERNAL_CONF(sc_config)->nb_recv_ports = nb_recv_ports;
+
+        goto _parse_app_kv_pair_exit;
+
+free_recv_port_mac:
+        for(i=0; i<nb_recv_ports; i++) free(INTERNAL_CONF(sc_config)->recv_port_mac_address[i]);
+
+invalid_recv_port_mac:
+        SC_ERROR_DETAILS("invalid recv port mac address\n");
+    }
+    
+_parse_app_kv_pair_exit:
     return result;
 }
 
@@ -41,8 +160,8 @@ int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
  * \return  zero for successfully executing
  */
 int _process_enter(struct sc_config *sc_config){
-    /* configure to use DOCA SHA to accelerate the hash calculation */
     #if defined(SC_HAS_DOCA) && defined(SC_NEED_DOCA_SHA)
+        /* use DOCA SHA to accelerate the hash calculation */
         int doca_result;
 
         char *dst_buffer = NULL;
@@ -155,6 +274,7 @@ int _process_enter(struct sc_config *sc_config){
         PER_CORE_DOCA_META(sc_config).sha_job = sha_job;
     #endif
 
+_process_enter_exit:
     return SC_SUCCESS;
 }
 
@@ -168,7 +288,7 @@ int _process_enter(struct sc_config *sc_config){
  * \return  zero for successfully processing
  */
 int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, bool *need_forward){
-    int i, doca_result;
+    int i, doca_result, result = SC_SUCCESS;
     char tuple_key[SC_SHA_HASH_KEY_LENGTH];
     struct rte_ether_hdr *_eth_addr;
     struct rte_ipv4_hdr *_ipv4_hdr;
@@ -213,6 +333,19 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t rec
             _udp_hdr->src_port, _udp_hdr->dst_port
         );
     #endif // RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
+
+    #if defined(MODE_LATENCY)
+        struct timeval start_time, end_time;
+        long interval_sec;
+        long interval_usec;
+
+        /* record start time */
+        if(unlikely(-1 == gettimeofday(&start_time, NULL))){
+            SC_THREAD_ERROR_DETAILS("failed to obtain recv time");
+            result = SC_ERROR_INTERNAL;
+            goto _process_pkt_exit;
+        }
+    #endif
 
     /* calculate hash value */
     #if defined(SC_HAS_DOCA) && defined(SC_NEED_DOCA_SHA)
@@ -263,16 +396,50 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t rec
 
         /* retrieve SHA result, we only use the LSB 32 bits */
         doca_buf_get_data(PER_CORE_DOCA_META(sc_config).sha_job->resp_buf, (void **)&resp_head);
-
     #elif defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
+        __reload_sha_state(sc_config);
         sha256_process_arm(
-            INTERNAL_CONF(sc_config)->sha_state, (uint8_t*)tuple_key, SC_SHA_HASH_KEY_LENGTH);
+            PER_CORE_APP_META(sc_config).sha_state, (uint8_t*)tuple_key, SC_SHA_HASH_KEY_LENGTH);
     #else
+        __reload_sha_state(sc_config);
         sha256_process_x86(
-            INTERNAL_CONF(sc_config)->sha_state, (uint8_t*)tuple_key, SC_SHA_HASH_KEY_LENGTH);
+            PER_CORE_APP_META(sc_config).sha_state, (uint8_t*)tuple_key, SC_SHA_HASH_KEY_LENGTH);
     #endif
 
-    return SC_SUCCESS;
+    #if defined(MODE_LATENCY)
+        /* record start time */
+        if(unlikely(-1 == gettimeofday(&end_time, NULL))){
+            SC_THREAD_ERROR_DETAILS("failed to obtain recv time");
+            result = SC_ERROR_INTERNAL;
+            goto _process_pkt_exit;
+        }
+
+        interval_sec = end_time.tv_sec - start_time.tv_sec;
+        interval_usec = end_time.tv_usec - start_time.tv_usec;
+
+        if(PER_CORE_APP_META(sc_config).latency_data_pointer == SC_SHA_MAX_LATENCY_NB){
+            PER_CORE_APP_META(sc_config).latency_data_pointer = 0;
+        }
+
+        PER_CORE_APP_META(sc_config).latency_sec[PER_CORE_APP_META(sc_config).latency_data_pointer] 
+            = interval_sec;
+        PER_CORE_APP_META(sc_config).latency_usec[PER_CORE_APP_META(sc_config).latency_data_pointer] 
+            = interval_usec;
+
+        PER_CORE_APP_META(sc_config).latency_data_pointer += 1;
+        if(PER_CORE_APP_META(sc_config).nb_latency_data < SC_SHA_MAX_LATENCY_NB){
+            PER_CORE_APP_META(sc_config).nb_latency_data += 1;
+        }
+    #endif
+
+    PER_CORE_APP_META(sc_config).nb_processed_pkt += 1;
+
+    /* set as forwarded, default to first send port */
+    *need_forward = true;
+    *fwd_port_id  = INTERNAL_CONF(sc_config)->send_port_idx[0];
+
+_process_pkt_exit:
+    return result;
 }
 
 /*!
@@ -293,8 +460,85 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
  * \return  zero for successfully executing
  */
 int _process_exit(struct sc_config *sc_config){
-    SC_WARNING_DETAILS("_process_exit not implemented");
-    return SC_ERROR_NOT_IMPLEMENTED;
+    int result = SC_SUCCESS;
+
+    SC_THREAD_LOG("processed packet: %lu", PER_CORE_APP_META(sc_config).nb_processed_pkt);
+
+    #if defined(MODE_LATENCY)
+        if(PER_CORE_APP_META(sc_config).nb_latency_data == 0){
+            goto _process_exit_exit;
+        }
+
+        long p99 = 0,  p80 = 0, p50 = 0, p10 = 0;
+        if(SC_SUCCESS != sc_util_tail_latency(
+            /* latency_sec */ PER_CORE_APP_META(sc_config).latency_sec,
+            /* latency_usec */ PER_CORE_APP_META(sc_config).latency_usec,
+            /* p_latency */ &p99,
+            /* nb_latency */ PER_CORE_APP_META(sc_config).nb_latency_data,
+            /* percent */ 0.99
+        )){
+            SC_THREAD_ERROR("failed to obtain p99 tail latency");
+            result = SC_ERROR_INTERNAL;
+            goto _process_exit_exit;
+        }
+        PER_CORE_APP_META(sc_config).tail_latency_p99 = p99;
+
+        if(SC_SUCCESS != sc_util_tail_latency(
+            /* latency_sec */ PER_CORE_APP_META(sc_config).latency_sec,
+            /* latency_usec */ PER_CORE_APP_META(sc_config).latency_usec,
+            /* p_latency */ &p80,
+            /* nb_latency */ PER_CORE_APP_META(sc_config).nb_latency_data,
+            /* percent */ 0.80
+        )){
+            SC_THREAD_ERROR("failed to obtain p80 tail latency");
+            result = SC_ERROR_INTERNAL;
+            goto _process_exit_exit;
+        }
+        PER_CORE_APP_META(sc_config).tail_latency_p80 = p80;
+
+        if(SC_SUCCESS != sc_util_tail_latency(
+            /* latency_sec */ PER_CORE_APP_META(sc_config).latency_sec,
+            /* latency_usec */ PER_CORE_APP_META(sc_config).latency_usec,
+            /* p_latency */ &p50,
+            /* nb_latency */ PER_CORE_APP_META(sc_config).nb_latency_data,
+            /* percent */ 0.50
+        )){
+            SC_THREAD_ERROR("failed to obtain p50 tail latency");
+            result = SC_ERROR_INTERNAL;
+            goto _process_exit_exit;
+        }
+        PER_CORE_APP_META(sc_config).tail_latency_p50 = p50;
+
+        if(SC_SUCCESS != sc_util_tail_latency(
+            /* latency_sec */ PER_CORE_APP_META(sc_config).latency_sec,
+            /* latency_usec */ PER_CORE_APP_META(sc_config).latency_usec,
+            /* p_latency */ &p10,
+            /* nb_latency */ PER_CORE_APP_META(sc_config).nb_latency_data,
+            /* percent */ 0.10
+        )){
+            SC_THREAD_ERROR("failed to obtain p10 tail latency");
+            result = SC_ERROR_INTERNAL;
+            goto _process_exit_exit;
+        }
+        PER_CORE_APP_META(sc_config).tail_latency_p10 = p10;
+
+        #if defined(SC_HAS_DOCA) && defined(SC_NEED_DOCA_SHA)
+            SC_THREAD_LOG(
+                    "tail latency with SHA engine: \
+                    \n\r\tp99: %ld us \
+                    \n\r\tp80: %ld us \
+                    \n\r\tp50: %ld us \
+                    \n\r\tp10: %ld us", 
+                p99, p80, p50, p10
+            );
+        #elif defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
+
+        #endif // SC_HAS_DOCA, SC_NEED_DOCA_SHA
+    
+    #endif // MODE_LATENCY
+
+_process_exit_exit:
+    return result;
 }
 
 /*!
@@ -303,5 +547,60 @@ int _process_exit(struct sc_config *sc_config){
  * \return  zero for successfully executing
  */
 int _all_exit(struct sc_config *sc_config){
-    return SC_ERROR_NOT_IMPLEMENTED;
+    int i;
+    uint64_t nb_processed_pkt = 0;
+
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        nb_processed_pkt += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_processed_pkt;
+    }
+    SC_THREAD_LOG("[TOTAL] processed packet: %lu", nb_processed_pkt);
+
+    #if defined(MODE_LATENCY)
+
+        long overall_p99 = 0, overall_p80 = 0, overall_p50 = 0, overall_p10 = 0; 
+
+        for(i=0; i<sc_config->nb_used_cores; i++){
+            overall_p99 += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).tail_latency_p99;
+            overall_p80 += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).tail_latency_p80;
+            overall_p50 += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).tail_latency_p50;
+            overall_p10 += PER_CORE_APP_META_BY_CORE_ID(sc_config, i).tail_latency_p10;
+        }
+
+        #if defined(SC_HAS_DOCA) && defined(SC_NEED_DOCA_SHA)
+            SC_THREAD_LOG(
+                    "[TOTAL] average tail latency with SHA engine: \
+                    \n\r\tp99: %lf us \
+                    \n\r\tp80: %lf us \
+                    \n\r\tp50: %lf us \
+                    \n\r\tp10: %lf us", 
+                (double)overall_p99 / (double)sc_config->nb_used_cores,
+                (double)overall_p80 / (double)sc_config->nb_used_cores,
+                (double)overall_p50 / (double)sc_config->nb_used_cores,
+                (double)overall_p10 / (double)sc_config->nb_used_cores
+            );
+        #elif defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
+
+        #endif // SC_HAS_DOCA, SC_NEED_DOCA_SHA
+    
+    #endif // MODE_LATENCY
+
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   reload SHA initial state
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully reloading
+ */
+int __reload_sha_state(struct sc_config *sc_config){
+    PER_CORE_APP_META(sc_config).sha_state[0] = 0x6a09e667;
+    PER_CORE_APP_META(sc_config).sha_state[1] = 0xbb67ae85;
+    PER_CORE_APP_META(sc_config).sha_state[2] = 0x3c6ef372;
+    PER_CORE_APP_META(sc_config).sha_state[3] = 0xa54ff53a;
+    PER_CORE_APP_META(sc_config).sha_state[4] = 0x510e527f;
+    PER_CORE_APP_META(sc_config).sha_state[5] = 0x9b05688c;
+    PER_CORE_APP_META(sc_config).sha_state[6] = 0x1f83d9ab;
+    PER_CORE_APP_META(sc_config).sha_state[7] = 0x5be0cd19;
+
+    return SC_SUCCESS;
 }

@@ -5,6 +5,11 @@
 
 /* gcc -DTEST_MAIN -msse4.1 -msha sha256-x86.c -o sha256.exe   */
 
+#include "sc_global.h"
+#include "apps/sc_sha/sha.h"
+
+#if !defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
+
 /* Include the GCC super header */
 #if defined(__GNUC__)
 # include <stdint.h>
@@ -262,5 +267,7 @@ int main(int argc, char* argv[])
 
     return (success != 0 ? 0 : 1);
 }
+
+#endif
 
 #endif

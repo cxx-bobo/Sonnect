@@ -1,6 +1,8 @@
 #ifndef _SC_SHA_H_
 #define _SC_SHA_H_
 
+#include <sys/time.h>
+
 #if defined(SC_HAS_DOCA)
     #include "sc_doca.h"
     #include "sc_doca_utils.h"
@@ -8,13 +10,34 @@
 
 #define SC_SHA_HASH_KEY_LENGTH 57
 
+#define SC_SHA_MAX_LATENCY_NB (1UL << 24)-1
+
 struct _per_core_app_meta {
-    int something;
+    uint32_t sha_state[8];
+
+    #if defined(MODE_LATENCY)
+        uint64_t nb_latency_data;
+        uint64_t latency_data_pointer;
+        long latency_sec[SC_SHA_MAX_LATENCY_NB];
+        long latency_usec[SC_SHA_MAX_LATENCY_NB];
+    #endif
+
+    uint64_t nb_processed_pkt;
+
+    long tail_latency_p99;
+    long tail_latency_p80;
+    long tail_latency_p50;
+    long tail_latency_p10;
 };
 
 /* definition of internal config */
 struct _internal_config {
-    uint32_t sha_state[8];
+    /* used echo ports */
+    uint32_t nb_send_ports, nb_recv_ports;
+    uint32_t send_port_idx[SC_MAX_NB_PORTS], recv_port_idx[SC_MAX_NB_PORTS];
+    uint32_t send_port_logical_idx[SC_MAX_NB_PORTS], recv_port_logical_idx[SC_MAX_NB_PORTS];
+    char *send_port_mac_address[SC_MAX_NB_PORTS];
+    char *recv_port_mac_address[SC_MAX_NB_PORTS];
 };
 
 int _init_app(struct sc_config *sc_config);

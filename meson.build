@@ -5,7 +5,7 @@ project('SOCONNECT', 'C',
 )
 
 # specified which application to use
-app = 'echo_server'
+app = 'sha'
 add_global_arguments('-DAPP_' + app.to_upper(), language: 'c')
 
 # project name
@@ -25,6 +25,9 @@ subdir('src/apps/' + project_name_abbreviation + '_' + app)
 
 # set the SC_CLOSE_MOCK_MACRO to clear mock macro definition for developing
 add_global_arguments('-DSC_CLOSE_MOCK_MACRO', language: 'c')
+
+# indicator of whether need ARM/x86 SIMD
+need_simd = false
 
 # ==================== Third-party Library Detection ====================
 
@@ -46,7 +49,7 @@ doca_sha_dep 			= dependency('doca-sha', required: false)
 doca_telemetry_dep 		= dependency('doca-telemetry', required: false)
 
 # DOCA hardware resources disable flag
-doca_disable_sha = true
+doca_enable_sha = true
 
 if doca_common_dep.found() and doca_argp_dep.found() and doca_apsh_dep.found() \
 		and doca_comm_channel_dep.found() and doca_compress_dep.found() \
@@ -65,11 +68,13 @@ if doca_common_dep.found() and doca_argp_dep.found() and doca_apsh_dep.found() \
 	add_global_arguments('-DSC_DOCA_SUB_VERSION=' + doca_version[2], language: 'c')
 
 	# specified necessary doca resources according to application
-	if app == 'sketch'
-		if doca_disable_sha == false
+	if doca_enable_sha == true		
+		if app == 'sketch' or app == 'sha'
 			add_global_arguments('-DSC_NEED_DOCA_SHA', language: 'c')
 		endif
 		message('enabled DOCA SHA engine')
+	else
+		need_simd = true
 	endif
 endif
 
@@ -117,6 +122,40 @@ endif
 # =======================================================================
 
 
+# ==
+# simd = import('unstable-simd')
+# sc_simd_lib = []
+# if need_simd
+# 	simd_variants = [
+# 		{ 'mmx' : ['remap_mmx.c', 'svolume_mmx.c'] },
+# 		{ 'sse' : ['remap_sse.c', 'sconv_sse.c', 'svolume_sse.c'] },
+# 		{ 'neon' : ['remap_neon.c', 'sconv_neon.c', 'mix_neon.c'] },
+# 	]
+
+# 	foreach simd_kwargs : simd_variants
+# 		# ARM NEON support
+# 		if host_machine.cpu_family() == 'arm' and 'neon' in simd_kwargs
+# 			if not meson.get_compiler('c').compiles('''
+# 				#include <arm_neon.h>
+# 					int main() {
+# 						return sizeof(uint8x8_t) + sizeof(int32x4_t) + sizeof(float32x4_t);
+# 					}
+# 				''', name : 'neon code'
+# 			)
+# 				continue
+# 			endif
+# 		endif
+
+# 		sc_simd = simd.check('sc_simd',
+# 			kwargs : simd_kwargs,
+# 			implicit_include_directories : false,
+# 			compiler: meson.get_compiler('c'),
+# 		)
+
+# 		sc_simd_lib += sc_simd[0]
+# 		# cdata.merge_from(libpulsecore_simd[1])
+# 	endforeach
+# endif
 
 # ==================== Specified All Dependent Headers ==================
 
@@ -138,13 +177,29 @@ sources = glob.stdout().strip().split('\n')
 # =======================================================================
 
 
+# ========================= Specifed All CFLAGS =========================
+
+## Note: we detect different DPDK, DOCA and CUDA version inside meson and source files,
+##		so we block all deprecated-declarations warnings here to make log output of 
+##		the build process cleaner
+sc_c_args = ['-D_GNU_SOURCE', '-Wno-deprecated-declarations', '-g']
+
+if need_simd
+	if host_machine.cpu_family() == 'arm' or host_machine.cpu_family() == 'aarch64'
+		# ref: https://github.com/noloader/SHA-Intrinsics#arm-sha
+		sc_c_args += ['-march=armv8-a+crc+crypto']
+	elif host_machine.cpu_family() == 'x86' or host_machine.cpu_family() == 'x86_64'
+		# ref: https://github.com/noloader/SHA-Intrinsics#intel-sha
+		sc_c_args += ['-msse4 -msha']
+	endif
+endif 
+# =======================================================================
+
+
 # build executable
 executable(project_name, sources,
 	dependencies : dep,
-	# Note: we detect different DPDK, DOCA and CUDA version inside meson and source files,
-	#		so we block all deprecated-declarations warnings here to make log output of 
-	#		the build process cleaner
-	c_args: ['-D_GNU_SOURCE', '-Wno-deprecated-declarations'],
+	c_args: sc_c_args,
 	include_directories: inc_dirs,
 	install: false
 )
