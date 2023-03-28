@@ -78,11 +78,14 @@ int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr){
  * \param	nb_queues		number of total queues
  * \param   used_queue_id	specified queue id to make sure the RSS direct to correct queue
  * \param	l4_type			type of the layer 4 protocol
+ * \param	rss_hash_field	rss hash field
+ * \param	rss_affinity	whether to generate packet with rss affinity to current core
  * \return  0 for successfully generation
  */
 int sc_util_generate_random_pkt_hdr(
 		struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_len, uint32_t nb_queues, 
-		uint32_t used_queue_id, uint32_t l3_type, uint32_t l4_type, uint64_t rss_hash_field
+		uint32_t used_queue_id, uint32_t l3_type, uint32_t l4_type, uint64_t rss_hash_field,
+		bool rss_affinity
 ){
 	int result = SC_SUCCESS;
 	uint16_t _pkt_len;
@@ -118,31 +121,35 @@ int sc_util_generate_random_pkt_hdr(
 		 * calculate rss hash result,
 		 * to ensure the rss result belongs to current core 
 		 */
-		if(l3_type == RTE_ETHER_TYPE_IPV4){
-			sc_util_get_rss_queue_id_ipv4(
-				/* src_ipv4 */ sc_pkt_hdr->src_ipv4_addr,
-				/* dst_ipv4 */ sc_pkt_hdr->dst_ipv4_addr,
-				/* sport */ sc_pkt_hdr->src_port,
-				/* dport */ sc_pkt_hdr->dst_port,
-				/* sctp_tag */ 0,
-				/* nb_queues */ nb_queues,
-				/* queue_id */ &queue_id,
-				/* rss_hash_field */ rss_hash_field
-			);
-		} else {
-			sc_util_get_rss_queue_id_ipv6(
-				/* src_ipv6 */ sc_pkt_hdr->src_ipv6_addr,
-				/* dst_ipv6 */ sc_pkt_hdr->dst_ipv6_addr,
-				/* sport */ sc_pkt_hdr->src_port,
-				/* dport */ sc_pkt_hdr->dst_port,
-				/* sctp_tag */ 0,
-				/* nb_queues */ nb_queues,
-				/* queue_id */ &queue_id,
-				/* rss_hash_field */ rss_hash_field
-			);
-		}
+		if(rss_affinity){
+			if(l3_type == RTE_ETHER_TYPE_IPV4){
+				sc_util_get_rss_queue_id_ipv4(
+					/* src_ipv4 */ sc_pkt_hdr->src_ipv4_addr,
+					/* dst_ipv4 */ sc_pkt_hdr->dst_ipv4_addr,
+					/* sport */ sc_pkt_hdr->src_port,
+					/* dport */ sc_pkt_hdr->dst_port,
+					/* sctp_tag */ 0,
+					/* nb_queues */ nb_queues,
+					/* queue_id */ &queue_id,
+					/* rss_hash_field */ rss_hash_field
+				);
+			} else {
+				sc_util_get_rss_queue_id_ipv6(
+					/* src_ipv6 */ sc_pkt_hdr->src_ipv6_addr,
+					/* dst_ipv6 */ sc_pkt_hdr->dst_ipv6_addr,
+					/* sport */ sc_pkt_hdr->src_port,
+					/* dport */ sc_pkt_hdr->dst_port,
+					/* sctp_tag */ 0,
+					/* nb_queues */ nb_queues,
+					/* queue_id */ &queue_id,
+					/* rss_hash_field */ rss_hash_field
+				);
+			}
 
-        if(queue_id == (uint16_t)used_queue_id){ break; }
+			if(queue_id == (uint16_t)used_queue_id){ break; }
+		} else {
+			break;
+		}
     }
     
     /* assemble layer 4 header */

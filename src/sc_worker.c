@@ -78,8 +78,16 @@ int _worker_loop(void* param){
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         if(sc_config->core_ids[i] == rte_lcore_id()){
-            queue_id = i; 
-            SC_THREAD_LOG("polling on queue %u", queue_id);
+            queue_id = i;
+            /*! 
+                \note:  we allow nb_rings_per_port is less than nb_used_port 
+                        so we have to limit the queue_id within the valid range
+             */
+            if(queue_id != 0){
+                queue_id = queue_id % sc_config->nb_rx_rings_per_port;
+            }
+            
+            SC_THREAD_LOG("core %u is using queue %u", rte_lcore_id(), queue_id);
             break;
         }
         if(i == sc_config->nb_used_cores-1){

@@ -281,11 +281,11 @@ static int _init_env(struct sc_config *sc_config, int argc, char **argv){
     return SC_ERROR_INTERNAL;
   }
   
-//   #if defined(SC_HAS_DOCA)
-//     /* free parameter string buffer */
-//     for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){ free(sf_eal_confs[i]); }
-//     free(sf_eal_confs);
-//   #endif
+  #if defined(SC_HAS_DOCA)
+    /* free parameter string buffer */
+    for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){ free(sf_eal_confs[i]); }
+    free(sf_eal_confs);
+  #endif
 
   /* register signal handler */
   signal(SIGINT, _signal_handler);
@@ -326,22 +326,27 @@ static int _check_configuration(struct sc_config *sc_config, int argc, char **ar
         }
     }
 
-    /* check whether the number of queues per core is equal to the number of lcores */
+    /* 
+        check whether the number of queues per core is equal to the number of lcores,
+        not an error, but giving warnings
+     */
     if(sc_config->nb_rx_rings_per_port != sc_config->nb_used_cores ||
         sc_config->nb_tx_rings_per_port != sc_config->nb_used_cores){
-        SC_ERROR_DETAILS("the number of queues per core (rx: %u, tx: %u) isn't equal to the number of lcores (%u)",
+        SC_WARNING_DETAILS("the number of queues per core (rx: %u, tx: %u) isn't equal to the number of lcores (%u)",
             sc_config->nb_rx_rings_per_port,
             sc_config->nb_tx_rings_per_port,
             sc_config->nb_used_cores
         );
-        return SC_ERROR_INVALID_VALUE;
     }
 
-    /* check whether the core for logging is conflict with other worker cores */
+    /*  
+        check whether the core for logging is conflict with other worker cores 
+        not an error, but giving warnings
+     */
     for(i=0; i<sc_config->nb_used_cores; i++){
         if(sc_config->core_ids[i] == sc_config->log_core_id){
-            SC_ERROR_DETAILS("the core for logging is conflict with other worker cores");
-            return SC_ERROR_INVALID_VALUE;
+            SC_WARNING_DETAILS("the core for logging is conflict with other worker cores");
+            break;
         }
     }
     

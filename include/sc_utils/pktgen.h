@@ -48,7 +48,7 @@ int sc_util_generate_random_ipv4_addr(uint32_t *addr);
 int sc_util_generate_random_ipv6_addr(uint8_t *addr);
 int sc_util_generate_random_pkt_hdr(struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_len, 
 	uint32_t nb_queues, uint32_t used_queue_id, uint32_t l3_type, uint32_t l4_type,
-	uint64_t rss_hash_field);
+	uint64_t rss_hash_field, bool rss_affinity);
 int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);
 
 /* rte header initializer */
