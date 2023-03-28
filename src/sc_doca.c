@@ -47,12 +47,12 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
         goto init_doca_exit;
     }
 
-    /* initialize doca flow */
-    if(SC_SUCCESS != _init_doca_flow(sc_config)){
-        SC_ERROR("failed to initialize doca flow\n");
-        result = SC_ERROR_INTERNAL;
-        goto init_doca_exit;
-    }
+    /*! No need: initialize doca flow */
+    // if(SC_SUCCESS != _init_doca_flow(sc_config)){
+    //     SC_ERROR("failed to initialize doca flow\n");
+    //     result = SC_ERROR_INTERNAL;
+    //     goto init_doca_exit;
+    // }
 
     /* initialize sha engine if the application need it */
     #if defined(SC_NEED_DOCA_SHA)
@@ -80,15 +80,14 @@ init_doca_exit:
         uint32_t max_chunks = 2;		/* The sha engine will use 2 doca buffers */
 
         /* create doca context */
-        for(i=0; i<sc_config->nb_used_cores; i++){
-            doca_result = doca_sha_create(&sha_ctx);
-            if (doca_result != DOCA_SUCCESS) {
-                SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string(doca_result));
-                result = SC_ERROR_INTERNAL;
-                goto _init_doca_sha_exit;
-            }
-            PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_ctx = doca_sha_as_ctx(sha_ctx);
+        /*! No need to create per-core doca context */
+        doca_result = doca_sha_create(&sha_ctx);
+        if (doca_result != DOCA_SUCCESS) {
+            SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string(doca_result));
+            result = SC_ERROR_INTERNAL;
+            goto _init_doca_sha_exit;
         }
+        DOCA_CONF(sc_config)->sha_ctx = doca_sha_as_ctx(sha_ctx);
 
         /* open doca sha device */
         result = sc_doca_util_open_doca_device_with_pci(
@@ -107,10 +106,11 @@ init_doca_exit:
                 &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_mmap),
                 DOCA_CONF(sc_config)->sha_dev,
                 &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_buf_inv),
-                PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_ctx,
+                DOCA_CONF(sc_config)->sha_ctx,
                 &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_workq),
                 DOCA_BUF_EXTENSION_NONE,
-                workq_depth, max_chunks
+                workq_depth, max_chunks,
+                (bool)(i == 0)
             );
             if(result != SC_SUCCESS){
                 SC_ERROR("failed to initialize core objects for sha engine");
@@ -130,7 +130,7 @@ init_doca_exit:
                 &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_mmap),
                 &(DOCA_CONF(sc_config)->sha_dev),
                 &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_buf_inv),
-                PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_ctx,
+                DOCA_CONF(sc_config)->sha_ctx,
                 &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_workq)
             );
         }

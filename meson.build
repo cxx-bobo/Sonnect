@@ -5,7 +5,7 @@ project('SOCONNECT', 'C',
 )
 
 # specified which application to use
-app = 'echo_client'
+app = 'echo_server'
 add_global_arguments('-DAPP_' + app.to_upper(), language: 'c')
 
 # project name

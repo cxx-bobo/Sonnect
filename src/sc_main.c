@@ -216,31 +216,52 @@ static int _init_env(struct sc_config *sc_config, int argc, char **argv){
   rte_argv[4] = mem_channels_buf;
   
   #if defined(SC_HAS_DOCA)
-    /* 
-     * specified used scalable functions, check more details:
-     * [1] DOCA doc: https://docs.nvidia.com/networking/m/view-rendered-page.action?abstractPageId=71013008
-     * [2] DPDK doc: https://doc.dpdk.org/guides/platform/mlx5.html#linux-environment
-     */
-    char **sf_eal_confs = (char**)malloc(sizeof(char*)*DOCA_CONF(sc_config)->nb_used_sfs);
-    if(unlikely(!sf_eal_confs)){
-      SC_ERROR_DETAILS("Failed to allocate memory for sf_eal_confs");
-      return SC_ERROR_MEMORY;
-    }
-    for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){
-      #define SF_EAL_CONF_STRLEN 128
-        sf_eal_confs[i] = (char*)malloc(sizeof(char)*SF_EAL_CONF_STRLEN);
-        if(unlikely(!sf_eal_confs[i])){
-          SC_ERROR_DETAILS("Failed to allocate memory for sf_eal_confs[%d]", i);
-          return SC_ERROR_MEMORY;
+    if(DOCA_CONF(sc_config)->enable_scalable_functions){
+        /* 
+         * specified used scalable functions, check more details:
+         * [1] DOCA doc: https://docs.nvidia.com/networking/m/view-rendered-page.action?abstractPageId=71013008
+         * [2] DPDK doc: https://doc.dpdk.org/guides/platform/mlx5.html#linux-environment
+         */
+        char **sf_eal_confs = (char**)malloc(sizeof(char*)*DOCA_CONF(sc_config)->nb_used_sfs);
+        if(unlikely(!sf_eal_confs)){
+            SC_ERROR_DETAILS("Failed to allocate memory for sf_eal_confs");
+            return SC_ERROR_MEMORY;
         }
-        memset(sf_eal_confs[i], 0, SF_EAL_CONF_STRLEN);
-        sprintf(sf_eal_confs[i], "auxiliary:%s,dv_flow_en=2", 
-          DOCA_CONF(sc_config)->scalable_functions[i]);
-      #undef SF_EAL_CONF_STRLEN
-
-      rte_argv[rte_argc] = "-a";
-      rte_argv[rte_argc+1] = sf_eal_confs[i];
-      rte_argc += 2;
+        for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){
+        #define SF_EAL_CONF_STRLEN 128
+            sf_eal_confs[i] = (char*)malloc(sizeof(char)*SF_EAL_CONF_STRLEN);
+            if(unlikely(!sf_eal_confs[i])){
+                SC_ERROR_DETAILS("Failed to allocate memory for sf_eal_confs[%d]", i);
+                return SC_ERROR_MEMORY;
+            }
+            memset(sf_eal_confs[i], 0, SF_EAL_CONF_STRLEN);
+            sprintf(sf_eal_confs[i], "auxiliary:%s,dv_flow_en=2", 
+            DOCA_CONF(sc_config)->scalable_functions[i]);
+        #undef SF_EAL_CONF_STRLEN
+            rte_argv[rte_argc] = "-a";
+            rte_argv[rte_argc+1] = sf_eal_confs[i];
+            rte_argc += 2;
+        }
+    } else {
+        char **pci_dev_eal_confs = (char**)malloc(sizeof(char*)*DOCA_CONF(sc_config)->nb_used_pci_devices);
+        if(unlikely(!pci_dev_eal_confs)){
+            SC_ERROR_DETAILS("Failed to allocate memory for pci_dev_eal_confs");
+            return SC_ERROR_MEMORY;
+        }
+        for(i=0; i<DOCA_CONF(sc_config)->nb_used_pci_devices; i++){
+        #define SF_EAL_CONF_STRLEN 128
+            pci_dev_eal_confs[i] = (char*)malloc(sizeof(char)*SF_EAL_CONF_STRLEN);
+            if(unlikely(!pci_dev_eal_confs[i])){
+                SC_ERROR_DETAILS("Failed to allocate memory for pci_dev_eal_confs[%d]", i);
+                return SC_ERROR_MEMORY;
+            }
+            memset(pci_dev_eal_confs[i], 0, SF_EAL_CONF_STRLEN);
+            sprintf(pci_dev_eal_confs[i], "%s", DOCA_CONF(sc_config)->pci_devices[i]);
+        #undef SF_EAL_CONF_STRLEN
+            rte_argv[rte_argc] = "-a";
+            rte_argv[rte_argc+1] = pci_dev_eal_confs[i];
+            rte_argc += 2;
+        }
     }
   #endif // SC_HAS_DOCA
 
@@ -260,11 +281,11 @@ static int _init_env(struct sc_config *sc_config, int argc, char **argv){
     return SC_ERROR_INTERNAL;
   }
   
-  #if defined(SC_HAS_DOCA)
-    /* free parameter string buffer */
-    for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){ free(sf_eal_confs[i]); }
-    free(sf_eal_confs);
-  #endif
+//   #if defined(SC_HAS_DOCA)
+//     /* free parameter string buffer */
+//     for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){ free(sf_eal_confs[i]); }
+//     free(sf_eal_confs);
+//   #endif
 
   /* register signal handler */
   signal(SIGINT, _signal_handler);
@@ -766,7 +787,26 @@ invalid_test_duration:
 
     /* DOCA-specific configurations for DPDK */
     #if defined(SC_HAS_DOCA)
-      uint16_t nb_sfs = 0;
+      uint16_t nb_sfs = 0, nb_pci_dev = 0;
+
+        /* config: whether to enable test duration limit */
+        if(!strcmp(key, "bf_enable_scalable_functions")){
+            value = sc_util_del_both_trim(value);
+            sc_util_del_change_line(value);
+            if (!strcmp(value, "true")){
+                DOCA_CONF(sc_config)->enable_scalable_functions = true;
+            } else if (!strcmp(value, "false")){
+                DOCA_CONF(sc_config)->enable_scalable_functions = false;
+            } else {
+                result = SC_ERROR_INVALID_VALUE;
+                goto invalid_bf_enable_scalable_functions;
+            }
+
+            goto exit;
+
+invalid_bf_enable_scalable_functions:
+            SC_ERROR_DETAILS("invalid configuration bf_enable_scalable_functions\n");
+        }
 
       /* config: used scalable functions */
       if(!strcmp(key, "bf_scalable_functions")){
@@ -803,6 +843,43 @@ invalid_test_duration:
 free_sfs:
         for(i=0; i<nb_sfs; i++) free(DOCA_CONF(sc_config)->scalable_functions[i]);
         DOCA_CONF(sc_config)->nb_used_sfs = 0;
+      }
+
+      /* config: used pci devices */
+      if(!strcmp(key, "bf_pci_devices")){
+        char *delim = ",";
+        char *p, *bf_pci_dev;
+
+        for(;;){
+            if(nb_pci_dev == 0)
+                p = strtok(value, delim);
+            else
+                p = strtok(NULL, delim);
+            if (!p) break;
+
+            p = sc_util_del_both_trim(p);
+            sc_util_del_change_line(p);
+
+            bf_pci_dev = (char*)malloc(strlen(p)+1);
+            if(unlikely(!bf_pci_dev)){
+                SC_ERROR_DETAILS("Failed to allocate memory for bf_pci_dev\n");
+                result = SC_ERROR_MEMORY;
+                goto free_pci_devs;
+            }
+            memset(bf_pci_dev, 0, strlen(p)+1);
+
+            strcpy(bf_pci_dev, p);
+            DOCA_CONF(sc_config)->pci_devices[nb_pci_dev] = bf_pci_dev;
+            nb_pci_dev += 1;
+        }
+
+        DOCA_CONF(sc_config)->nb_used_pci_devices = nb_pci_dev;
+
+        goto exit;
+
+free_pci_devs:
+        for(i=0; i<nb_pci_dev; i++) free(DOCA_CONF(sc_config)->pci_devices[i]);
+        DOCA_CONF(sc_config)->nb_used_pci_devices = 0;
       }
     #endif // SC_HAS_DOCA
 

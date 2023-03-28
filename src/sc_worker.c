@@ -53,9 +53,9 @@ int __worker_loop_init(struct sc_config *sc_config) {
  */
 int _worker_loop(void* param){
     int result = SC_SUCCESS;
-    uint16_t i, j, queue_id, forward_port_id, nb_rx, nb_tx;
+    uint16_t i, j, queue_id, forward_port_id, nb_rx, nb_tx, retry;
     int lcore_id_from_zero;
-    bool need_forward = false;
+    uint64_t nb_fwd_pkts = 0;
     struct sc_config *sc_config = (struct sc_config*)param;
 
     /* record lcore id starts from 0 */
@@ -98,11 +98,11 @@ int _worker_loop(void* param){
         }
     }
 
-    /* Hook Point: Enter */
-    if(sc_config->app_config->process_enter(sc_config) != SC_SUCCESS){
+    /* Hook Point: Enter */    
+    if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_enter_func(sc_config)){
         SC_THREAD_WARNING("error occurs while executing enter callback\n");
     }
-    
+
     while(!sc_force_quit){
         /* 
          * use core 0 to shutdown the application while test duration 
@@ -129,45 +129,55 @@ int _worker_loop(void* param){
             for(i=0; i<sc_config->nb_used_ports; i++){
                 nb_rx = rte_eth_rx_burst(i, queue_id, pkt, SC_MAX_PKT_BURST);
                 
-                if(nb_rx == 0) continue;
+                // if(nb_rx == 0) continue;
                 
-                // SC_THREAD_LOG("received %u ethernet frames", nb_rx);
-
-                for(j=0; j<nb_rx; j++){
-                    /* Hook Point: Packet Processing */
-                    if(sc_config->app_config->process_pkt(pkt[j], sc_config, i, &forward_port_id, &need_forward) != SC_SUCCESS){
-                        SC_THREAD_WARNING("failed to process the received frame");
-                    }
-
-                    if(need_forward){
-                        nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt+j, 1);
-                        if(nb_tx == 0){
-                            rte_pktmbuf_free(pkt[j]);
-                            SC_THREAD_WARNING("failed to forward packet to queue %u on port %u",
-                                queue_id, forward_port_id);
-                        }
-                        // SC_THREAD_LOG("send %d ethernet frames", nb_tx);
-                    }
-
-                    // reset need forward flag
-                    need_forward = false;
+                /* Hook Point: Packet Processing */
+                if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_pkt_func(
+                    /* pkt */ pkt, 
+                    /* nb_rx */ nb_rx,
+                    /* sc_config */ sc_config,
+                    /* recv_port_id */ i, 
+                    /* fwd_port_id */ &forward_port_id,
+                    /* nb_fwd_pkts */ &nb_fwd_pkts
+                )){
+                    SC_THREAD_WARNING("failed to process the received frame");
                 }
+
+                if(nb_fwd_pkts > 0){
+                    nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt, nb_fwd_pkts);
+                    if(unlikely(nb_tx < nb_rx)){
+                        retry = 0;
+                        while (nb_tx < nb_rx && retry++ < SC_BURST_TX_RETRIES) {
+                            nb_tx += rte_eth_tx_burst(forward_port_id, queue_id, &pkt[nb_tx], nb_fwd_pkts - nb_tx);
+                        }
+                    }
+                    
+                    if (unlikely(nb_tx < nb_rx)) {
+                        do {
+                            rte_pktmbuf_free(pkt[nb_tx]);
+                        } while (++nb_tx < nb_rx);
+                    }
+                }
+                
+                // reset need forward flag
+                nb_fwd_pkts = 0;
             }
         #endif // ROLE_SERVER
 
         /* role: client */
         #if defined(ROLE_CLIENT)
             /* Hook Point: Packet Preparing */
-            if(sc_config->app_config->process_client(sc_config, queue_id, &ready_to_exit) != SC_SUCCESS){
+            if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_pkt_func(sc_config, queue_id, &ready_to_exit)){
                 SC_THREAD_WARNING("error occured within the client process");
             }
+
             if(ready_to_exit){ break; }
         #endif // ROLE_CLIENT
     }
 
 exit_callback:
     /* Hook Point: Exit */
-    if(sc_config->app_config->process_exit(sc_config) != SC_SUCCESS){
+    if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_exit_func(sc_config)){
         SC_THREAD_WARNING("error occurs while executing exit callback\n");
     }
     
@@ -195,7 +205,7 @@ int init_worker_threads(struct sc_config *sc_config){
     }
     memset(per_core_meta_array, 0, sizeof(struct per_core_meta)*sc_config->nb_used_cores);
     sc_config->per_core_meta = per_core_meta_array;
-    
+
     /* initialize pthread barrier */
     pthread_barrier_init(&sc_config->pthread_barrier, NULL, sc_config->nb_used_cores);
 

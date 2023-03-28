@@ -10,14 +10,15 @@
 
 /*!
  * \brief   initialize all necessary doca object of  the specified resources
- * \param   mmap    	the allocated doca memery map
- * \param   dev			the doca device instance
- * \param	buf_inv		the allocated doca buffer inventory
- * \param	ctx			the doca context
- * \param	workq		the allocated work queue
- * \param	extensions	?
- * \param	workq_depth	depth of the allocated work queue
- * \param	max_chunks	maximum number of memory chunks
+ * \param   mmap    		the allocated doca memery map
+ * \param   dev				the doca device instance
+ * \param	buf_inv			the allocated doca buffer inventory
+ * \param	ctx				the doca context
+ * \param	workq			the allocated work queue
+ * \param	extensions		?
+ * \param	workq_depth		depth of the allocated work queue
+ * \param	max_chunks		maximum number of memory chunks
+ * \param	is_first_init	indicate wether it's firtst call to this function
  * \return  zero for successfully initialization
  */
 int sc_doca_util_init_core_objects(
@@ -28,77 +29,64 @@ int sc_doca_util_init_core_objects(
 		struct doca_workq **workq,
 		uint32_t extensions,
 		uint32_t workq_depth,
-		uint32_t max_chunks
+		uint32_t max_chunks,
+		bool is_first_init
 ){
 	int result = SC_SUCCESS;
 	doca_error_t doca_result;
 	struct doca_workq *_workq;
-	bool is_first_init = false;
 
 	/* allocate doca memory map */
-	if(!(*mmap)){
-		doca_result = doca_mmap_create(NULL, mmap);
-		if (doca_result != DOCA_SUCCESS) {
-			SC_ERROR_DETAILS("unable to create mmap: %s", doca_get_error_string(doca_result));
-			result = SC_ERROR_INTERNAL;
-			goto init_core_objects_exit;
-		}
-		is_first_init = true;
+	doca_result = doca_mmap_create(NULL, mmap);
+	if (doca_result != DOCA_SUCCESS) {
+		SC_ERROR_DETAILS("unable to create mmap: %s", doca_get_error_string(doca_result));
+		result = SC_ERROR_INTERNAL;
+		goto init_core_objects_exit;
 	}
 	
 	/* create doca buffer inventory */
-	if(is_first_init){
-		doca_result = doca_buf_inventory_create(NULL, max_chunks, extensions, buf_inv);
-		if (doca_result != DOCA_SUCCESS) {
-			SC_ERROR_DETAILS("unable to create buffer inventory: %s", 
-				doca_get_error_string(doca_result));
-			result = SC_ERROR_INTERNAL;
-			goto destory_doca_mmap;
-		}	
+	doca_result = doca_buf_inventory_create(NULL, max_chunks, extensions, buf_inv);
+	if (doca_result != DOCA_SUCCESS) {
+		SC_ERROR_DETAILS("unable to create buffer inventory: %s", 
+			doca_get_error_string(doca_result));
+		result = SC_ERROR_INTERNAL;
+		goto destory_doca_mmap;
 	}
 	
 	/* set the maximum number of chunks */
-	if(is_first_init){
-		doca_result = doca_mmap_set_max_num_chunks(*mmap, max_chunks);
-		if (doca_result != DOCA_SUCCESS) {
-			SC_ERROR_DETAILS("unable to set memory map nb chunks: %s",
-				doca_get_error_string(doca_result));
-			result = SC_ERROR_INTERNAL;
-			goto destory_doca_buf_inv;
-		}
+	doca_result = doca_mmap_set_max_num_chunks(*mmap, max_chunks);
+	if (doca_result != DOCA_SUCCESS) {
+		SC_ERROR_DETAILS("unable to set memory map nb chunks: %s",
+			doca_get_error_string(doca_result));
+		result = SC_ERROR_INTERNAL;
+		goto destory_doca_buf_inv;
 	}
 
 	/* start doca memory map */
-	if(is_first_init){
-		doca_result = doca_mmap_start(*mmap);
-		if (doca_result != DOCA_SUCCESS) {
-			SC_ERROR_DETAILS("unable to start memory map: %s",
-				doca_get_error_string(doca_result));
-			result = SC_ERROR_INTERNAL;
-			goto destory_doca_buf_inv;
-		}
+	doca_result = doca_mmap_start(*mmap);
+	if (doca_result != DOCA_SUCCESS) {
+		SC_ERROR_DETAILS("unable to start memory map: %s",
+			doca_get_error_string(doca_result));
+		result = SC_ERROR_INTERNAL;
+		goto destory_doca_buf_inv;
 	}
     
 	/* add device to the allocated memory map */
-	if(is_first_init){
-		doca_result = doca_mmap_dev_add(*mmap, dev);
-		if (doca_result != DOCA_SUCCESS) {
-			SC_ERROR_DETAILS("unable to add device to mmap: %s",
-				doca_get_error_string(doca_result));
-			result = SC_ERROR_INTERNAL;
-			goto destory_doca_buf_inv;
-		}
+	doca_result = doca_mmap_dev_add(*mmap, dev);
+	if (doca_result != DOCA_SUCCESS) {
+		SC_ERROR_DETAILS("unable to add device to mmap: %s",
+			doca_get_error_string(doca_result));
+		result = SC_ERROR_INTERNAL;
+		goto destory_doca_buf_inv;
 	}
 
 	/* start the buffer inventory */
-	if(is_first_init){
-		doca_result = doca_buf_inventory_start(*buf_inv);
-		if (doca_result != DOCA_SUCCESS) {
-			SC_ERROR_DETAILS("unable to start buffer inventory: %s",
-				doca_get_error_string(doca_result));
-			result = SC_ERROR_INTERNAL;
-			goto destory_doca_buf_inv;
-		}
+	doca_result = doca_buf_inventory_start(*buf_inv);
+	if (doca_result != DOCA_SUCCESS) {
+		SC_ERROR_DETAILS("unable to start buffer inventory: %s",
+			doca_get_error_string(doca_result));
+		result = SC_ERROR_INTERNAL;
+		goto destory_doca_buf_inv;
 	}
 
 	/* add device to the context */

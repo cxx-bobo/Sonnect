@@ -43,8 +43,13 @@ struct per_core_doca_meta;
  */
 struct doca_config {
     /* scalable functions */
+    bool enable_scalable_functions;
     char* scalable_functions[SC_MAX_NB_PORTS];
     uint16_t nb_used_sfs;
+
+    /* pci_devices */
+    char* pci_devices[SC_MAX_NB_PORTS];
+    uint16_t nb_used_pci_devices;
 
     /* doca flow configurations */
     struct doca_flow_port **doca_flow_ports;
@@ -56,6 +61,7 @@ struct doca_config {
         rte_spinlock_t sha_lock;                /* spinlock use to access SHA engine under multi-thread */
         struct doca_pci_bdf sha_pci_bdf;        /* pci bus-device-function index of sha engine */
         struct doca_dev *sha_dev;		        /* doca device of sha engine */
+        struct doca_ctx *sha_ctx;			    /* doca context for sha engine */
     #endif // SC_HAS_DOCA && SC_NEED_DOCA_SHA
 
     /* doca per-core meta */
@@ -75,7 +81,6 @@ struct per_core_doca_meta {
     #if defined(SC_NEED_DOCA_SHA)
         struct doca_mmap *sha_mmap;             /* memory map for sha engine */
         struct doca_buf_inventory *sha_buf_inv; /* buffer inventory for sha engine */
-        struct doca_ctx *sha_ctx;			    /* doca context for sha engine */
         struct doca_workq *sha_workq;           /* work queue for sha engine */
         struct doca_buf *sha_src_doca_buf;      /* pointer to the doca_buf of source data */
         struct doca_buf *sha_dst_doca_buf;      /* pointer to the doca_buf of destination data */

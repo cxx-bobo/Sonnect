@@ -20,7 +20,8 @@ int sc_doca_util_init_core_objects(
 	struct doca_mmap **mmap, struct doca_dev *dev,
 	struct doca_buf_inventory **buf_inv, struct doca_ctx *ctx,
 	struct doca_workq **workq, uint32_t extensions,
-	uint32_t workq_depth, uint32_t max_chunks
+	uint32_t workq_depth, uint32_t max_chunks,
+	bool is_first_init
 );
 
 int sc_doca_util_destory_core_objects(

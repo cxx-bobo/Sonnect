@@ -2,6 +2,8 @@
 #include "sc_echo_server/echo_server.h"
 #include "sc_utils.h"
 #include "sc_log.h"
+#include "sc_app.h"
+#include "sc_utils/pktgen.h"
 
 /*!
  * \brief   initialize application (internal)
@@ -9,6 +11,15 @@
  * \return  zero for successfully initialization
  */
 int _init_app(struct sc_config *sc_config){
+    int i;
+    
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
+    }
+
     return SC_SUCCESS;
 }
 
@@ -21,7 +32,7 @@ int _init_app(struct sc_config *sc_config){
  */
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
     int result = SC_SUCCESS;
-
+    
     /* used send port */
     if(!strcmp(key, "send_port_mac")){
         int nb_send_ports = 0, i;
@@ -168,12 +179,43 @@ int _process_enter(struct sc_config *sc_config){
  * \param   need_forward    indicate whether need to forward packet, default to be false
  * \return  zero for successfully processing
  */
-int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, bool *need_forward){
+int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
+    struct timeval current_time;
+    long interval_s, interval_us;
+
+    /* record current time */
+    if(unlikely(-1 == gettimeofday(&current_time, NULL))){
+        SC_THREAD_ERROR_DETAILS("failed to obtain current time");
+        return SC_ERROR_INTERNAL;
+    }
+
+    interval_s = current_time.tv_sec - PER_CORE_APP_META(sc_config).last_record_time.tv_sec;
+    interval_us = current_time.tv_usec - PER_CORE_APP_META(sc_config).last_record_time.tv_usec;
+
+    if(interval_s >= 1){
+        if(nb_recv_pkts != 0){
+            SC_THREAD_LOG("pktlen: %lu", pkt[0]->pkt_len);
+            SC_THREAD_LOG("throughput: %lf Gbps", 
+                (double)((PER_CORE_APP_META(sc_config).nb_interval_forward_pkt)*pkt[0]->pkt_len)
+                / (double)(SC_UTIL_TIME_INTERVL_US(interval_s, interval_us)*1000)
+            );
+        } else {
+            SC_THREAD_LOG("throughput: 0.0 Mpps");
+        }
+        
+        /* reset */
+        PER_CORE_APP_META(sc_config).last_record_time.tv_sec = current_time.tv_sec;
+        PER_CORE_APP_META(sc_config).last_record_time.tv_usec = current_time.tv_usec;
+        PER_CORE_APP_META(sc_config).nb_interval_forward_pkt = 0;
+    }
+
     /* count */
-    PER_CORE_APP_META(sc_config).nb_forward_pkt += 1;
+    PER_CORE_APP_META(sc_config).nb_forward_pkt += nb_recv_pkts;
+    PER_CORE_APP_META(sc_config).nb_interval_forward_pkt += nb_recv_pkts;
+    
 
     /* set as forwarded, default to first send port */
-    *need_forward = true;
+    *nb_fwd_pkts = nb_recv_pkts;
     *fwd_port_id  = INTERNAL_CONF(sc_config)->send_port_idx[0];
 
     return SC_SUCCESS;

@@ -12,7 +12,7 @@
 int init_app(struct sc_config *sc_config, const char *app_conf_path){
     FILE* fp = NULL;
 
-    /* allocate per-core metadata */
+    /* allocate per-core application metadata */
     struct _per_core_app_meta *per_core_app_meta = NULL;
     per_core_app_meta = (struct _per_core_app_meta*)rte_malloc(NULL, sizeof(struct _per_core_app_meta)*sc_config->nb_used_cores, 0);
     if(unlikely(!per_core_app_meta)){
@@ -30,17 +30,16 @@ int init_app(struct sc_config *sc_config, const char *app_conf_path){
     }
     sc_config->app_config->internal_config = _internal_config;
 
-    /* specify pkt entering callback function */
-    sc_config->app_config->process_enter = _process_enter;
-
-    /* specify pkt processing callback function (server mode) */
-    sc_config->app_config->process_pkt = _process_pkt;
-
-    /* specify client callback function (client mode) */
-    sc_config->app_config->process_client = _process_client;
-
-    /* specify pkt exiting callback function */
-    sc_config->app_config->process_exit = _process_exit;
+    /* allocate per-core worker function array */
+    struct per_core_worker_func *per_core_worker_func = NULL;
+    per_core_worker_func = (struct per_core_worker_func*)rte_malloc(NULL, sizeof(struct per_core_worker_func)
+                            *sc_config->nb_used_cores, 0);
+    if(unlikely(!per_core_worker_func)){
+        SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_worker_func");
+        return SC_ERROR_MEMORY;
+    }
+    memset(per_core_worker_func, 0, sizeof(struct per_core_worker_func)*sc_config->nb_used_cores);
+    sc_config->per_core_worker_funcs = per_core_worker_func;
 
     /* specify the all exit callback function */
     sc_config->app_config->all_exit = _all_exit;

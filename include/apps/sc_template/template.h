@@ -1,6 +1,8 @@
 #ifndef _SC_TEMPLATE_H_
 #define _SC_TEMPLATE_H_
 
+#include "sc_app.h"
+
 struct _per_core_app_meta {
     int something;
 };

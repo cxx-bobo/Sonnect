@@ -47,6 +47,7 @@ extern volatile bool sc_force_quit;
 struct app_config;
 struct doca_config;
 struct per_core_meta;
+struct per_core_worker_func;
 
 /*!
  * \brief meta of a dpdk port
@@ -98,6 +99,9 @@ struct sc_config {
     /* application per-core metadata */
     void *per_core_app_meta;
 
+    /* worker functions dispatching */
+    struct per_core_worker_func *per_core_worker_funcs;
+
     /* per-core metadata */
     struct per_core_meta *per_core_meta;
 
@@ -109,6 +113,7 @@ struct sc_config {
     uint64_t test_duration;
     struct timeval test_duration_start_time;
     struct timeval test_duration_end_time;
+    struct timeval test_duration_tick_time;
 
     /* doca specific configurations */
     #if defined(SC_HAS_DOCA)
@@ -128,6 +133,11 @@ struct sc_config {
 #define PER_CORE_APP_META(scc) ((struct _per_core_app_meta*)scc->per_core_app_meta)[rte_lcore_index(rte_lcore_id())]
 #define PER_CORE_APP_META_BY_CORE_ID(scc, id) ((struct _per_core_app_meta*)scc->per_core_app_meta)[id]
 
+#define PER_CORE_WORKER_FUNC(scc)((struct per_core_worker_func*)scc->per_core_worker_funcs)\
+        [rte_lcore_index(rte_lcore_id())]
+#define PER_CORE_WORKER_FUNC_BY_CORE_ID(scc, id)((struct per_core_worker_func*)scc->per_core_worker_funcs)\
+        [id]
+
 #define INTERNAL_CONF(scc) ((struct _internal_config*)scc->app_config->internal_config)
 
 /* application specific configuration */
@@ -136,7 +146,7 @@ struct app_config {
     int (*process_enter)(struct sc_config *sc_config);
     
     /* callback function (worker thread): processing single received packet (server mode) */
-    int (*process_pkt)(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, bool *need_forward);
+    int (*process_pkt)(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts);
     
     /* callback function (worker thread): client logic (client mode) */
     int (*process_client)(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
@@ -161,6 +171,22 @@ struct per_core_meta {
 
     /* per-core memory pool */
     struct rte_mempool *pktmbuf_pool
+};
+
+/* function pointer definition, for dispatching different logic to different cores */
+typedef int (*process_enter_t)(struct sc_config *sc_config);
+typedef int (*process_pkt_t)(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t 
+                                recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts);
+typedef int (*process_client_t)(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
+typedef int (*process_exit_t)(struct sc_config *sc_config);
+
+/* dispatch different woker logic to different cores */
+struct per_core_worker_func {
+    /* per-core processing functions */
+    process_enter_t    process_enter_func;
+    process_pkt_t      process_pkt_func;
+    process_client_t   process_client_func;
+    process_exit_t     process_exit_func;
 };
 
 #endif // _SC_GLOBAL_H_

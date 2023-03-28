@@ -9,6 +9,16 @@
  * \return  zero for successfully initialization
  */
 int _init_app(struct sc_config *sc_config){
+    int i;
+    
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        /* TODO: dispatch processing functions here */
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
+    }
+
     SC_WARNING_DETAILS("_init_app not implemented");
     return SC_ERROR_NOT_IMPLEMENTED;
 }
