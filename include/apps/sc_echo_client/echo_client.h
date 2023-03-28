@@ -6,6 +6,7 @@
 #include <rte_ether.h>
 #include <rte_malloc.h>
 
+#include "sc_global.h"
 #include "sc_utils.h"
 #include "sc_utils/pktgen.h"
 
@@ -14,9 +15,6 @@
 #endif
 
 struct _per_core_app_meta {
-    /* number of packet to be sent (per core) */
-    uint32_t nb_pkt_budget_per_core;
-
     /* store rte_mbuf for sending and receiving */
     struct rte_mbuf **send_pkt_bufs; 
     struct rte_mbuf **recv_pkt_bufs;
@@ -58,7 +56,6 @@ struct _per_core_app_meta {
 
 /* definition of internal config */
 struct _internal_config {
-    uint32_t nb_pkt_budget;
     uint32_t pkt_len;           /* unit: bytes */
     uint32_t nb_pkt_per_burst;
     uint64_t nb_flow_per_core;
@@ -74,7 +71,7 @@ struct _internal_config {
 int _init_app(struct sc_config *sc_config);
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config);
 int _process_enter(struct sc_config *sc_config);
-int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, bool *need_forward);
+int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts);
 int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
 int _process_exit(struct sc_config *sc_config);
 int _all_exit(struct sc_config *sc_config);

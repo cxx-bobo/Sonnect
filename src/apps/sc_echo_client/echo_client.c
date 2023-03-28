@@ -13,12 +13,22 @@
  * \return  zero for successfully initialization
  */
 int _init_app(struct sc_config *sc_config){
+    int i;
+
     #if defined(MODE_LATENCY)
         if(INTERNAL_CONF(sc_config)->nb_pkt_per_burst != 1){
             SC_WARNING_DETAILS("suggest to use 1 pkt per brust while testing rtt");
             return SC_ERROR_INVALID_VALUE;
         }
     #endif
+
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
+    }
+
     return SC_SUCCESS;
 }
 
@@ -209,22 +219,6 @@ invalid_nb_flow_per_core:
         SC_ERROR_DETAILS("invalid configuration nb_flow_per_core\n");
     }
 
-    /* number of packet to be send (enabled only there's no duration limitation) */
-    if(!strcmp(key, "nb_pkt_budget")){
-        value = sc_util_del_both_trim(value);
-        sc_util_del_change_line(value);
-        uint32_t nb_pkt_budget;
-        if(sc_util_atoui_32(value, &nb_pkt_budget) != SC_SUCCESS) {
-            result = SC_ERROR_INVALID_VALUE;
-            goto invalid_nb_pkt_budget;
-        }
-        INTERNAL_CONF(sc_config)->nb_pkt_budget = nb_pkt_budget;
-        goto _parse_app_kv_pair_exit;
-
-invalid_nb_pkt_budget:
-        SC_ERROR_DETAILS("invalid configuration nb_pkt_budget\n");
-    }
-
 _parse_app_kv_pair_exit:
     return result;
 }
@@ -296,10 +290,6 @@ int _process_enter(struct sc_config *sc_config){
     /* initialize the waiting confirm indicator */
     PER_CORE_APP_META(sc_config).wait_ack = 0;
 
-    /* initialize the number of packet to be sent (per core) */
-    PER_CORE_APP_META(sc_config).nb_pkt_budget_per_core
-        = INTERNAL_CONF(sc_config)->nb_pkt_budget / sc_config->nb_used_cores;
-
     /* initialize the start_time */
     if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).start_time, NULL))){
         SC_THREAD_ERROR_DETAILS("failed to obtain current time");
@@ -320,7 +310,7 @@ _process_enter_exit:
  * \param   need_forward    indicate whether need to forward packet, default to be false
  * \return  zero for successfully processing
  */
-int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, bool *need_forward){
+int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
     SC_WARNING_DETAILS("_process_pkt not implemented");
     return SC_ERROR_NOT_IMPLEMENTED;
 }
@@ -333,7 +323,7 @@ int _process_pkt(struct rte_mbuf *pkt, struct sc_config *sc_config, uint16_t rec
  * \return  zero for successfully executing
  */
 int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
-    int i, j, nb_tx = 0, nb_rx = 0, 
+    int i, j, nb_tx = 0, nb_rx = 0, nb_send_pkt = 0,
         result = SC_SUCCESS, finial_retry_times = 0;
     struct timeval current_time;
     long interval_sec;
@@ -434,22 +424,6 @@ try_receive_ack:
              */
             if(PER_CORE_APP_META(sc_config).wait_ack){ goto try_receive_ack; }
         #endif
-
-        /* 
-         * if the number of packet to be sent reach the budget, 
-         * keep trying receiving ack, then exit (p.s. work only
-         * duration limitation isn't set)
-         */
-        if( !sc_config->enable_test_duration_limit &&
-            PER_CORE_APP_META(sc_config).nb_send_pkt >= PER_CORE_APP_META(sc_config).nb_pkt_budget_per_core
-        ){
-            if(PER_CORE_APP_META(sc_config).wait_ack && finial_retry_times <= 10000){
-                finial_retry_times += 1;
-                goto try_receive_ack;
-            } else {
-                goto process_client_ready_to_exit;
-            }
-        }
     }
 
     /* send packet */
@@ -485,6 +459,13 @@ try_receive_ack:
             /* tx_pkts */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
             /* nb_pkts */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst
         );
+
+        /* return back send pkt_mbuf */
+        for(j=0; j<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; j++) {
+            rte_pktmbuf_free(PER_CORE_APP_META(sc_config).send_pkt_bufs[j]); 
+        }
+
+        nb_tx += nb_send_pkt;
     }
 
     /* record send time */
@@ -502,11 +483,6 @@ try_receive_ack:
         PER_CORE_APP_META(sc_config).last_used_flow = 0;
     } else {
         PER_CORE_APP_META(sc_config).last_used_flow += 1;
-    }
-
-    /* return back send pkt_mbuf */
-    for(j=0; j<INTERNAL_CONF(sc_config)->nb_pkt_per_burst; j++) {
-        rte_pktmbuf_free(PER_CORE_APP_META(sc_config).send_pkt_bufs[j]); 
     }
 
     goto process_client_exit;

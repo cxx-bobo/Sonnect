@@ -167,7 +167,7 @@ int _worker_loop(void* param){
         /* role: client */
         #if defined(ROLE_CLIENT)
             /* Hook Point: Packet Preparing */
-            if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_pkt_func(sc_config, queue_id, &ready_to_exit)){
+            if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_client_func(sc_config, queue_id, &ready_to_exit)){
                 SC_THREAD_WARNING("error occured within the client process");
             }
 
