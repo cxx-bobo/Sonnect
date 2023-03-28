@@ -281,11 +281,11 @@ static int _init_env(struct sc_config *sc_config, int argc, char **argv){
     return SC_ERROR_INTERNAL;
   }
   
-  #if defined(SC_HAS_DOCA)
-    /* free parameter string buffer */
-    for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){ free(sf_eal_confs[i]); }
-    free(sf_eal_confs);
-  #endif
+//   #if defined(SC_HAS_DOCA)
+//     /* free parameter string buffer */
+//     for(i=0; i<DOCA_CONF(sc_config)->nb_used_sfs; i++){ free(sf_eal_confs[i]); }
+//     free(sf_eal_confs);
+//   #endif
 
   /* register signal handler */
   signal(SIGINT, _signal_handler);

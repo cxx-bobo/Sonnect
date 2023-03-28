@@ -69,7 +69,7 @@ int _worker_loop(void* param){
     }
 
     #if defined(ROLE_SERVER)
-        struct rte_mbuf *pkt[SC_MAX_PKT_BURST];
+        struct rte_mbuf *pkt[SC_MAX_PKT_BURST*2];
     #endif // ROLE_SERVER
 
     #if defined(ROLE_CLIENT)

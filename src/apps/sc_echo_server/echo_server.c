@@ -183,31 +183,31 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
     struct timeval current_time;
     long interval_s, interval_us;
 
-    /* record current time */
-    if(unlikely(-1 == gettimeofday(&current_time, NULL))){
-        SC_THREAD_ERROR_DETAILS("failed to obtain current time");
-        return SC_ERROR_INTERNAL;
-    }
+    // /* record current time */
+    // if(unlikely(-1 == gettimeofday(&current_time, NULL))){
+    //     SC_THREAD_ERROR_DETAILS("failed to obtain current time");
+    //     return SC_ERROR_INTERNAL;
+    // }
 
-    interval_s = current_time.tv_sec - PER_CORE_APP_META(sc_config).last_record_time.tv_sec;
-    interval_us = current_time.tv_usec - PER_CORE_APP_META(sc_config).last_record_time.tv_usec;
+    // interval_s = current_time.tv_sec - PER_CORE_APP_META(sc_config).last_record_time.tv_sec;
+    // interval_us = current_time.tv_usec - PER_CORE_APP_META(sc_config).last_record_time.tv_usec;
 
-    if(interval_s >= 1){
-        if(nb_recv_pkts != 0){
-            SC_THREAD_LOG("pktlen: %lu", pkt[0]->pkt_len);
-            SC_THREAD_LOG("throughput: %lf Gbps", 
-                (double)((PER_CORE_APP_META(sc_config).nb_interval_forward_pkt)*pkt[0]->pkt_len)
-                / (double)(SC_UTIL_TIME_INTERVL_US(interval_s, interval_us)*1000)
-            );
-        } else {
-            SC_THREAD_LOG("throughput: 0.0 Mpps");
-        }
+    // if(interval_s >= 1){
+    //     if(nb_recv_pkts != 0){
+    //         SC_THREAD_LOG("pktlen: %lu", pkt[0]->pkt_len);
+    //         SC_THREAD_LOG("throughput: %lf Gbps", 
+    //             (double)((PER_CORE_APP_META(sc_config).nb_interval_forward_pkt)*pkt[0]->pkt_len)
+    //             / (double)(SC_UTIL_TIME_INTERVL_US(interval_s, interval_us)*1000)
+    //         );
+    //     } else {
+    //         SC_THREAD_LOG("throughput: 0.0 Mpps");
+    //     }
         
-        /* reset */
-        PER_CORE_APP_META(sc_config).last_record_time.tv_sec = current_time.tv_sec;
-        PER_CORE_APP_META(sc_config).last_record_time.tv_usec = current_time.tv_usec;
-        PER_CORE_APP_META(sc_config).nb_interval_forward_pkt = 0;
-    }
+    //     /* reset */
+    //     PER_CORE_APP_META(sc_config).last_record_time.tv_sec = current_time.tv_sec;
+    //     PER_CORE_APP_META(sc_config).last_record_time.tv_usec = current_time.tv_usec;
+    //     PER_CORE_APP_META(sc_config).nb_interval_forward_pkt = 0;
+    // }
 
     /* count */
     PER_CORE_APP_META(sc_config).nb_forward_pkt += nb_recv_pkts;
