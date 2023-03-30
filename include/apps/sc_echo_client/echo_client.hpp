@@ -1,6 +1,10 @@
 #ifndef _SC_ECHO_CLIENT_H_
 #define _SC_ECHO_CLIENT_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <sys/time.h>
 #include <rte_ethdev.h>
 #include <rte_ether.h>
@@ -71,5 +75,10 @@ struct _internal_config {
 int _init_app(struct sc_config *sc_config);
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config);
 int _all_exit(struct sc_config *sc_config);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

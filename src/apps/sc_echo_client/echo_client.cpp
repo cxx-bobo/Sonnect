@@ -1,12 +1,17 @@
 #include "sc_global.h"
 #include "sc_worker.h"
 #include "sc_app.h"
-#include "sc_echo_client/echo_client.h"
+#include "sc_echo_client/echo_client.hpp"
+#include "sc_utils/distribution_gen.hpp"
 #include "sc_utils/pktgen.h"
 #include "sc_utils/rss.h"
 #include "sc_utils/tail_latency.h"
 #include "sc_utils.h"
 #include "sc_log.h"
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
 
 /*!
  * \brief   parse application-specific key-value configuration pair
@@ -17,6 +22,9 @@
  */
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
     int result = SC_SUCCESS;
+    
+    // debug: test integrate c and cpp
+    sc_utils_uniform_distribution_uint64_generator *g = new sc_utils_uniform_distribution_uint64_generator(0, 1);
 
     /* used send port */
     if(!strcmp(key, "send_port_mac")){
@@ -120,7 +128,7 @@ invalid_send_port_mac:
             if(SC_SUCCESS != sc_util_get_logical_port_id_by_port_id(sc_config, port_id, &logical_port_id)){
                 SC_ERROR_DETAILS("failed to get logical port id by port id %u", port_id);
                 result = SC_ERROR_INVALID_VALUE;
-                goto free_send_port_mac;
+                goto free_recv_port_mac;
             }
 
             /* we record all id info in previous for fatser indexing while sending packets */
@@ -575,3 +583,7 @@ int _init_app(struct sc_config *sc_config){
 
     return SC_SUCCESS;
 }
+
+#ifdef __cplusplus
+    }
+#endif

@@ -17,7 +17,7 @@ app_conf_path = '"../conf/apps/' + app + '.conf"'
 add_global_arguments('-DAPP_CONF_PATH=' + app_conf_path, language: ['c', 'cpp'])
 
 # set header file of the application
-app_header_file_path = '"sc_' + app + '/' + app + '.h"'
+app_header_file_path = '"sc_' + app + '/' + app + '.hpp"'
 add_global_arguments('-DAPP_HEADER_FILE_PATH=' + app_header_file_path, language: ['c', 'cpp'])
 
 # specified the sub directory to include more meson.build file

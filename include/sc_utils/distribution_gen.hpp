@@ -37,11 +37,34 @@ class sc_utils_uniform_distribution_generator : public sc_utils_distribution_gen
   uint64_t last_int_;
 };
 
+/*!
+ * \brief   generate a new value based on uniform distribution
+ * \return  
+ */
+template<typename T>
+inline T sc_utils_uniform_distribution_generator<T>::next() {
+  return last_int_ = dist_(generator_);
+}
+
+/*!
+ * \brief   obtain the last generated value
+ */
+template<typename T>
+inline T sc_utils_uniform_distribution_generator<T>::last() {
+  return last_int_;
+}
+
+/*!
+ * \brief   expose the class with certain template parameters to C runtime
+ */
+extern "C" {
+  using sc_utils_uniform_distribution_uint64_generator = sc_utils_uniform_distribution_generator<uint64_t>;
+}
 
 template<typename T>
 class sc_utils_bimodal_distribution_generator : public sc_utils_distribution_generator<T> {
  public:
-  using normal_dist   = std::normal_distribution<T>;
+  using normal_dist   = std::normal_distribution<>;
   using discrete_dist = std::discrete_distribution<std::size_t>;
 
   std::array<normal_dist, 2> G_;
@@ -66,5 +89,31 @@ private:
   std::mt19937_64 generator_;
   T last_int_;
 };
+
+/*!
+ * \brief   generate a new value based on bimodal distribution
+ * \return  
+ */
+template<typename T>
+inline T sc_utils_bimodal_distribution_generator<T>::next() {
+  auto index = w_(generator_);
+  auto sample = G_[index](generator_);
+  return (T)ceil(sample);
+}
+
+/*!
+ * \brief   obtain the last generated value
+ */
+template<typename T>
+inline T sc_utils_bimodal_distribution_generator<T>::last() {
+  return last_int_;
+}
+
+/*!
+ * \brief   expose the class with certain template parameters to C runtime
+ */
+extern "C" {
+  using sc_utils_bimodal_distribution_uint64_generator = sc_utils_bimodal_distribution_generator<uint64_t>;
+}
 
 #endif

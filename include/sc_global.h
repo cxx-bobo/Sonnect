@@ -170,7 +170,7 @@ struct per_core_meta {
     char *mbuf_pool_name;
 
     /* per-core memory pool */
-    struct rte_mempool *pktmbuf_pool
+    struct rte_mempool *pktmbuf_pool;
 };
 
 /* function pointer definition, for dispatching different logic to different cores */
