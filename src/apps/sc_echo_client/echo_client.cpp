@@ -165,19 +165,19 @@ invalid_pkt_len:
     }
 
     /* send flow rate */
-    if(!strcmp(key, "flow_rate")){
+    if(!strcmp(key, "bit_rate")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
-        double flow_rate;
-        if(sc_util_atolf(value, &flow_rate) != SC_SUCCESS) {
+        double bit_rate;
+        if(sc_util_atolf(value, &bit_rate) != SC_SUCCESS) {
             result = SC_ERROR_INVALID_VALUE;
-            goto invalid_flow_rate;
+            goto invalid_bit_rate;
         }
-        INTERNAL_CONF(sc_config)->flow_rate = flow_rate;
+        INTERNAL_CONF(sc_config)->bit_rate = bit_rate;
         goto _parse_app_kv_pair_exit;
 
-invalid_flow_rate:
-        SC_ERROR_DETAILS("invalid configuration flow_rate\n");
+invalid_bit_rate:
+        SC_ERROR_DETAILS("invalid configuration bit_rate\n");
     }
 
     /* number of packet per burst */
@@ -230,7 +230,7 @@ int _process_enter_sender(struct sc_config *sc_config){
     int i, result = SC_SUCCESS;
     
     /* initialize interval generator */
-    double per_core_pkt_rate = (double)INTERNAL_CONF(sc_config)->flow_rate 
+    double per_core_pkt_rate = (double)INTERNAL_CONF(sc_config)->bit_rate 
                                 / (double)sc_config->nb_used_cores 
                                 / (double) 8.0 / (double)INTERNAL_CONF(sc_config)->pkt_len;
     double per_core_pkt_interval = (double) 1.0 / (double) per_core_pkt_rate; /* ns */

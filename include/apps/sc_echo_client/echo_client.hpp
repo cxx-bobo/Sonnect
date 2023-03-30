@@ -79,7 +79,7 @@ struct _internal_config {
     uint64_t nb_flow_per_core;
 
     /* send flow rate */
-    double flow_rate;
+    double bit_rate;
 
     /* used echo ports */
     uint32_t nb_send_ports, nb_recv_ports;
