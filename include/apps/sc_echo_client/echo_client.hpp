@@ -1,8 +1,14 @@
 #ifndef _SC_ECHO_CLIENT_H_
 #define _SC_ECHO_CLIENT_H_
 
+/* cpp header */
 #ifdef __cplusplus
-extern "C" {
+    #include "sc_utils/distribution_gen.hpp"
+#endif
+
+/* for cpp linkage */
+#ifdef __cplusplus
+    extern "C" {
 #endif
 
 #include <sys/time.h>
@@ -36,9 +42,17 @@ struct _per_core_app_meta {
     struct timeval end_time;
     struct timeval last_send_time;
 
+    /* last send flow */
     uint64_t last_used_flow;
     struct sc_pkt_hdr *test_pkts;
 
+    /* send interval */
+    uint64_t last_send_timestamp;
+    uint64_t interval;
+    #ifdef __cplusplus
+        sc_utils_distribution_uint64_generator* interval_generator;
+    #endif
+    
     #if defined(MODE_LATENCY)
         long min_rtt_sec;
         long min_rtt_usec;
@@ -64,6 +78,9 @@ struct _internal_config {
     uint32_t nb_pkt_per_burst;
     uint64_t nb_flow_per_core;
 
+    /* send flow rate */
+    double flow_rate;
+
     /* used echo ports */
     uint32_t nb_send_ports, nb_recv_ports;
     uint32_t send_port_idx[SC_MAX_NB_PORTS], recv_port_idx[SC_MAX_NB_PORTS];
@@ -78,7 +95,7 @@ int _all_exit(struct sc_config *sc_config);
 
 
 #ifdef __cplusplus
-}
+    }   // extern "C"
 #endif
 
 #endif

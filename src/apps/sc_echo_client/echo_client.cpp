@@ -3,6 +3,7 @@
 #include "sc_app.h"
 #include "sc_echo_client/echo_client.hpp"
 #include "sc_utils/distribution_gen.hpp"
+#include "sc_utils/timestamp.hpp"
 #include "sc_utils/pktgen.h"
 #include "sc_utils/rss.h"
 #include "sc_utils/tail_latency.h"
@@ -23,9 +24,6 @@
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config){
     int result = SC_SUCCESS;
     
-    // debug: test integrate c and cpp
-    sc_utils_uniform_distribution_uint64_generator *g = new sc_utils_uniform_distribution_uint64_generator(0, 1);
-
     /* used send port */
     if(!strcmp(key, "send_port_mac")){
         int nb_send_ports = 0, i;
@@ -166,6 +164,22 @@ invalid_pkt_len:
         SC_ERROR_DETAILS("invalid configuration pkt_len\n");
     }
 
+    /* send flow rate */
+    if(!strcmp(key, "flow_rate")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        double flow_rate;
+        if(sc_util_atolf(value, &flow_rate) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_flow_rate;
+        }
+        INTERNAL_CONF(sc_config)->flow_rate = flow_rate;
+        goto _parse_app_kv_pair_exit;
+
+invalid_flow_rate:
+        SC_ERROR_DETAILS("invalid configuration flow_rate\n");
+    }
+
     /* number of packet per burst */
     if(!strcmp(key, "nb_pkt_per_burst")){
         value = sc_util_del_both_trim(value);
@@ -215,6 +229,22 @@ _parse_app_kv_pair_exit:
 int _process_enter_sender(struct sc_config *sc_config){
     int i, result = SC_SUCCESS;
     
+    /* initialize interval generator */
+    double per_core_pkt_rate = (double)INTERNAL_CONF(sc_config)->flow_rate 
+                                / (double)sc_config->nb_used_cores 
+                                / (double) 8.0 / (double)INTERNAL_CONF(sc_config)->pkt_len;
+    double per_core_pkt_interval = (double) 1.0 / (double) per_core_pkt_rate; /* ns */
+    PER_CORE_APP_META(sc_config).interval_generator 
+        = new sc_util_exponential_uint64_generator((int)per_core_pkt_interval);
+    PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
+    PER_CORE_APP_META(sc_config).last_send_timestamp = sc_util_timestamp_ns();
+
+    /* TODO: print for debug */    
+    SC_THREAD_LOG("per core packet rate: %lf Gpps", per_core_pkt_rate);
+    SC_THREAD_LOG("per core packet interval: %lf ns, (int)%d ns",
+        per_core_pkt_interval, (int)per_core_pkt_interval);
+    SC_THREAD_LOG("initialize interval: %lu ns", PER_CORE_APP_META(sc_config).interval);
+
     /* allocate memory for storing generated packet headers */
     struct sc_pkt_hdr *pkt_hdrs = (struct sc_pkt_hdr*)rte_malloc(
         NULL, sizeof(struct sc_pkt_hdr)*INTERNAL_CONF(sc_config)->nb_flow_per_core, 0);
@@ -283,9 +313,20 @@ _process_enter_exit:
  */
 int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_tx = 0, nb_send_pkt = 0, result = SC_SUCCESS;
+    uint64_t current_ns;
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
+        /* avoid endless loop */
+        if(sc_force_quit){ break; }
+
+        /* check send interval */
+        current_ns = sc_util_timestamp_ns();
+        if(PER_CORE_APP_META(sc_config).last_send_timestamp - current_ns < PER_CORE_APP_META(sc_config).interval){
+            i -= 1;
+            continue;
+        }
+
         /* assemble pkt brust */
         if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
                 /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
@@ -323,6 +364,10 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         }
 
         nb_tx += nb_send_pkt;
+
+        /* update sending timestamp and interval */
+        PER_CORE_APP_META(sc_config).last_send_timestamp = sc_util_timestamp_ns();
+        PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
     }
 
     /* update metadata */

@@ -37,6 +37,9 @@ struct sc_pkt_hdr {
 
 	/* length of the genearted packet */
 	uint32_t pkt_len;
+
+	/* pkt metadata */
+	uint64_t service_time;
 };
 
 /* data copier */

@@ -269,6 +269,17 @@ int sc_util_atoui_64(char *in, uint64_t *out){
     return SC_SUCCESS;
 }
 
+/*!
+ * \brief   convery string to double
+ * \param   in  given string
+ * \param   out output double
+ * \return  zero for successfully parsing
+ */
+int sc_util_atolf(char *in, double *out){
+    *out = strtod(in, NULL);
+    return SC_SUCCESS;
+}
+
 /* ========================================================== */
 
 
