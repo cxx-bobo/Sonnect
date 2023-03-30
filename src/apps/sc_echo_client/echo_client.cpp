@@ -229,20 +229,24 @@ _parse_app_kv_pair_exit:
 int _process_enter_sender(struct sc_config *sc_config){
     int i, result = SC_SUCCESS;
     
+    PER_CORE_APP_META(sc_config).nb_send_pkt = 0;
+    PER_CORE_APP_META(sc_config).nb_confirmed_pkt = 0;
+
     /* initialize interval generator */
     double per_core_pkt_rate = (double)INTERNAL_CONF(sc_config)->bit_rate 
-                                / (double)sc_config->nb_used_cores 
+                                / (double)(sc_config->nb_used_cores/2)
                                 / (double) 8.0 / (double)INTERNAL_CONF(sc_config)->pkt_len;
-    double per_core_pkt_interval = (double) 1.0 / (double) per_core_pkt_rate; /* ns */
+    double per_core_brust_rate = (double) per_core_pkt_rate / (double)INTERNAL_CONF(sc_config)->nb_pkt_per_burst;
+    double per_core_brust_interval = (double) 1.0 / (double) per_core_brust_rate; /* ns */
     PER_CORE_APP_META(sc_config).interval_generator 
-        = new sc_util_exponential_uint64_generator((int)per_core_pkt_interval);
+        = new sc_util_exponential_uint64_generator((int)per_core_brust_interval);
     PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
     PER_CORE_APP_META(sc_config).last_send_timestamp = sc_util_timestamp_ns();
 
-    /* TODO: print for debug */    
-    SC_THREAD_LOG("per core packet rate: %lf Gpps", per_core_pkt_rate);
-    SC_THREAD_LOG("per core packet interval: %lf ns, (int)%d ns",
-        per_core_pkt_interval, (int)per_core_pkt_interval);
+    SC_THREAD_LOG("per core pkt rate: %lf G packet/second", per_core_pkt_rate);    
+    SC_THREAD_LOG("per core brust rate: %lf G brust/second", per_core_brust_rate);
+    SC_THREAD_LOG("per core brust interval: %lf ns, (int)%d ns",
+        per_core_brust_interval, (int)per_core_brust_interval);
     SC_THREAD_LOG("initialize interval: %lu ns", PER_CORE_APP_META(sc_config).interval);
 
     /* allocate memory for storing generated packet headers */
@@ -313,7 +317,7 @@ _process_enter_exit:
  */
 int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_tx = 0, nb_send_pkt = 0, result = SC_SUCCESS;
-    uint64_t current_ns;
+    uint64_t current_ns = 0;
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
@@ -322,8 +326,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
 
         /* check send interval */
         current_ns = sc_util_timestamp_ns();
-        if(PER_CORE_APP_META(sc_config).last_send_timestamp - current_ns < PER_CORE_APP_META(sc_config).interval){
-            i -= 1;
+        if(current_ns - PER_CORE_APP_META(sc_config).last_send_timestamp < PER_CORE_APP_META(sc_config).interval){
             continue;
         }
 
@@ -366,18 +369,20 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         nb_tx += nb_send_pkt;
 
         /* update sending timestamp and interval */
-        PER_CORE_APP_META(sc_config).last_send_timestamp = sc_util_timestamp_ns();
+        PER_CORE_APP_META(sc_config).last_send_timestamp = current_ns;
         PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
     }
 
     /* update metadata */
-    PER_CORE_APP_META(sc_config).nb_send_pkt += nb_tx;
-    if(PER_CORE_APP_META(sc_config).last_used_flow == INTERNAL_CONF(sc_config)->nb_flow_per_core){
-        PER_CORE_APP_META(sc_config).last_used_flow = 0;
-    } else {
-        PER_CORE_APP_META(sc_config).last_used_flow += 1;
+    if(nb_tx != 0){
+        PER_CORE_APP_META(sc_config).nb_send_pkt += nb_tx;
+        if(PER_CORE_APP_META(sc_config).last_used_flow == INTERNAL_CONF(sc_config)->nb_flow_per_core){
+            PER_CORE_APP_META(sc_config).last_used_flow = 0;
+        } else {
+            PER_CORE_APP_META(sc_config).last_used_flow += 1;
+        }
     }
-
+    
     goto process_client_exit;
 
 process_client_ready_to_exit:
@@ -429,6 +434,9 @@ _process_exit_exit:
  */
 int _process_enter_receiver(struct sc_config *sc_config){
     int result = SC_SUCCESS;
+
+    PER_CORE_APP_META(sc_config).nb_send_pkt = 0;
+    PER_CORE_APP_META(sc_config).nb_confirmed_pkt = 0;
 
     /* allocate array for pointers to storing received pkt_bufs */
     PER_CORE_APP_META(sc_config).recv_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
@@ -546,7 +554,7 @@ int _all_exit(struct sc_config *sc_config){
         SC_THREAD_LOG("[TOTAL] duration: %lu us",
             SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)
         );
-        SC_THREAD_LOG("[TOTAL] packet length: %u",
+        SC_THREAD_LOG("[TOTAL] packet length: %u bytes",
             INTERNAL_CONF(sc_config)->pkt_len
         );
         SC_THREAD_LOG("[TOTAL] send throughput: %f Gbps",
