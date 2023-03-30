@@ -1,8 +1,9 @@
-#ifndef _SC_UTILS_GENERATOR_H_
-#define _SC_UTILS_GENERATOR_H_
+#ifndef _SC_UTILS_DISTRIBUTION_GENERATOR_H_
+#define _SC_UTILS_DISTRIBUTION_GENERATOR_H_
 
 #include <atomic>
 #include <random>
+#include <array>
 #include <cstdint>
 #include <string>
 

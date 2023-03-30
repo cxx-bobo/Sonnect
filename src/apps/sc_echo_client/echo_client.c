@@ -449,7 +449,7 @@ int _process_exit_receiver(struct sc_config *sc_config){
         return SC_ERROR_INTERNAL;
     }
 
-    SC_THREAD_LOG("nb of confirmed pkt: %u", PER_CORE_APP_META(sc_config).nb_confirmed_pkt);
+    SC_THREAD_LOG("[receiver] confirmed pkt: %u", PER_CORE_APP_META(sc_config).nb_confirmed_pkt);
 
     return SC_SUCCESS;
 }

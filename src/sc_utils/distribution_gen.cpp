@@ -17,12 +17,21 @@ inline T sc_utils_uniform_distribution_generator<T>::last() {
   return last_int_;
 }
 
-inline uint64_t BimodalGenerator::Next() {
+/*!
+ * \brief   generate a new value based on bimodal distribution
+ * \return  
+ */
+template<typename T>
+inline T sc_utils_bimodal_distribution_generator<T>::next() {
   auto index = w_(generator_);
   auto sample = G_[index](generator_);
-  return (uint64_t)ceil(sample);
+  return (T)ceil(sample);
 }
 
-inline uint64_t BimodalGenerator::Last() {
+/*!
+ * \brief   obtain the last generated value
+ */
+template<typename T>
+inline T sc_utils_bimodal_distribution_generator<T>::last() {
   return last_int_;
 }

@@ -1,12 +1,12 @@
-project('SOCONNECT', 'C',
+project('SOCONNECT', ['C', 'CPP'],
 	# Get version number from file.
 	version: run_command(find_program('cat'),
 		files('./VERSION'), check: true).stdout().strip(),
 )
 
 # specified which application to use
-app = 'echo_server'
-add_global_arguments('-DAPP_' + app.to_upper(), language: 'c')
+app = 'echo_client'
+add_global_arguments('-DAPP_' + app.to_upper(), language: ['c', 'cpp'])
 
 # project name
 project_name = app
@@ -14,17 +14,17 @@ project_name_abbreviation = 'sc'
 
 # set configuration file for the application
 app_conf_path = '"../conf/apps/' + app + '.conf"'
-add_global_arguments('-DAPP_CONF_PATH=' + app_conf_path, language: 'c')
+add_global_arguments('-DAPP_CONF_PATH=' + app_conf_path, language: ['c', 'cpp'])
 
 # set header file of the application
 app_header_file_path = '"sc_' + app + '/' + app + '.h"'
-add_global_arguments('-DAPP_HEADER_FILE_PATH=' + app_header_file_path, language: 'c')
+add_global_arguments('-DAPP_HEADER_FILE_PATH=' + app_header_file_path, language: ['c', 'cpp'])
 
 # specified the sub directory to include more meson.build file
 subdir('src/apps/' + project_name_abbreviation + '_' + app)
 
 # set the SC_CLOSE_MOCK_MACRO to clear mock macro definition for developing
-add_global_arguments('-DSC_CLOSE_MOCK_MACRO', language: 'c')
+add_global_arguments('-DSC_CLOSE_MOCK_MACRO', language: ['c', 'cpp'])
 
 # indicator of whether need ARM/x86 SIMD
 need_simd = false
@@ -58,19 +58,19 @@ if doca_common_dep.found() and doca_argp_dep.found() and doca_apsh_dep.found() \
 		and doca_sha_dep.found() and doca_telemetry_dep.found()
 	# set doca as founded
 	has_doca = true
-	add_global_arguments('-DSC_HAS_DOCA', language: 'c')
+	add_global_arguments('-DSC_HAS_DOCA', language: ['c', 'cpp'])
 
 	# set doca version
 	doca_version = run_command(
 		find_program('cat'), files(doca_path + '/applications/VERSION'), check: true).stdout().strip()
 	message('found DOCA ' + doca_version)
-	add_global_arguments('-DSC_DOCA_MAIN_VERSION=' + doca_version[0], language: 'c')
-	add_global_arguments('-DSC_DOCA_SUB_VERSION=' + doca_version[2], language: 'c')
+	add_global_arguments('-DSC_DOCA_MAIN_VERSION=' + doca_version[0], language: ['c', 'cpp'])
+	add_global_arguments('-DSC_DOCA_SUB_VERSION=' + doca_version[2], language: ['c', 'cpp'])
 
 	# specified necessary doca resources according to application
 	if doca_enable_sha == true		
 		if app == 'sketch' or app == 'sha'
-			add_global_arguments('-DSC_NEED_DOCA_SHA', language: 'c')
+			add_global_arguments('-DSC_NEED_DOCA_SHA', language: ['c', 'cpp'])
 		endif
 		message('enabled DOCA SHA engine')
 	else
@@ -85,7 +85,7 @@ has_cuda 	= false
 cuda_dep 	= dependency('cuda', version : '>=11', required: false)
 if cuda_dep.found()
 	has_cuda = true
-	add_global_arguments('-DSC_HAS_CUDA', language: 'c')
+	add_global_arguments('-DSC_HAS_CUDA', language: ['c', 'cpp'])
 endif
 
 # =======================================================================
@@ -96,8 +96,8 @@ endif
 # basic dependencies
 dep = []
 dep += dependency('libdpdk', required: true)
-dep += meson.get_compiler('c').find_library('pthread')
-dep += meson.get_compiler('c').find_library('gmp')
+dep += meson.get_compiler('cpp').find_library('pthread')
+dep += meson.get_compiler('cpp').find_library('gmp')
 
 # DOCA dependencies (optional)
 if has_doca
@@ -195,6 +195,7 @@ if need_simd
 endif 
 # =======================================================================
 
+sc_c_args += ['--std=c++11']
 
 # build executable
 executable(project_name, sources,
