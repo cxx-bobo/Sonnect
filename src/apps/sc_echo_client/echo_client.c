@@ -278,7 +278,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
-        /* assemble fininal pkt brust */
+        /* assemble pkt brust */
         if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
                 /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
                 /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
