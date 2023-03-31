@@ -4,8 +4,8 @@
 #include <rte_malloc.h>
 #include <rte_spinlock.h>
 
-#include "sc_global.h"
-#include "sc_doca_utils.h"
+#include "sc_global.hpp"
+#include "sc_doca_utils.hpp"
 
 #if defined(SC_HAS_DOCA)
 
@@ -29,9 +29,9 @@
 #include <doca_buf.h>
 #include <doca_mmap.h>
 
-#include "sc_global.h"
-#include "sc_utils.h"
-#include "sc_log.h"
+#include "sc_global.hpp"
+#include "sc_utils.hpp"
+#include "sc_log.hpp"
 
 int init_doca(struct sc_config *sc_config, const char *doca_conf_path);
 struct per_core_doca_meta;

@@ -1,24 +1,15 @@
 #ifndef _SC_ECHO_CLIENT_H_
 #define _SC_ECHO_CLIENT_H_
 
-/* cpp header */
-#ifdef __cplusplus
-    #include "sc_utils/distribution_gen.hpp"
-#endif
-
-/* for cpp linkage */
-#ifdef __cplusplus
-    extern "C" {
-#endif
-
 #include <sys/time.h>
 #include <rte_ethdev.h>
 #include <rte_ether.h>
 #include <rte_malloc.h>
 
-#include "sc_global.h"
-#include "sc_utils.h"
-#include "sc_utils/pktgen.h"
+#include "sc_global.hpp"
+#include "sc_utils.hpp"
+#include "sc_utils/pktgen.hpp"
+#include "sc_utils/distribution_gen.hpp"
 
 #if defined(MODE_LATENCY)
     #define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 24)-1
@@ -92,10 +83,5 @@ struct _internal_config {
 int _init_app(struct sc_config *sc_config);
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config);
 int _all_exit(struct sc_config *sc_config);
-
-
-#ifdef __cplusplus
-    }   // extern "C"
-#endif
 
 #endif

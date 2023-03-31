@@ -1,7 +1,7 @@
-#include "sc_global.h"
-#include "sc_utils.h"
-#include "sc_port.h"
-#include "sc_mbuf.h"
+#include "sc_global.hpp"
+#include "sc_utils.hpp"
+#include "sc_port.hpp"
+#include "sc_mbuf.hpp"
 
 int _init_single_port(uint16_t port_index, uint16_t port_logical_index, struct sc_config *sc_config);
 static bool _is_port_choosed(uint16_t port_index, struct sc_config *sc_config);
@@ -16,7 +16,7 @@ uint8_t *used_rss_hash_key;
 /*!
  * \brief hash key for symmetric RSS
  */
-static const uint8_t _symmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] = {
+static uint8_t _symmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] = {
     0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
     0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
     0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
@@ -27,7 +27,7 @@ static const uint8_t _symmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] = {
 /*!
  * \brief hash key for asymmetric RSS
  */
-static const uint8_t _asymmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] = 
+static uint8_t _asymmetric_rss_hash_key[RSS_HASH_KEY_LENGTH] = 
 	{ 0x6d, 0x5a, 0x56, 0xda, 0x25, 0x5b, 0x0e, 0xc2, 
       0x41, 0x67, 0x25, 0x3d, 0x43, 0xa3, 0x8f, 0xb0,
 	  0xd0, 0xca, 0x2b, 0xcb, 0xae, 0x7b, 0x30, 0xb4,

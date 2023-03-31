@@ -1,20 +1,11 @@
-#include "sc_global.h"
-#include "sc_sha/sha.h"
-#include "sc_utils.h"
-#include "sc_utils/pktgen.h"
-#include "sc_utils/tail_latency.h"
-#include "sc_log.h"
+#include "sc_global.hpp"
+#include "sc_sha/sha.hpp"
+#include "sc_utils/tail_latency.hpp"
+#include "sc_utils/pktgen.hpp"
+#include "sc_utils.hpp"
+#include "sc_log.hpp"
 
 int __reload_sha_state(struct sc_config *sc_config);
-
-/*!
- * \brief   initialize application (internal)
- * \param   sc_config   the global configuration
- * \return  zero for successfully initialization
- */
-int _init_app(struct sc_config *sc_config){
-    return SC_SUCCESS;
-}
 
 /*!
  * \brief   parse application-specific key-value configuration pair
@@ -128,7 +119,7 @@ invalid_send_port_mac:
             if(SC_SUCCESS != sc_util_get_logical_port_id_by_port_id(sc_config, port_id, &logical_port_id)){
                 SC_ERROR_DETAILS("failed to get logical port id by port id %u", port_id);
                 result = SC_ERROR_INVALID_VALUE;
-                goto free_send_port_mac;
+                goto free_recv_port_mac;
             }
 
             /* we record all id info in previous for fatser indexing while sending packets */
@@ -398,7 +389,7 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
                 return SC_ERROR_INTERNAL;
             }
 
-            /* retrieve SHA result, we only use the LSB 32 bits */
+            /* retrieve SHA result */
             doca_buf_get_data(PER_CORE_DOCA_META(sc_config).sha_job->resp_buf, (void **)&resp_head);
         #elif defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
             __reload_sha_state(sc_config);
@@ -628,6 +619,15 @@ int _all_exit(struct sc_config *sc_config){
     
     #endif // MODE_LATENCY
 
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   initialize application (internal)
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully initialization
+ */
+int _init_app(struct sc_config *sc_config){
     return SC_SUCCESS;
 }
 

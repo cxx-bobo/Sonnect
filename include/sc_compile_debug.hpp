@@ -3,7 +3,7 @@
 
 #include <rte_version.h>
 
-#include "sc_utils.h"
+#include "sc_utils.hpp"
 
 /* print dpdk version while compiling */
 #pragma message "DPDK Version: " \

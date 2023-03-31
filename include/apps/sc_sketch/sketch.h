@@ -7,12 +7,12 @@
 #include <rte_udp.h>
 #include <rte_malloc.h>
 
-#include "sc_global.h"
-#include "sc_utils/map.h"
+#include "sc_global.hpp"
+#include "sc_utils/map.hpp"
 
 #if defined(SC_HAS_DOCA)
-    #include "sc_doca.h"
-    #include "sc_doca_utils.h"
+    #include "sc_doca.hpp"
+    #include "sc_doca_utils.hpp"
 #endif
 
 /* type of the sketch counter */

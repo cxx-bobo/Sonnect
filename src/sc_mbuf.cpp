@@ -1,7 +1,7 @@
-#include "sc_global.h"
-#include "sc_utils.h"
-#include "sc_mbuf.h"
-#include "sc_port.h"
+#include "sc_global.hpp"
+#include "sc_utils.hpp"
+#include "sc_mbuf.hpp"
+#include "sc_port.hpp"
 
 /*!
  * \brief   initialize dpdk memory

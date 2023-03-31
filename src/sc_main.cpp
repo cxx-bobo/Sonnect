@@ -7,16 +7,16 @@
 
 #include <gmp.h>
 
-#include "sc_compile_debug.h"
-#include "sc_global.h"
-#include "sc_port.h"
-#include "sc_mbuf.h"
-#include "sc_utils.h"
-#include "sc_worker.h"
-#include "sc_app.h"
-#include "sc_log.h"
+#include "sc_compile_debug.hpp"
+#include "sc_global.hpp"
+#include "sc_port.hpp"
+#include "sc_mbuf.hpp"
+#include "sc_utils.hpp"
+#include "sc_worker.hpp"
+#include "sc_app.hpp"
+#include "sc_log.hpp"
 #if defined(SC_HAS_DOCA)
-  #include "sc_doca.h"
+  #include "sc_doca.hpp"
 #endif
 
 /* indicator to force shutdown all threads (e.g. worker threads, logging thread, etc.) */
@@ -38,6 +38,7 @@ static void _signal_handler(int signum);
 int main(int argc, char **argv){
   int result = EXIT_SUCCESS;
   FILE* fp = NULL;
+  struct sc_config *sc_config;
 
   /* allocate memory space for storing configuration */
   struct app_config *app_config = (struct app_config*)malloc(sizeof(struct app_config));
@@ -58,7 +59,7 @@ int main(int argc, char **argv){
     memset(doca_config, 0, sizeof(struct doca_config));
   #endif // SC_HAS_DOCA
 
-  struct sc_config *sc_config = (struct sc_config*)malloc(sizeof(struct sc_config));
+  sc_config = (struct sc_config*)malloc(sizeof(struct sc_config));
   if(unlikely(!sc_config)){
     SC_ERROR_DETAILS("failed to allocate memory for sc_config: %s\n", strerror(errno));
     result = EXIT_FAILURE;

@@ -6,9 +6,9 @@
 
 #include <rte_malloc.h>
 
-#include "sc_global.h"
-#include "sc_utils.h"
-#include "sc_log.h"
+#include "sc_global.hpp"
+#include "sc_utils.hpp"
+#include "sc_log.hpp"
 
 typedef struct kv_entry {
     void *key;

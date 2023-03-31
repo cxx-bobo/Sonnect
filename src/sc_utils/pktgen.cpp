@@ -1,8 +1,8 @@
-#include "sc_global.h"
-#include "sc_utils/pktgen.h"
-#include "sc_utils.h"
-#include "sc_log.h"
-#include "sc_utils/rss.h"
+#include "sc_global.hpp"
+#include "sc_utils/pktgen.hpp"
+#include "sc_utils.hpp"
+#include "sc_log.hpp"
+#include "sc_utils/rss.hpp"
 
 /*!
  * \brief   generate random ethernet address
@@ -109,8 +109,8 @@ int sc_util_generate_random_pkt_hdr(
 			sc_util_generate_random_ipv4_addr(&sc_pkt_hdr->src_ipv4_addr);
         	sc_util_generate_random_ipv4_addr(&sc_pkt_hdr->dst_ipv4_addr);
 		} else if(l3_type == RTE_ETHER_TYPE_IPV6){
-			sc_util_generate_random_ipv6_addr(&sc_pkt_hdr->src_ipv6_addr);
-        	sc_util_generate_random_ipv6_addr(&sc_pkt_hdr->dst_ipv6_addr);
+			sc_util_generate_random_ipv6_addr(sc_pkt_hdr->src_ipv6_addr);
+        	sc_util_generate_random_ipv6_addr(sc_pkt_hdr->dst_ipv6_addr);
 		} else {
 			SC_THREAD_ERROR("unknown l3 type %u", l3_type);
 			result = SC_ERROR_INVALID_VALUE;

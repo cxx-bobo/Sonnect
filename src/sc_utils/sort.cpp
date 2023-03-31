@@ -1,6 +1,6 @@
-#include "sc_global.h"
-#include "sc_utils.h"
-#include "sc_log.h"
+#include "sc_global.hpp"
+#include "sc_utils.hpp"
+#include "sc_log.hpp"
 
 int __internal_merge_sort_long(long *list, uint64_t low, uint64_t high, bool is_increament);
 short __merge_long(long *list, uint64_t low, uint64_t high, bool is_increament);
@@ -38,13 +38,15 @@ int sc_util_merge_sort_long(long *list, uint64_t length, bool is_increament){
  * \return  sort status
  */
 int __internal_merge_sort_long(long *list, uint64_t low, uint64_t high, bool is_increament){
+     uint64_t mid;
+    
     // recursive quit condition
     if(low == high){
         goto low_eq_high;
     }
 
     // obtain middle position
-    uint64_t mid = (low+high)/2;
+    mid = (low+high)/2;
 
     // recursive calling to sort two sublists
     if(__internal_merge_sort_long(list, low, mid, is_increament) != SC_SUCCESS) 

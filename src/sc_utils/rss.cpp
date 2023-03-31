@@ -1,8 +1,8 @@
-#include "sc_global.h"
-#include "sc_port.h"
-#include "sc_utils/rss.h"
-#include "sc_log.h"
-#include "sc_utils.h"
+#include "sc_global.hpp"
+#include "sc_port.hpp"
+#include "sc_utils/rss.hpp"
+#include "sc_log.hpp"
+#include "sc_utils.hpp"
 
 /*!
  * \brief   calculate the queue id based on ipv4 packet

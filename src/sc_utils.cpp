@@ -1,6 +1,6 @@
-#include "sc_global.h"
-#include "sc_utils.h"
-#include "sc_log.h"
+#include "sc_global.hpp"
+#include "sc_utils.hpp"
+#include "sc_log.hpp"
 
 /* ==================== core operation ==================== */
 
@@ -88,7 +88,7 @@ int sc_util_get_mac_by_port_id(struct sc_config *sc_config, uint32_t port_id, ch
     char ebuf[RTE_ETHER_ADDR_FMT_SIZE];
 
     /* get mac */
-    ret = rte_eth_macaddr_get(port_id, ebuf);
+    ret = rte_eth_macaddr_get(port_id, (rte_ether_addr*)ebuf);
     if (ret == 0) {
         memcpy(port_mac, ebuf, RTE_ETHER_ADDR_FMT_SIZE);
     } else {

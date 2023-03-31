@@ -1,4 +1,4 @@
-#include "sc_doca.h"
+#include "sc_doca.hpp"
 
 #if defined(SC_HAS_DOCA)
 

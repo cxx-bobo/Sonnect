@@ -5,8 +5,8 @@
 
 /* gcc -DTEST_MAIN -msse4.1 -msha sha256-x86.c -o sha256.exe   */
 
-#include "sc_global.h"
-#include "apps/sc_sha/sha.h"
+#include "sc_global.hpp"
+#include "apps/sc_sha/sha.hpp"
 
 #if !defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
 
@@ -24,9 +24,6 @@
 typedef UINT32 uint32_t;
 typedef UINT8 uint8_t;
 #endif
-
-#include "sc_global.h"
-#include "apps/sc_sha/sha.h"
 
 /* Process multiple blocks. The caller is responsible for setting the initial */
 /*  state, and the caller is responsible for padding the final block.        */

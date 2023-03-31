@@ -1,7 +1,7 @@
 #ifndef _SC_APP_H_
 #define _SC_APP_H_
 
-#include "sc_global.h"
+#include "sc_global.hpp"
 
 #include <rte_malloc.h>
 #include <rte_mbuf.h>

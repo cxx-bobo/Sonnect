@@ -2,8 +2,8 @@
 #define _SC_CM_SKETCH_H_
 
 #if defined(SC_HAS_DOCA)
-    #include "sc_doca.h"
-    #include "sc_doca_utils.h"
+    #include "sc_doca.hpp"
+    #include "sc_doca_utils.hpp"
 #endif
 
 int __cm_update(const char* key, struct sc_config *sc_config);

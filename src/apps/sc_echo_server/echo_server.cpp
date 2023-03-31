@@ -1,27 +1,9 @@
-#include "sc_global.h"
-#include "sc_echo_server/echo_server.h"
-#include "sc_utils.h"
-#include "sc_log.h"
-#include "sc_app.h"
-#include "sc_utils/pktgen.h"
-
-/*!
- * \brief   initialize application (internal)
- * \param   sc_config   the global configuration
- * \return  zero for successfully initialization
- */
-int _init_app(struct sc_config *sc_config){
-    int i;
-    
-    for(i=0; i<sc_config->nb_used_cores; i++){
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
-    }
-
-    return SC_SUCCESS;
-}
+#include "sc_global.hpp"
+#include "sc_echo_server/echo_server.hpp"
+#include "sc_utils.hpp"
+#include "sc_log.hpp"
+#include "sc_app.hpp"
+#include "sc_utils/pktgen.hpp"
 
 /*!
  * \brief   parse application-specific key-value configuration pair
@@ -135,7 +117,7 @@ invalid_send_port_mac:
             if(SC_SUCCESS != sc_util_get_logical_port_id_by_port_id(sc_config, port_id, &logical_port_id)){
                 SC_ERROR_DETAILS("failed to get logical port id by port id %u", port_id);
                 result = SC_ERROR_INVALID_VALUE;
-                goto free_send_port_mac;
+                goto free_recv_port_mac;
             }
 
             /* we record all id info in previous for fatser indexing while sending packets */
@@ -249,5 +231,23 @@ int _process_exit(struct sc_config *sc_config){
  * \return  zero for successfully executing
  */
 int _all_exit(struct sc_config *sc_config){
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   initialize application (internal)
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully initialization
+ */
+int _init_app(struct sc_config *sc_config){
+    int i;
+    
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
+    }
+
     return SC_SUCCESS;
 }

@@ -1,4 +1,4 @@
-#include "sc_utils/map.h"
+#include "sc_utils/map.hpp"
 
 /*!
  * \brief   create a new key-value map
@@ -27,16 +27,17 @@ int new_kv_map(sc_kv_map_t **p){
  */
 int insert_kv_map(sc_kv_map_t *p, void *key, uint64_t key_len, void *value, uint64_t value_len){
     int i, result = SC_SUCCESS;
-    sc_kv_entry_t *pointer, *last_pointer;
+    sc_kv_entry_t *pointer, *last_pointer, *entry;
+    void *_key, *_value;
 
-    sc_kv_entry_t *entry = (sc_kv_entry_t*)rte_malloc(NULL, sizeof(sc_kv_entry_t), 0);
+    entry = (sc_kv_entry_t*)rte_malloc(NULL, sizeof(sc_kv_entry_t), 0);
     if(!entry){
         SC_ERROR_DETAILS("failed to allocate memory for sc_kv_entry_t: %s", strerror(errno));
         result = SC_ERROR_MEMORY;
         goto insert_kv_map_exit;
     }
     
-    void *_key = (void*)rte_malloc(NULL, key_len, 0);
+    _key = (void*)rte_malloc(NULL, key_len, 0);
     if(!_key){
         SC_ERROR_DETAILS("failed to allocate memory for key: %s", strerror(errno));
         result = SC_ERROR_MEMORY;
@@ -44,7 +45,7 @@ int insert_kv_map(sc_kv_map_t *p, void *key, uint64_t key_len, void *value, uint
     }
     memcpy(_key, key, key_len);
 
-    void *_value = (void*)rte_malloc(NULL, value_len, 0);
+    _value = (void*)rte_malloc(NULL, value_len, 0);
     if(!_value){
         SC_ERROR_DETAILS("failed to allocate memory for value: %s", strerror(errno));
         result = SC_ERROR_MEMORY;

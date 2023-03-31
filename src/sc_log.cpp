@@ -1,6 +1,6 @@
-#include "sc_global.h"
-#include "sc_log.h"
-#include "sc_utils.h"
+#include "sc_global.hpp"
+#include "sc_log.hpp"
+#include "sc_utils.hpp"
 
 char current_time_str[128] = "UNKNOWN TIME";
 pthread_mutex_t thread_log_mutex;

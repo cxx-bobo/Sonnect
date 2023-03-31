@@ -1,8 +1,8 @@
-#include "sc_global.h"
-#include "sc_worker.h"
-#include "sc_utils.h"
-#include "sc_mbuf.h"
-#include "sc_log.h"
+#include "sc_global.hpp"
+#include "sc_worker.hpp"
+#include "sc_utils.hpp"
+#include "sc_mbuf.hpp"
+#include "sc_log.hpp"
 
 extern volatile bool sc_force_quit;
 
@@ -58,6 +58,14 @@ int _worker_loop(void* param){
     uint64_t nb_fwd_pkts = 0;
     struct sc_config *sc_config = (struct sc_config*)param;
 
+    #if defined(ROLE_SERVER)
+        struct rte_mbuf *pkt[SC_MAX_PKT_BURST*2];
+    #endif // ROLE_SERVER
+
+    #if defined(ROLE_CLIENT)
+        bool ready_to_exit = false;
+    #endif // ROLE_CLIENT
+
     /* record lcore id starts from 0 */
     lcore_id_from_zero = rte_lcore_index(rte_lcore_id());
 
@@ -67,14 +75,6 @@ int _worker_loop(void* param){
         SC_THREAD_ERROR("failed to initialize worker loop");
         goto worker_exit;
     }
-
-    #if defined(ROLE_SERVER)
-        struct rte_mbuf *pkt[SC_MAX_PKT_BURST*2];
-    #endif // ROLE_SERVER
-
-    #if defined(ROLE_CLIENT)
-        bool ready_to_exit = false;
-    #endif // ROLE_CLIENT
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         if(sc_config->core_ids[i] == rte_lcore_id()){

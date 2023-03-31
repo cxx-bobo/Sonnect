@@ -13,8 +13,8 @@
 #include <rte_ethdev.h>
 #include <rte_ether.h>
 
-#include "sc_global.h"
-#include "sc_log.h"
+#include "sc_global.hpp"
+#include "sc_log.hpp"
 
 /*!
  * \brief all return status

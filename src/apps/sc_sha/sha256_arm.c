@@ -8,8 +8,8 @@
 /* GCC118 on the compile farm with GCC 4.8.5 suffers the issue.     */
 /* g++ -DTEST_MAIN -march=armv8-a+crypto sha256-arm.c -o sha256.exe */
 
-#include "sc_global.h"
-#include "apps/sc_sha/sha.h"
+#include "sc_global.hpp"
+#include "apps/sc_sha/sha.hpp"
 
 #if defined(SC_HAS_DOCA) && !defined(SC_NEED_DOCA_SHA)
 

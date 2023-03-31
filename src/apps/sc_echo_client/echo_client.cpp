@@ -1,18 +1,14 @@
-#include "sc_global.h"
-#include "sc_worker.h"
-#include "sc_app.h"
+#include "sc_global.hpp"
+#include "sc_worker.hpp"
+#include "sc_app.hpp"
 #include "sc_echo_client/echo_client.hpp"
 #include "sc_utils/distribution_gen.hpp"
 #include "sc_utils/timestamp.hpp"
-#include "sc_utils/pktgen.h"
-#include "sc_utils/rss.h"
-#include "sc_utils/tail_latency.h"
-#include "sc_utils.h"
-#include "sc_log.h"
-
-#ifdef __cplusplus
-    extern "C" {
-#endif
+#include "sc_utils/pktgen.hpp"
+#include "sc_utils/rss.hpp"
+#include "sc_utils/tail_latency.hpp"
+#include "sc_utils.hpp"
+#include "sc_log.hpp"
 
 /*!
  * \brief   parse application-specific key-value configuration pair
@@ -636,7 +632,3 @@ int _init_app(struct sc_config *sc_config){
 
     return SC_SUCCESS;
 }
-
-#ifdef __cplusplus
-    }
-#endif
