@@ -314,6 +314,7 @@ _process_enter_exit:
 int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_tx = 0, nb_send_pkt = 0, result = SC_SUCCESS;
     uint64_t current_ns = 0;
+    char timestamp_ns[24] = {0};
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
@@ -325,6 +326,9 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         if(current_ns - PER_CORE_APP_META(sc_config).last_send_timestamp < PER_CORE_APP_META(sc_config).interval){
             continue;
         }
+
+        /* cast the time to timestamp string, as the packet payload */
+        sprintf(timestamp_ns, "%lu", current_ns);
 
         /* assemble pkt brust */
         if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
@@ -343,7 +347,9 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
                                     PER_CORE_APP_META(sc_config).last_used_flow
                                 ].pkt_udp_hdr,
                 /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
-                /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len
+                /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
+                /* payload */ timestamp_ns,
+                /* payload_len */ 24
         )){
             SC_THREAD_ERROR("failed to assemble final packet");
             result = SC_ERROR_INTERNAL;
@@ -463,6 +469,8 @@ _process_enter_receiver_exit:
  */
 int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_rx = 0, nb_recv_pkt = 0, result = SC_SUCCESS;
+    char *origin_timestamp;
+    uint64_t current_ns, origin_ns;
 
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_recv_ports; i++){
         memset(PER_CORE_APP_META(sc_config).recv_pkt_bufs, 0, sizeof(struct rte_mbuf*)*SC_MAX_PKT_BURST*2);
@@ -473,14 +481,35 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
             /* nb_pkts */ SC_MAX_PKT_BURST
         );
 
-        if(nb_recv_pkt == 0) { 
-            continue;
-        }
+        if(nb_recv_pkt == 0) { continue; }
+        
+        /* record the receiving timestamp */
+        // current_ns = sc_util_timestamp_ns();
 
         PER_CORE_APP_META(sc_config).nb_confirmed_pkt += nb_recv_pkt;
 
-        /* return back recv pkt_mbuf */
         for(j=0; j<nb_recv_pkt; j++) {
+            /* record latency (assume its a ipv4 + udp packet) */
+            origin_timestamp = rte_pktmbuf_mtod_offset(
+                PER_CORE_APP_META(sc_config).recv_pkt_bufs[j], char*, 
+                sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
+            );
+
+            if(SC_SUCCESS != sc_util_atoui_64(origin_timestamp, &origin_ns)){
+                SC_THREAD_WARNING("failed to cast timestamp payload to uint64_t");
+                goto process_client_receiver_exit;
+            }
+
+            PER_CORE_APP_META(sc_config).latency_ns[
+                PER_CORE_APP_META(sc_config).latency_data_pointer
+            ] = current_ns - origin_ns;
+
+            PER_CORE_APP_META(sc_config).latency_data_pointer += 1;
+            if(PER_CORE_APP_META(sc_config).latency_data_pointer == SC_ECHO_CLIENT_MAX_LATENCY_NB){
+                PER_CORE_APP_META(sc_config).latency_data_pointer = 0;
+            }
+
+            /* return back recv pkt_mbuf */
             rte_pktmbuf_free(PER_CORE_APP_META(sc_config).recv_pkt_bufs[j]); 
         }
     }
@@ -517,8 +546,9 @@ int _process_exit_receiver(struct sc_config *sc_config){
  * \return  zero for successfully executing
  */
 int _all_exit(struct sc_config *sc_config){
-    int i;
+    int i, j;
     size_t nb_send_pkt = 0, nb_confirmed_pkt = 0;
+    double per_core_avg_latency, all_core_avg_latency;
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         /* reduce number of packet */
@@ -529,47 +559,58 @@ int _all_exit(struct sc_config *sc_config){
         nb_send_pkt, nb_confirmed_pkt
     );
 
-    #if defined(MODE_THROUGHPUT)
-        long worker_max_interval_sec = 0, worker_max_interval_usec = 0;
+    long worker_max_interval_sec = 0, worker_max_interval_usec = 0;
 
-        for(i=0; i<sc_config->nb_used_cores; i++){
-            /* record maximum duration */
-            long interval_sec, interval_usec;
-            interval_sec
-                = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).end_time.tv_sec 
-                - PER_CORE_APP_META_BY_CORE_ID(sc_config, i).start_time.tv_sec;
-            interval_usec
-                = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).end_time.tv_usec 
-                - PER_CORE_APP_META_BY_CORE_ID(sc_config, i).start_time.tv_usec;
-            if(SC_UTIL_TIME_INTERVL_US(interval_sec, interval_usec) >
-                    SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)){
-                worker_max_interval_sec = interval_sec;
-                worker_max_interval_usec = interval_usec;
-            }
+    /* record maximum duration */
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        long interval_sec, interval_usec;
+        interval_sec
+            = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).end_time.tv_sec 
+            - PER_CORE_APP_META_BY_CORE_ID(sc_config, i).start_time.tv_sec;
+        interval_usec
+            = PER_CORE_APP_META_BY_CORE_ID(sc_config, i).end_time.tv_usec 
+            - PER_CORE_APP_META_BY_CORE_ID(sc_config, i).start_time.tv_usec;
+        if(SC_UTIL_TIME_INTERVL_US(interval_sec, interval_usec) >
+                SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)){
+            worker_max_interval_sec = interval_sec;
+            worker_max_interval_usec = interval_usec;
         }
-        SC_THREAD_LOG("[TOTAL] duration: %lu us",
-            SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)
-        );
-        SC_THREAD_LOG("[TOTAL] packet length: %u bytes",
-            INTERNAL_CONF(sc_config)->pkt_len
-        );
-        SC_THREAD_LOG("[TOTAL] send throughput: %f Gbps",
-            (float)(nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
-            / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec) * 1000)
-        );
-        SC_THREAD_LOG("[TOTAL] confirm throughput: %f Gbps",
-            (float)(nb_confirmed_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
-            / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec) * 1000)
-        );
-        SC_THREAD_LOG("[TOTAL] send throughput: %f Mpps",
-            (float)(nb_send_pkt) 
-            / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
-        );
-        SC_THREAD_LOG("[TOTAL] confirm throughput: %f Mpps",
-            (float)(nb_confirmed_pkt) 
-            / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
-        );
-    #endif
+    }
+
+    /* calculate latency */
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        per_core_avg_latency = (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).latency_ns[0];
+        for(j=1; j<SC_ECHO_CLIENT_MAX_LATENCY_NB; j++){
+            per_core_avg_latency 
+                = (per_core_avg_latency + (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).latency_ns[j])/(double)2;
+        }
+        all_core_avg_latency += per_core_avg_latency;
+    }
+    all_core_avg_latency /= (double)sc_config->nb_used_cores;
+
+    SC_THREAD_LOG("[TOTAL] duration: %lu us",
+        SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)
+    );
+    SC_THREAD_LOG("[TOTAL] packet length: %u bytes",
+        INTERNAL_CONF(sc_config)->pkt_len
+    );
+    SC_THREAD_LOG("[TOTAL] send throughput: %f Gbps",
+        (float)(nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
+        / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec) * 1000)
+    );
+    SC_THREAD_LOG("[TOTAL] confirm throughput: %f Gbps",
+        (float)(nb_confirmed_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
+        / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec) * 1000)
+    );
+    SC_THREAD_LOG("[TOTAL] send throughput: %f Mpps",
+        (float)(nb_send_pkt) 
+        / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
+    );
+    SC_THREAD_LOG("[TOTAL] confirm throughput: %f Mpps",
+        (float)(nb_confirmed_pkt) 
+        / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
+    );
+    SC_THREAD_LOG("[TOTAL] average RTT: %lf us", all_core_avg_latency/(double)1000);
 
     return SC_SUCCESS;
 }
