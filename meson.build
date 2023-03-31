@@ -5,7 +5,7 @@ project('SOCONNECT', ['C', 'CPP'],
 )
 
 # specified which application to use
-app = 'echo_client'
+app = 'echo_server'
 add_global_arguments('-DAPP_' + app.to_upper(), language: ['c', 'cpp'])
 
 # project name
@@ -200,7 +200,7 @@ sc_c_args += ['--std=c++11']
 # build executable
 executable(project_name, sources,
 	dependencies : dep,
-	c_args: sc_c_args,
+	cpp_args: sc_c_args,
 	include_directories: inc_dirs,
 	install: false
 )

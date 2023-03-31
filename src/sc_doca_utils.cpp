@@ -337,7 +337,7 @@ int sc_doca_util_open_doca_device_with_pci(
 	doca_result = doca_devinfo_list_create(&dev_list, &nb_devs);
 	if (doca_result != DOCA_SUCCESS) {
 		SC_ERROR_DETAILS("failed to load doca devices list: %s",
-		 	doca_get_error_string(doca_result));
+		 	doca_get_error_string((doca_error_t)doca_result));
 		result = SC_ERROR_INTERNAL;
 		goto open_doca_device_exit;
 	}

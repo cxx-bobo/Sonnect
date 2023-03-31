@@ -158,7 +158,7 @@ init_doca_exit:
  */
 static int _init_doca_flow(struct sc_config *sc_config){
     int i, result = SC_SUCCESS;
-    struct doca_flow_error err = {0};
+    struct doca_flow_error err;
     struct doca_flow_port *single_doca_flow_port;
     struct doca_flow_port **doca_flow_ports;
     char doca_flow_port_id_str[SC_DOCA_FLOW_MAX_PORT_ID_STRLEN];

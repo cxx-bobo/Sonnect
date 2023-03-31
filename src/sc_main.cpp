@@ -39,6 +39,9 @@ int main(int argc, char **argv){
   int result = EXIT_SUCCESS;
   FILE* fp = NULL;
   struct sc_config *sc_config;
+  #if defined(SC_HAS_DOCA)
+    struct doca_config *doca_config;
+  #endif
 
   /* allocate memory space for storing configuration */
   struct app_config *app_config = (struct app_config*)malloc(sizeof(struct app_config));
@@ -50,7 +53,7 @@ int main(int argc, char **argv){
   memset(app_config, 0, sizeof(struct app_config));
   
   #if defined(SC_HAS_DOCA)
-    struct doca_config *doca_config = (struct doca_config*)malloc(sizeof(struct doca_config));
+    doca_config = (struct doca_config*)malloc(sizeof(struct doca_config));
     if(unlikely(!doca_config)){
       SC_ERROR_DETAILS("failed to allocate memory for doca_config: %s\n", strerror(errno));
       result = EXIT_FAILURE;
@@ -396,6 +399,9 @@ static void _signal_handler(int signum) {
 static int _parse_dpdk_kv_pair(char* key, char *value, struct sc_config* sc_config){
     int i, result = SC_SUCCESS;
     uint16_t nb_ports = 0;
+    #if defined(SC_HAS_DOCA)
+        uint16_t nb_sfs = 0, nb_pci_dev = 0;
+    #endif
     
     /* config: used device */
     if(!strcmp(key, "port_mac")){
@@ -437,7 +443,7 @@ free_dev_src:
     }
 
     /* config: number of RX rings per port */
-    if(!strcmp(key, "nb_rx_rings_per_port")){
+    else if(!strcmp(key, "nb_rx_rings_per_port")){
         uint16_t nb_rings;
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
@@ -459,7 +465,7 @@ invalid_nb_rx_rings_per_port:
     }
 
     /* config: number of TX rings per port */
-    if(!strcmp(key, "nb_tx_rings_per_port")){
+    else if(!strcmp(key, "nb_tx_rings_per_port")){
         uint16_t nb_rings;
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
@@ -481,7 +487,7 @@ invalid_nb_tx_rings_per_port:
     }
 
     /* config: length of the receive queue */
-    if(!strcmp(key, "rx_queue_len")){
+    else if(!strcmp(key, "rx_queue_len")){
         uint32_t rx_queue_len;
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
@@ -503,7 +509,7 @@ invalid_rx_queue_len:
     }
 
     /* config: length of the send queue */
-    if(!strcmp(key, "tx_queue_len")){
+    else if(!strcmp(key, "tx_queue_len")){
         uint32_t tx_queue_len;
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
@@ -525,7 +531,7 @@ invalid_tx_queue_len:
     }
     
     /* config: whether to enable promiscuous mode */
-    if(!strcmp(key, "enable_promiscuous")){
+    else if(!strcmp(key, "enable_promiscuous")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
         if (!strcmp(value, "true")){
@@ -544,7 +550,7 @@ invalid_enable_promiscuous:
     }
 
     /* config: whether to enable rss */
-    if(!strcmp(key, "enable_rss")){
+    else if(!strcmp(key, "enable_rss")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
         if (!strcmp(value, "true")){
@@ -563,7 +569,7 @@ invalid_enable_rss:
     }
 
     /* config: whether to enable offload */
-    if(!strcmp(key, "enable_offload")){
+    else if(!strcmp(key, "enable_offload")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
         if (!strcmp(value, "true")){
@@ -582,7 +588,7 @@ invalid_enable_offload:
     }
 
     /* config: rss symmetric mode */
-    if(!strcmp(key, "rss_symmetric_mode")){
+    else if(!strcmp(key, "rss_symmetric_mode")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
         if (!strcmp(value, "symmetric")){
@@ -601,7 +607,7 @@ invalid_rss_symmetric_mode:
     }
 
     /* config: rss hash fileds */
-    if(!strcmp(key, "rss_hash_field")){
+    else if(!strcmp(key, "rss_hash_field")){
         uint64_t rss_hash_field = 0;
         uint8_t nb_hash_fields = 0;
         char *delim = ",";
@@ -681,7 +687,7 @@ invalid_rss_hash_field:
     }
 
     /* config: number of cores to used */
-    if(!strcmp(key, "used_core_ids")){
+    else if(!strcmp(key, "used_core_ids")){
         uint16_t nb_used_cores = 0;
         uint32_t core_id = 0;
         char *delim = ",";
@@ -723,7 +729,7 @@ invalid_used_cores:
     }
 
     /* config: number of memory channels per socket */
-    if(!strcmp(key, "nb_memory_channels_per_socket")){
+    else if(!strcmp(key, "nb_memory_channels_per_socket")){
         uint16_t nb_memory_channels_per_socket;
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
@@ -740,7 +746,7 @@ invalid_nb_memory_channels_per_socket:
     }
 
     /* config: the core for logging */
-    if(!strcmp(key, "log_core_id")){
+    else if(!strcmp(key, "log_core_id")){
         uint32_t log_core_id;
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
@@ -757,7 +763,7 @@ invalid_log_core_id:
     }
 
     /* config: whether to enable test duration limit */
-    if(!strcmp(key, "enable_test_duration_limit")){
+    else if(!strcmp(key, "enable_test_duration_limit")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
         if (!strcmp(value, "true")){
@@ -776,7 +782,7 @@ invalid_enable_test_duration_limit:
     }
 
     /* test duration */
-    if(!strcmp(key, "test_duration")){
+    else if(!strcmp(key, "test_duration")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
         uint64_t test_duration;
@@ -793,10 +799,8 @@ invalid_test_duration:
 
     /* DOCA-specific configurations for DPDK */
     #if defined(SC_HAS_DOCA)
-      uint16_t nb_sfs = 0, nb_pci_dev = 0;
-
         /* config: whether to enable test duration limit */
-        if(!strcmp(key, "bf_enable_scalable_functions")){
+        else if(!strcmp(key, "bf_enable_scalable_functions")){
             value = sc_util_del_both_trim(value);
             sc_util_del_change_line(value);
             if (!strcmp(value, "true")){
@@ -815,7 +819,7 @@ invalid_bf_enable_scalable_functions:
         }
 
       /* config: used scalable functions */
-      if(!strcmp(key, "bf_scalable_functions")){
+      else if(!strcmp(key, "bf_scalable_functions")){
         char *delim = ",";
         char *p, *bf_sf;
 
@@ -852,7 +856,7 @@ free_sfs:
       }
 
       /* config: used pci devices */
-      if(!strcmp(key, "bf_pci_devices")){
+      else if(!strcmp(key, "bf_pci_devices")){
         char *delim = ",";
         char *p, *bf_pci_dev;
 
