@@ -4,6 +4,7 @@
 #include "sc_utils/pktgen.hpp"
 #include "sc_utils.hpp"
 #include "sc_log.hpp"
+#include "sc_app.hpp"
 
 int __reload_sha_state(struct sc_config *sc_config);
 
@@ -160,7 +161,7 @@ int _process_enter(struct sc_config *sc_config){
         struct doca_sha_job *sha_job;
 
         /* allocate SHA engine result buffer */
-        dst_buffer = malloc(DOCA_SHA256_BYTE_COUNT);
+        dst_buffer = (char*)malloc(DOCA_SHA256_BYTE_COUNT);
         if (dst_buffer == NULL) {
             SC_THREAD_ERROR_DETAILS("failed to malloc memory for dst_buffer");
             return SC_ERROR_MEMORY;
@@ -169,7 +170,7 @@ int _process_enter(struct sc_config *sc_config){
         PER_CORE_DOCA_META(sc_config).sha_dst_buffer = dst_buffer;
 
         /* allocate buffer for storing input source data */
-        src_buffer = malloc(SC_SHA_HASH_KEY_LENGTH);
+        src_buffer = (char*)malloc(SC_SHA_HASH_KEY_LENGTH);
         if (src_buffer == NULL) {
             SC_THREAD_ERROR_DETAILS("failed to malloc memory for src_buffer");
             return SC_ERROR_MEMORY;
@@ -188,7 +189,7 @@ int _process_enter(struct sc_config *sc_config){
         );
         if(doca_result != DOCA_SUCCESS){
             SC_THREAD_ERROR_DETAILS("failed to populate memory dst_buffer to memory map: %s", 
-                doca_get_error_string(doca_result));
+                doca_get_error_string((doca_error_t)doca_result));
             return SC_ERROR_MEMORY;
         }
 
@@ -203,7 +204,7 @@ int _process_enter(struct sc_config *sc_config){
         );
         if(doca_result != DOCA_SUCCESS){
             SC_THREAD_ERROR_DETAILS("failed to populate memory src_buffer to memory map: %s",
-                doca_get_error_string(doca_result));
+                doca_get_error_string((doca_error_t)doca_result));
             return SC_ERROR_MEMORY;
         }
 
@@ -217,7 +218,7 @@ int _process_enter(struct sc_config *sc_config){
         );
         if(doca_result != DOCA_SUCCESS){
             SC_THREAD_ERROR_DETAILS("failed to acquire DOCA buffer representing source buffer: %s",
-                doca_get_error_string(doca_result));
+                doca_get_error_string((doca_error_t)doca_result));
             return SC_ERROR_MEMORY;
         }
 
@@ -229,7 +230,7 @@ int _process_enter(struct sc_config *sc_config){
         );
         if(doca_result != DOCA_SUCCESS){
             SC_THREAD_ERROR_DETAILS("failed to set data address and length in the doca_buf: %s",
-                doca_get_error_string(doca_result));
+                doca_get_error_string((doca_error_t)doca_result));
             return SC_ERROR_MEMORY;
         }
 
@@ -243,7 +244,7 @@ int _process_enter(struct sc_config *sc_config){
         );
         if(doca_result != DOCA_SUCCESS){
             SC_THREAD_ERROR_DETAILS("failed to acquire DOCA buffer representing destination buffer: %s",
-                doca_get_error_string(doca_result));
+                doca_get_error_string((doca_error_t)doca_result));
             return SC_ERROR_MEMORY;
         }
 
@@ -253,12 +254,11 @@ int _process_enter(struct sc_config *sc_config){
             SC_THREAD_ERROR_DETAILS("failed to allocate memory for sha_job");
             return SC_ERROR_MEMORY;
         }
-        sha_job->base = (struct doca_job) {
-			.type = DOCA_SHA_JOB_SHA256,
-			.flags = DOCA_JOB_FLAGS_NONE,
-			.ctx = DOCA_CONF(sc_config)->sha_ctx,
-			.user_data.u64 = DOCA_SHA_JOB_SHA256,
-		},
+        sha_job->base.type = DOCA_SHA_JOB_SHA256;
+        sha_job->base.flags = DOCA_JOB_FLAGS_NONE;
+        sha_job->base.ctx = DOCA_CONF(sc_config)->sha_ctx;
+        sha_job->base.user_data.u64 = DOCA_SHA_JOB_SHA256;
+
         sha_job->resp_buf = PER_CORE_DOCA_META(sc_config).sha_dst_doca_buf;
         sha_job->req_buf = PER_CORE_DOCA_META(sc_config).sha_src_doca_buf;
         sha_job->flags = DOCA_SHA_JOB_FLAGS_NONE;
@@ -359,7 +359,7 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
                 /* job */ &PER_CORE_DOCA_META(sc_config).sha_job->base
             );
             if(doca_result != DOCA_SUCCESS){
-                SC_THREAD_ERROR_DETAILS("failed to enqueue SHA job: %s", doca_get_error_string(doca_result));
+                SC_THREAD_ERROR_DETAILS("failed to enqueue SHA job: %s", doca_get_error_string((doca_error_t)doca_result));
                 return SC_ERROR_INTERNAL;
             }
 
@@ -370,7 +370,7 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
                     /* flags */ NULL) == DOCA_ERROR_AGAIN)
             ){}
             if(doca_result != DOCA_SUCCESS){
-                SC_THREAD_ERROR_DETAILS("failed to retrieve SHA result: %s", doca_get_error_string(doca_result));
+                SC_THREAD_ERROR_DETAILS("failed to retrieve SHA result: %s", doca_get_error_string((doca_error_t)doca_result));
                 return SC_ERROR_INTERNAL;
             }
 
@@ -628,6 +628,15 @@ int _all_exit(struct sc_config *sc_config){
  * \return  zero for successfully initialization
  */
 int _init_app(struct sc_config *sc_config){
+    int i;
+    
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
+    }
+
     return SC_SUCCESS;
 }
 

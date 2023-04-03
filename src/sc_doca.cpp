@@ -83,7 +83,7 @@ init_doca_exit:
         /*! No need to create per-core doca context */
         doca_result = doca_sha_create(&sha_ctx);
         if (doca_result != DOCA_SUCCESS) {
-            SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string(doca_result));
+            SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string((doca_error_t)doca_result));
             result = SC_ERROR_INTERNAL;
             goto _init_doca_sha_exit;
         }
@@ -138,7 +138,7 @@ init_doca_exit:
     sha_destory_ctx:
         doca_result = doca_sha_destroy(sha_ctx);
         if(doca_result != DOCA_SUCCESS){
-            SC_ERROR_DETAILS("failed to destroy sha: %s", doca_get_error_string(doca_result));
+            SC_ERROR_DETAILS("failed to destroy sha: %s", doca_get_error_string((doca_error_t)doca_result));
             result = SC_ERROR_INTERNAL;
         }
 

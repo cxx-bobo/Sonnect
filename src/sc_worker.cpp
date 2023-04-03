@@ -57,6 +57,14 @@ int _worker_loop(void* param){
     int lcore_id_from_zero;
     uint64_t nb_fwd_pkts = 0;
     struct sc_config *sc_config = (struct sc_config*)param;
+    process_enter_t process_enter_func = PER_CORE_WORKER_FUNC(sc_config).process_enter_func;
+    #if defined(ROLE_SERVER)
+        process_pkt_t process_pkt_func = PER_CORE_WORKER_FUNC(sc_config).process_pkt_func;
+    #endif
+    #if defined(ROLE_CLIENT)
+        process_client_t process_client_func = PER_CORE_WORKER_FUNC(sc_config).process_client_func;
+    #endif
+    process_exit_t process_exit_func = PER_CORE_WORKER_FUNC(sc_config).process_exit_func;
 
     #if defined(ROLE_SERVER)
         struct rte_mbuf *pkt[SC_MAX_PKT_BURST*2];
@@ -107,7 +115,7 @@ int _worker_loop(void* param){
     }
 
     /* Hook Point: Enter */    
-    if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_enter_func(sc_config)){
+    if(SC_SUCCESS != process_enter_func(sc_config)){
         SC_THREAD_WARNING("error occurs while executing enter callback\n");
     }
 
@@ -140,7 +148,7 @@ int _worker_loop(void* param){
                 // if(nb_rx == 0) continue;
                 
                 /* Hook Point: Packet Processing */
-                if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_pkt_func(
+                if(SC_SUCCESS != process_pkt_func(
                     /* pkt */ pkt, 
                     /* nb_rx */ nb_rx,
                     /* sc_config */ sc_config,
@@ -175,7 +183,7 @@ int _worker_loop(void* param){
         /* role: client */
         #if defined(ROLE_CLIENT)
             /* Hook Point: Packet Preparing */
-            if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_client_func(sc_config, queue_id, &ready_to_exit)){
+            if(SC_SUCCESS != process_client_func(sc_config, queue_id, &ready_to_exit)){
                 SC_THREAD_WARNING("error occured within the client process");
             }
 
@@ -185,7 +193,7 @@ int _worker_loop(void* param){
 
 exit_callback:
     /* Hook Point: Exit */
-    if(SC_SUCCESS != PER_CORE_WORKER_FUNC(sc_config).process_exit_func(sc_config)){
+    if(SC_SUCCESS != process_exit_func(sc_config)){
         SC_THREAD_WARNING("error occurs while executing exit callback\n");
     }
     

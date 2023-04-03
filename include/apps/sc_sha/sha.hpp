@@ -1,10 +1,6 @@
 #ifndef _SC_SHA_H_
 #define _SC_SHA_H_
 
-/* for cpp linkage */
-#ifdef __cplusplus
-    extern "C" {
-#endif
 
 #include <sys/time.h>
 
@@ -59,11 +55,6 @@ int _all_exit(struct sc_config *sc_config);
     void sha256_process_arm(uint32_t state[8], const uint8_t data[], uint32_t length);
 #else
     void sha256_process_x86(uint32_t state[8], const uint8_t data[], uint32_t length);
-#endif
-
-/* for cpp linkage */
-#ifdef __cplusplus
-    }
 #endif
 
 #endif
