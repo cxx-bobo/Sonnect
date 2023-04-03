@@ -12,7 +12,7 @@
 #include "sc_utils/distribution_gen.hpp"
 
 
-#define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 24)-1
+#define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 16)-1
 
 
 struct _per_core_app_meta {

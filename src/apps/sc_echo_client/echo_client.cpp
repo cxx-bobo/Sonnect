@@ -224,6 +224,7 @@ _parse_app_kv_pair_exit:
  */
 int _process_enter_sender(struct sc_config *sc_config){
     int i, result = SC_SUCCESS;
+    uint16_t queue_id = 0;
     
     PER_CORE_APP_META(sc_config).nb_send_pkt = 0;
     PER_CORE_APP_META(sc_config).nb_confirmed_pkt = 0;
@@ -257,13 +258,34 @@ int _process_enter_sender(struct sc_config *sc_config){
     PER_CORE_APP_META(sc_config).test_pkts = pkt_hdrs;
     PER_CORE_APP_META(sc_config).last_used_flow = 0;
 
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        if(sc_config->core_ids[i] == rte_lcore_id()){
+            queue_id = i;
+            /*! 
+                \note:  we allow nb_rings_per_port is less than nb_used_port 
+                        so we have to limit the queue_id within the valid range
+             */
+            if(queue_id != 0){
+                queue_id = queue_id % sc_config->nb_rx_rings_per_port;
+            }
+            
+            SC_THREAD_LOG("core %u is using queue %u", rte_lcore_id(), queue_id);
+            break;
+        }
+        if(i == sc_config->nb_used_cores-1){
+            SC_THREAD_ERROR_DETAILS("unknown queue id for worker thread on lcore %u", rte_lcore_id());
+            result = SC_ERROR_INTERNAL;
+            goto _process_enter_exit;
+        }
+    }
+
     /* generate random packet header */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_flow_per_core; i++){
         result = sc_util_generate_random_pkt_hdr(
             /* sc_pkt_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[i],
             /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
             /* nb_queues */ sc_config->nb_rx_rings_per_port,
-            /* used_queue_id */ rte_lcore_index(rte_lcore_id()),
+            /* used_queue_id */ queue_id,
             /* l3_type */ RTE_ETHER_TYPE_IPV4,
             /* l4_type */ IPPROTO_UDP,
             /* rss_hash_field */ sc_config->rss_hash_field,
@@ -274,6 +296,7 @@ int _process_enter_sender(struct sc_config *sc_config){
             goto _process_enter_exit;
         }
     }
+    SC_THREAD_LOG("finish generating packets");
     
     /* allocate array for pointers to storing send pkt_bufs */
     PER_CORE_APP_META(sc_config).send_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
@@ -314,7 +337,7 @@ _process_enter_exit:
 int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_tx = 0, nb_send_pkt = 0, result = SC_SUCCESS;
     uint64_t current_ns = 0;
-    char timestamp_ns[24] = {0};
+    char timestamp_ns[18] = {0};
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
@@ -474,6 +497,7 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
 
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_recv_ports; i++){
         memset(PER_CORE_APP_META(sc_config).recv_pkt_bufs, 0, sizeof(struct rte_mbuf*)*SC_MAX_PKT_BURST*2);
+
         nb_recv_pkt = rte_eth_rx_burst(
             /* port_id */ INTERNAL_CONF(sc_config)->recv_port_idx[i], 
             /* queue_id */ queue_id, 
@@ -481,11 +505,11 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
             /* nb_pkts */ SC_MAX_PKT_BURST
         );
 
+        /* record the receiving timestamp */
+        current_ns = sc_util_timestamp_ns();
+
         if(nb_recv_pkt == 0) { continue; }
         
-        /* record the receiving timestamp */
-        // current_ns = sc_util_timestamp_ns();
-
         PER_CORE_APP_META(sc_config).nb_confirmed_pkt += nb_recv_pkt;
 
         for(j=0; j<nb_recv_pkt; j++) {
@@ -496,7 +520,7 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
             );
 
             if(SC_SUCCESS != sc_util_atoui_64(origin_timestamp, &origin_ns)){
-                SC_THREAD_WARNING("failed to cast timestamp payload to uint64_t");
+                // SC_THREAD_WARNING("failed to cast timestamp payload to uint64_t");
                 goto process_client_receiver_exit;
             }
 
@@ -507,6 +531,9 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
             PER_CORE_APP_META(sc_config).latency_data_pointer += 1;
             if(PER_CORE_APP_META(sc_config).latency_data_pointer == SC_ECHO_CLIENT_MAX_LATENCY_NB){
                 PER_CORE_APP_META(sc_config).latency_data_pointer = 0;
+            }
+            if(PER_CORE_APP_META(sc_config).nb_latency_data < SC_ECHO_CLIENT_MAX_LATENCY_NB){
+                PER_CORE_APP_META(sc_config).nb_latency_data += 1;
             }
 
             /* return back recv pkt_mbuf */
@@ -580,7 +607,7 @@ int _all_exit(struct sc_config *sc_config){
     /* calculate latency */
     for(i=0; i<sc_config->nb_used_cores; i++){
         per_core_avg_latency = (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).latency_ns[0];
-        for(j=1; j<SC_ECHO_CLIENT_MAX_LATENCY_NB; j++){
+        for(j=1; j<PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_latency_data; j++){
             per_core_avg_latency 
                 = (per_core_avg_latency + (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).latency_ns[j])/(double)2;
         }

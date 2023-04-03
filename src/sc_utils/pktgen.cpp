@@ -147,7 +147,7 @@ int sc_util_generate_random_pkt_hdr(
 				);
 			}
 
-			if(queue_id == (uint16_t)used_queue_id){ break; }
+			if(queue_id == used_queue_id){ break; }
 		} else {
 			break;
 		}
