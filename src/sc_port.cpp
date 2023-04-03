@@ -51,7 +51,6 @@ static struct rte_eth_conf port_conf_default = {
         .rx_adv_conf = {
 			.rss_conf = {
 				.rss_key = NULL, /* init later */
-                .rss_key_len = RSS_HASH_KEY_LENGTH,
 				.rss_hf = 0 /* init later */
 			},
 		},
@@ -67,7 +66,6 @@ static struct rte_eth_conf port_conf_default = {
         .rx_adv_conf = {
             .rss_conf = {
                 .rss_key = NULL, /* init later */
-                .rss_key_len = RSS_HASH_KEY_LENGTH,
                 .rss_hf = 0, /* init later */
             }
         },
@@ -251,9 +249,11 @@ int _init_single_port(uint16_t port_index, uint16_t port_logical_index, struct s
         /* specify used rss key type */
         if(sc_config->rss_symmetric_mode){
             port_conf.rx_adv_conf.rss_conf.rss_key = _symmetric_rss_hash_key;
+            port_conf.rx_adv_conf.rss_conf.rss_key_len = RSS_HASH_KEY_LENGTH;
             used_rss_hash_key = _symmetric_rss_hash_key;
         } else {
             port_conf.rx_adv_conf.rss_conf.rss_key = _asymmetric_rss_hash_key;
+            port_conf.rx_adv_conf.rss_conf.rss_key_len = RSS_HASH_KEY_LENGTH;
             used_rss_hash_key = _asymmetric_rss_hash_key;
         }
         
