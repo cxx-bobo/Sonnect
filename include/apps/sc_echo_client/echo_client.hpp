@@ -11,9 +11,9 @@
 #include "sc_utils/pktgen.hpp"
 #include "sc_utils/distribution_gen.hpp"
 
-#if defined(MODE_LATENCY)
-    #define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 24)-1
-#endif
+
+#define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 24)-1
+
 
 struct _per_core_app_meta {
     /* store rte_mbuf for sending and receiving */
@@ -40,10 +40,12 @@ struct _per_core_app_meta {
     /* send interval */
     uint64_t last_send_timestamp;
     uint64_t interval;
-    #ifdef __cplusplus
-        sc_utils_distribution_uint64_generator* interval_generator;
-    #endif
+    sc_utils_distribution_uint64_generator* interval_generator;
     
+    uint64_t nb_latency_data;
+    uint64_t latency_data_pointer;
+    uint64_t latency_ns[SC_ECHO_CLIENT_MAX_LATENCY_NB];
+
     #if defined(MODE_LATENCY)
         long min_rtt_sec;
         long min_rtt_usec;

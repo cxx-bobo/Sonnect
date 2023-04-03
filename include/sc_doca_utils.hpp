@@ -14,7 +14,6 @@
 /* function to check if a given device is capable of executing some job */
 typedef int (*jobs_check)(struct doca_devinfo *);
 
-
 /* ================= DOCA core object operation ================ */
 int sc_doca_util_init_core_objects(
 	struct doca_mmap **mmap, struct doca_dev *dev,

@@ -58,7 +58,7 @@ int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);
 int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 
-		uint32_t pkt_len);
+		uint32_t pkt_len, char *payload, uint32_t payload_len);
 int sc_util_initialize_eth_header(struct rte_ether_hdr *eth_hdr,
 		struct rte_ether_addr *src_mac, struct rte_ether_addr *dst_mac, 
 		uint16_t ether_type, uint8_t vlan_enabled, uint16_t vlan_id, 

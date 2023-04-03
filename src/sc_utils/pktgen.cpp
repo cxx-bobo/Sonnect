@@ -3,6 +3,7 @@
 #include "sc_utils.hpp"
 #include "sc_log.hpp"
 #include "sc_utils/rss.hpp"
+#include "sc_utils/timestamp.hpp"
 
 /*!
  * \brief   generate random ethernet address
@@ -296,18 +297,20 @@ int sc_util_copy_buf_to_pkt(void *buf, uint32_t len, struct rte_mbuf *pkt, uint3
  * \param	proto_hdr 			transport layer header
  * \param	nb_pkt_per_burst 	number of packets within the produced burst
  * \param	pkt_len				length of each produced packet
- * \param	nb_pkt_segs 		number of segments within each produced packet
+ * \param	payload				useful payload of the packet
+ * \param	payload_len			length of the payload
  * \return  0 for successfully generation
  */
 int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 
-		uint32_t pkt_len){
+		uint32_t pkt_len, char *payload, uint32_t payload_len){
 	int i, nb_pkt = 0, result = SC_SUCCESS;
 	size_t eth_hdr_size;
 	struct rte_mbuf *pkt_seg;
 	struct rte_mbuf *pkt;
 	uint32_t assembled_pkt_len = 0;
+	uint32_t l3_l4_hdr_len = 0;
 
 	/* determine the number of pkt segments */
 	uint16_t nb_pkt_segs;
@@ -372,18 +375,22 @@ int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf 
 		/* copy ip and transport header to pkt */
 		if (ipv4) {
 			sc_util_copy_buf_to_pkt(ip_hdr, sizeof(struct rte_ipv4_hdr), pkt, eth_hdr_size);
+			l3_l4_hdr_len = sizeof(struct rte_ipv4_hdr);
 			switch (proto) {
 			case IPPROTO_UDP:
 				sc_util_copy_buf_to_pkt(proto_hdr,
 					sizeof(struct rte_udp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv4_hdr));
+				l3_l4_hdr_len += sizeof(struct rte_udp_hdr);
 				break;
 			case IPPROTO_TCP:
 				sc_util_copy_buf_to_pkt(proto_hdr,
 					sizeof(struct rte_tcp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv4_hdr));
+				l3_l4_hdr_len += sizeof(struct rte_tcp_hdr);
 				break;
 			case IPPROTO_SCTP:
 				sc_util_copy_buf_to_pkt(proto_hdr,
 					sizeof(struct rte_sctp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv4_hdr));
+				l3_l4_hdr_len += sizeof(struct rte_sctp_hdr);
 				break;
 			default:
 				SC_ERROR_DETAILS("unknown l4 type: %d", proto);
@@ -392,18 +399,22 @@ int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf 
 			}
 		} else {
 			sc_util_copy_buf_to_pkt(ip_hdr, sizeof(struct rte_ipv6_hdr), pkt, eth_hdr_size);
+			l3_l4_hdr_len = sizeof(struct rte_ipv6_hdr);
 			switch (proto) {
 			case IPPROTO_UDP:
 				sc_util_copy_buf_to_pkt(proto_hdr,
 					sizeof(struct rte_udp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv6_hdr));
+				l3_l4_hdr_len += sizeof(struct rte_udp_hdr);
 				break;
 			case IPPROTO_TCP:
 				sc_util_copy_buf_to_pkt(proto_hdr,
 					sizeof(struct rte_tcp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv6_hdr));
+				l3_l4_hdr_len += sizeof(struct rte_tcp_hdr);
 				break;
 			case IPPROTO_SCTP:
 				sc_util_copy_buf_to_pkt(proto_hdr,
 					sizeof(struct rte_sctp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv6_hdr));
+				l3_l4_hdr_len += sizeof(struct rte_sctp_hdr);
 				break;
 			default:
 				SC_ERROR_DETAILS("unknown l4 type: %d", proto);
@@ -411,6 +422,9 @@ int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf 
 				goto generate_packet_burst_proto_exit;
 			}
 		}
+
+		/* copy payload */
+		sc_util_copy_buf_to_pkt(payload, payload_len, pkt, eth_hdr_size + l3_l4_hdr_len);
 
 		/*
 		 * Complete first mbuf of packet and append it to the
