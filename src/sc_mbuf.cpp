@@ -50,34 +50,34 @@ int init_memory(struct sc_config *sc_config){
             sprintf(mbuf_pool_name, "rx_p%d_q%d", port_logical_id, queue_id);
             
             /* allocate mbuf pool */
-            // pktmbuf_pool = rte_pktmbuf_pool_create(
-            //     /* name */ mbuf_pool_name, 
-            //     /*!
-            //      * \note: should make sure number of element in the mbuf pool 
-            //      * is greater or equal to sc_config->rx_queue_len, and at the
-            //      * same time the dpdk suggest it should be a power of two minus 
-            //      * one, so we use sc_config->rx_queue_len*2-1
-            //      */
-            //     /* n */ sc_config->rx_queue_len*2-1, 
-            //     /* cache_size */ MEMPOOL_CACHE_SIZE, 
-            //     /* priv_size */ 0, 
-            //     /* data_room_size */ RTE_MBUF_DEFAULT_BUF_SIZE, 
-            //     /* socket_id */ rte_eth_dev_socket_id(port_indices[port_logical_id])
-            // );
-
-            pktmbuf_pool = rte_mempool_create(
-                /* name */ mbuf_pool_name,
+            pktmbuf_pool = rte_pktmbuf_pool_create(
+                /* name */ mbuf_pool_name, 
+                /*!
+                 * \note: should make sure number of element in the mbuf pool 
+                 * is greater or equal to sc_config->rx_queue_len, and at the
+                 * same time the dpdk suggest it should be a power of two minus 
+                 * one, so we use sc_config->rx_queue_len*2-1
+                 */
                 /* n */ sc_config->rx_queue_len*2-1, 
-                /* elt_size */ MBUF_SIZE, 
                 /* cache_size */ MEMPOOL_CACHE_SIZE, 
-                /* private_data_size */ sizeof(struct rte_pktmbuf_pool_private), 
-				/* mp_init */ rte_pktmbuf_pool_init, 
-                /* mp_init_arg */ NULL,
-                /* obj_init */ rte_pktmbuf_init, 
-                /* obj_init_arg */ NULL,
-				/* socket_id */ rte_eth_dev_socket_id(port_indices[port_logical_id]),
-                /* flag */ MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET
+                /* priv_size */ 0, 
+                /* data_room_size */ RTE_MBUF_DEFAULT_BUF_SIZE, 
+                /* socket_id */ rte_eth_dev_socket_id(port_indices[port_logical_id])
             );
+
+            // pktmbuf_pool = rte_mempool_create(
+            //     /* name */ mbuf_pool_name,
+            //     /* n */ sc_config->rx_queue_len*2-1, 
+            //     /* elt_size */ MBUF_SIZE, 
+            //     /* cache_size */ MEMPOOL_CACHE_SIZE, 
+            //     /* private_data_size */ sizeof(struct rte_pktmbuf_pool_private), 
+			// 	/* mp_init */ rte_pktmbuf_pool_init, 
+            //     /* mp_init_arg */ NULL,
+            //     /* obj_init */ rte_pktmbuf_init, 
+            //     /* obj_init_arg */ NULL,
+			// 	/* socket_id */ rte_eth_dev_socket_id(port_indices[port_logical_id]),
+            //     /* flag */ MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET
+            // );
 
             if (!pktmbuf_pool){
                 SC_ERROR_DETAILS(
@@ -87,7 +87,7 @@ int init_memory(struct sc_config *sc_config){
                 return SC_ERROR_MEMORY;
             }
 
-            // rte_pktmbuf_pool_init(pktmbuf_pool, NULL);
+            rte_pktmbuf_pool_init(pktmbuf_pool, NULL);
 
             sc_config->rx_pktmbuf_pool[RX_QUEUE_MEMORY_POOL_ID(sc_config, port_logical_id, queue_id)] 
                 = pktmbuf_pool;
@@ -99,28 +99,28 @@ int init_memory(struct sc_config *sc_config){
             sprintf(mbuf_pool_name, "tx_p%d_q%d", port_logical_id, queue_id);
             
             /* allocate mbuf pool */
-            // pktmbuf_pool = rte_pktmbuf_pool_create(
-            //     /* name */ mbuf_pool_name, 
-            //     /* n */ sc_config->tx_queue_len*2-1, 
-            //     /* cache_size */ MEMPOOL_CACHE_SIZE, 
-            //     /* priv_size */ 0, 
-            //     /* data_room_size */ RTE_MBUF_DEFAULT_BUF_SIZE, 
-            //     /* socket_id */ rte_eth_dev_socket_id(port_indices[port_logical_id])
-            // );
-
-            pktmbuf_pool = rte_mempool_create(
-                /* name */ mbuf_pool_name,
-                /* n */ sc_config->rx_queue_len*2-1, 
-                /* elt_size */ MBUF_SIZE, 
+            pktmbuf_pool = rte_pktmbuf_pool_create(
+                /* name */ mbuf_pool_name, 
+                /* n */ sc_config->tx_queue_len*2-1, 
                 /* cache_size */ MEMPOOL_CACHE_SIZE, 
-                /* private_data_size */ sizeof(struct rte_pktmbuf_pool_private), 
-				/* mp_init */ rte_pktmbuf_pool_init, 
-                /* mp_init_arg */ NULL,
-                /* obj_init */ rte_pktmbuf_init, 
-                /* obj_init_arg */ NULL,
-				/* socket_id */ rte_eth_dev_socket_id(port_indices[port_logical_id]),
-                /* flag */ MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET
+                /* priv_size */ 0, 
+                /* data_room_size */ RTE_MBUF_DEFAULT_BUF_SIZE, 
+                /* socket_id */ rte_eth_dev_socket_id(port_indices[port_logical_id])
             );
+
+            // pktmbuf_pool = rte_mempool_create(
+            //     /* name */ mbuf_pool_name,
+            //     /* n */ sc_config->rx_queue_len*2-1, 
+            //     /* elt_size */ MBUF_SIZE, 
+            //     /* cache_size */ MEMPOOL_CACHE_SIZE, 
+            //     /* private_data_size */ sizeof(struct rte_pktmbuf_pool_private), 
+			// 	/* mp_init */ rte_pktmbuf_pool_init, 
+            //     /* mp_init_arg */ NULL,
+            //     /* obj_init */ rte_pktmbuf_init, 
+            //     /* obj_init_arg */ NULL,
+			// 	/* socket_id */ rte_eth_dev_socket_id(port_indices[port_logical_id]),
+            //     /* flag */ MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET
+            // );
 
             if (!pktmbuf_pool){
                 SC_ERROR_DETAILS(
@@ -130,7 +130,7 @@ int init_memory(struct sc_config *sc_config){
                 return SC_ERROR_MEMORY;
             }
 
-            // rte_pktmbuf_pool_init(pktmbuf_pool, NULL);
+            rte_pktmbuf_pool_init(pktmbuf_pool, NULL);
 
             sc_config->tx_pktmbuf_pool[TX_QUEUE_MEMORY_POOL_ID(sc_config, port_logical_id, queue_id)] 
                 = pktmbuf_pool;

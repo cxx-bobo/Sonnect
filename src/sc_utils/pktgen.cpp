@@ -81,23 +81,24 @@ int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr){
  * \param	l4_type			type of the layer 4 protocol
  * \param	rss_hash_field	rss hash field
  * \param	rss_affinity	whether to generate packet with rss affinity to current core
+ * \param	min_pkt_len		minimum packet length
  * \return  0 for successfully generation
  */
 int sc_util_generate_random_pkt_hdr(
-		struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_len, uint32_t nb_queues, 
+		struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_len, uint32_t payload_len, uint32_t nb_queues, 
 		uint32_t used_queue_id, uint32_t l3_type, uint32_t l4_type, uint64_t rss_hash_field,
-		bool rss_affinity
+		bool rss_affinity, uint32_t min_pkt_len
 ){
 	int result = SC_SUCCESS;
 	uint16_t _pkt_len;
     uint32_t queue_id;
 
-	if(pkt_len <= 18 /* l4 len */ + 20 /* l3 len */ + 8 /* ethernet len */){
-		SC_THREAD_ERROR_DETAILS("pakcet length is too small, should be larger than %d", 18+20+8);
+	if(pkt_len < min_pkt_len){
+		SC_THREAD_ERROR_DETAILS("pakcet length is too small, should be larger than %d", min_pkt_len);
 	}
 
 	/* initialize the _pkt_len as the length of the l4 payload */
-    _pkt_len = pkt_len -  18 /* l4 len */ - 20 /* l3 len */ - 8 /* ethernet len */;
+    _pkt_len = payload_len;
 
     /* generate random port and ipv4 address */
     while(!sc_force_quit){

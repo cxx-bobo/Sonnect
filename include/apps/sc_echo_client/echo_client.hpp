@@ -14,6 +14,7 @@
 
 #define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 16)-1
 
+#define SC_ECHO_CLIENT_PAYLOAD_LEN 24
 
 struct _per_core_app_meta {
     /* store rte_mbuf for sending and receiving */

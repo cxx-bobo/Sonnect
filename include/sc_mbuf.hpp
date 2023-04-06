@@ -9,8 +9,8 @@
 #define MEMPOOL_CACHE_SIZE 512
 
 /* See: http://dpdk.org/dev/patchwork/patch/4479 */
-#define DEFAULT_PRIV_SIZE   0
-#define MBUF_SIZE           RTE_MBUF_DEFAULT_BUF_SIZE + DEFAULT_PRIV_SIZE
+// #define DEFAULT_PRIV_SIZE   0
+// #define MBUF_SIZE           RTE_MBUF_DEFAULT_BUF_SIZE + DEFAULT_PRIV_SIZE
 
 int init_memory(struct sc_config *sc_config);
 

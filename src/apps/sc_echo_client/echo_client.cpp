@@ -240,11 +240,11 @@ int _process_enter_sender(struct sc_config *sc_config){
     PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
     PER_CORE_APP_META(sc_config).last_send_timestamp = sc_util_timestamp_ns();
 
-    SC_THREAD_LOG("per core pkt rate: %lf G packet/second", per_core_pkt_rate);    
-    SC_THREAD_LOG("per core brust rate: %lf G brust/second", per_core_brust_rate);
-    SC_THREAD_LOG("per core brust interval: %lf ns, (int)%d ns",
-        per_core_brust_interval, (int)per_core_brust_interval);
-    SC_THREAD_LOG("initialize interval: %lu ns", PER_CORE_APP_META(sc_config).interval);
+    // SC_THREAD_LOG("per core pkt rate: %lf G packet/second", per_core_pkt_rate);    
+    // SC_THREAD_LOG("per core brust rate: %lf G brust/second", per_core_brust_rate);
+    // SC_THREAD_LOG("per core brust interval: %lf ns, (int)%d ns",
+    //    per_core_brust_interval, (int)per_core_brust_interval);
+    // SC_THREAD_LOG("initialize interval: %lu ns", PER_CORE_APP_META(sc_config).interval);
 
     /* allocate memory for storing generated packet headers */
     struct sc_pkt_hdr *pkt_hdrs = (struct sc_pkt_hdr*)rte_malloc(
@@ -284,19 +284,23 @@ int _process_enter_sender(struct sc_config *sc_config){
         result = sc_util_generate_random_pkt_hdr(
             /* sc_pkt_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[i],
             /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
+            /* payload_len */ SC_ECHO_CLIENT_PAYLOAD_LEN,
             /* nb_queues */ sc_config->nb_rx_rings_per_port,
             /* used_queue_id */ queue_id,
             /* l3_type */ RTE_ETHER_TYPE_IPV4,
             /* l4_type */ IPPROTO_UDP,
             /* rss_hash_field */ sc_config->rss_hash_field,
-            /* rss_affinity */ false
+            /* rss_affinity */ false,
+            /* min_pkt_len */ 
+                SC_ECHO_CLIENT_PAYLOAD_LEN + sizeof(struct rte_ether_hdr) 
+                + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
         );
         if(result != SC_SUCCESS){
             SC_THREAD_ERROR("failed to generate new pkt header");
             goto _process_enter_exit;
         }
     }
-    SC_THREAD_LOG("finish generating packets");
+    // SC_THREAD_LOG("finish generating packets");
     
     /* allocate array for pointers to storing send pkt_bufs */
     PER_CORE_APP_META(sc_config).send_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
@@ -306,15 +310,6 @@ int _process_enter_sender(struct sc_config *sc_config){
         result = SC_ERROR_MEMORY;
         goto _process_enter_exit;
     }
-
-    #if defined(MODE_LATENCY)
-        PER_CORE_APP_META(sc_config).min_rtt_sec = 100;
-        PER_CORE_APP_META(sc_config).min_rtt_usec = 0;
-        PER_CORE_APP_META(sc_config).max_rtt_sec = 0;
-        PER_CORE_APP_META(sc_config).max_rtt_usec = 0;
-        PER_CORE_APP_META(sc_config).nb_latency_data = 0;
-        PER_CORE_APP_META(sc_config).latency_data_pointer = 0;
-    #endif
 
     /* initialize the start_time */
     if(unlikely(-1 == gettimeofday(&PER_CORE_APP_META(sc_config).start_time, NULL))){
@@ -337,7 +332,7 @@ _process_enter_exit:
 int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_tx = 0, nb_send_pkt = 0, result = SC_SUCCESS;
     uint64_t current_ns = 0;
-    char timestamp_ns[18] = {0};
+    char timestamp_ns[24] = {0};
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
@@ -521,7 +516,7 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
 
             if(SC_SUCCESS != sc_util_atoui_64(origin_timestamp, &origin_ns)){
                 // SC_THREAD_WARNING("failed to cast timestamp payload to uint64_t");
-                goto process_client_receiver_exit;
+                goto free_recv_pkt_mbuf;
             }
 
             PER_CORE_APP_META(sc_config).latency_ns[
@@ -536,6 +531,7 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
                 PER_CORE_APP_META(sc_config).nb_latency_data += 1;
             }
 
+free_recv_pkt_mbuf:
             /* return back recv pkt_mbuf */
             rte_pktmbuf_free(PER_CORE_APP_META(sc_config).recv_pkt_bufs[j]); 
         }
@@ -613,7 +609,7 @@ int _all_exit(struct sc_config *sc_config){
         }
         all_core_avg_latency += per_core_avg_latency;
     }
-    all_core_avg_latency /= (double)sc_config->nb_used_cores;
+    all_core_avg_latency /= ((double)sc_config->nb_used_cores/(double)2.0f);
 
     SC_THREAD_LOG("[TOTAL] duration: %lu us",
         SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)
@@ -649,13 +645,6 @@ int _all_exit(struct sc_config *sc_config){
  */
 int _init_app(struct sc_config *sc_config){
     int i;
-
-    #if defined(MODE_LATENCY)
-        if(INTERNAL_CONF(sc_config)->nb_pkt_per_burst != 1){
-            SC_ERROR_DETAILS("suggest to use 1 pkt per brust while testing rtt");
-            return SC_ERROR_INVALID_VALUE;
-        }
-    #endif
 
     if(sc_config->nb_used_cores % 2 != 0){
         SC_ERROR_DETAILS("number of used cores (%u) should be a power of 2",
