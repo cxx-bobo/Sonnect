@@ -123,8 +123,6 @@ struct sc_config {
 #define PER_CORE_META(scc) ((struct per_core_meta*)scc->per_core_meta)[rte_lcore_index(rte_lcore_id())]
 #define PER_CORE_META_BY_CORE_ID(scc, id) ((struct per_core_meta*)scc->per_core_meta)[id]
 
-#define PER_CORE_MBUF_POOL(scc) (PER_CORE_META(scc)).pktmbuf_pool
-#define PER_CORE_MBUF_POOL_BY_CORE_ID(scc, id) (PER_CORE_META_BY_CORE_ID(scc,id)).pktmbuf_pool
 #define PER_CORE_RX_MBUF_POOL(scc, logical_port_id) \
     scc->rx_pktmbuf_pool[RX_QUEUE_MEMORY_POOL_ID(scc,logical_port_id,rte_lcore_index(rte_lcore_id()))]
 #define PER_CORE_TX_MBUF_POOL(scc, logical_port_id) \

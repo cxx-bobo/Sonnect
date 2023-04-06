@@ -12,36 +12,6 @@ extern volatile bool sc_force_quit;
  * \return  zero for successfully initialization
  */
 int __worker_loop_init(struct sc_config *sc_config) {
-    int i;
-#define MBUF_POOL_NAME_LEM 32
-    char *mbuf_pool_name;
-    struct rte_mempool *pktmbuf_pool;
-    
-    /* specify mbuf pool name for current thread */
-    mbuf_pool_name = (char*)malloc(sizeof(char)*MBUF_POOL_NAME_LEM);
-    if(unlikely(!mbuf_pool_name)){
-        SC_ERROR_DETAILS("failed to allocate memory for mbuf_pool_name");
-        return SC_ERROR_MEMORY;
-    }
-    sprintf(mbuf_pool_name, "mbuf_pool_core_%u", rte_lcore_id());
-    PER_CORE_META(sc_config).mbuf_pool_name = mbuf_pool_name;
-
-    /* allocate memory buffer pool for current thread */
-    pktmbuf_pool = rte_pktmbuf_pool_create(
-        /* name */ mbuf_pool_name, 
-        /* n */ SC_NUM_PRIVATE_MBUFS_PER_CORE, 
-        /* cache_size */ MEMPOOL_CACHE_SIZE, 
-        /* priv_size */ 0, 
-        /* data_room_size */ RTE_MBUF_DEFAULT_BUF_SIZE, 
-        /* socket_id */ rte_socket_id()
-    );
-    if (!pktmbuf_pool){
-        SC_THREAD_ERROR_DETAILS("failed to allocate memory for mbuf pool: %s", rte_strerror(rte_errno));
-        return SC_ERROR_MEMORY;
-    }
-    rte_pktmbuf_pool_init(pktmbuf_pool, NULL);
-    PER_CORE_MBUF_POOL(sc_config) = pktmbuf_pool;
-    
     return SC_SUCCESS;
 }
 
