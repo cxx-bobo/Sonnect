@@ -143,9 +143,10 @@ int _worker_loop(void* param){
         /* role: server */
         #if defined(ROLE_SERVER)
             for(i=0; i<sc_config->nb_used_ports; i++){
+
                 nb_rx = rte_eth_rx_burst(i, queue_id, pkt, SC_MAX_PKT_BURST);
                 
-                // if(nb_rx == 0) continue;
+                if(nb_rx == 0) continue;
                 
                 /* Hook Point: Packet Processing */
                 if(SC_SUCCESS != process_pkt_func(
@@ -161,14 +162,14 @@ int _worker_loop(void* param){
 
                 if(nb_fwd_pkts > 0){
                     nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt, nb_fwd_pkts);
-                    if(unlikely(nb_tx < nb_rx)){
+                    if(unlikely(nb_tx < nb_fwd_pkts)){
                         retry = 0;
                         while (nb_tx < nb_rx && retry++ < SC_BURST_TX_RETRIES) {
                             nb_tx += rte_eth_tx_burst(forward_port_id, queue_id, &pkt[nb_tx], nb_fwd_pkts - nb_tx);
                         }
                     }
                     
-                    if (unlikely(nb_tx < nb_rx)) {
+                    if (nb_tx < nb_rx) {
                         do {
                             rte_pktmbuf_free(pkt[nb_tx]);
                         } while (++nb_tx < nb_rx);

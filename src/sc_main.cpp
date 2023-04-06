@@ -260,7 +260,11 @@ static int _init_env(struct sc_config *sc_config, int argc, char **argv){
                 return SC_ERROR_MEMORY;
             }
             memset(pci_dev_eal_confs[i], 0, SF_EAL_CONF_STRLEN);
-            sprintf(pci_dev_eal_confs[i], "%s", DOCA_CONF(sc_config)->pci_devices[i]);
+            /* 
+             * FIXME: 
+             * must disable 'rxq_cqe_comp_en' otherwise segment fault caused by 'rxq_cq_decompress_v' would happen
+             */
+            sprintf(pci_dev_eal_confs[i], "%s,rxq_cqe_comp_en=0", DOCA_CONF(sc_config)->pci_devices[i]);
         #undef SF_EAL_CONF_STRLEN
             rte_argv[rte_argc] = "-a";
             rte_argv[rte_argc+1] = pci_dev_eal_confs[i];

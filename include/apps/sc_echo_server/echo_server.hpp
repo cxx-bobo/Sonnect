@@ -21,8 +21,15 @@
 
 #include "sc_global.hpp"
 
+#define SC_ECHO_SERVER_NB_THROUGHPUT 131072
+
 struct _per_core_app_meta {
     uint64_t nb_forward_pkt;
+
+    uint64_t nb_throughput;
+    uint64_t throughput_pointer;
+    double throughput[SC_ECHO_SERVER_NB_THROUGHPUT];
+    double average_throughput;
 
     /* for calculating throughput */
     uint64_t nb_interval_forward_pkt;
