@@ -1,5 +1,9 @@
 # SoConnect
 
+<div align="center" style="margin: 10px;">
+    <img src="./doc/logo.png" width="300px" />
+</div>
+
 **SoConnect** (SC) is a benchmark-oriented framework for fastly developping DPDK application, which integrate DOCA and CUDA support, one can use this framework for rapidly developping your own benchmark that can be tested on either x86 server or ARM SoC.
 
 
@@ -21,7 +25,7 @@ python3 -m pip install ninja
 
 1. Change the `app` within `meson.build` to build your desired application, full application list can be found under `src/apps/.app_list`;
 
-<div align="center">
+<div align="center" style="margin: 10px;">
     <img src="./doc/change-app.png" width="400px" />
 </div>
 
