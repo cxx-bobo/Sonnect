@@ -161,6 +161,7 @@ int _process_enter(struct sc_config *sc_config){
         struct doca_sha_job *sha_job;
 
         /* allocate SHA engine result buffer */
+        // FIXME: don't use malloc!
         dst_buffer = (char*)malloc(DOCA_SHA256_BYTE_COUNT);
         if (dst_buffer == NULL) {
             SC_THREAD_ERROR_DETAILS("failed to malloc memory for dst_buffer");
@@ -335,6 +336,7 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
             long interval_usec;
 
             /* record start time */
+            // FIXME: don't use gettimeofday
             if(unlikely(-1 == gettimeofday(&start_time, NULL))){
                 SC_THREAD_ERROR_DETAILS("failed to obtain recv time");
                 result = SC_ERROR_INTERNAL;
@@ -363,6 +365,8 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
                 return SC_ERROR_INTERNAL;
             }
 
+            // FIXME: leave
+            
             /* wait for job completion */
             while((doca_result = doca_workq_progress_retrieve(
                     /* workq */ PER_CORE_DOCA_META(sc_config).sha_workq,
@@ -401,6 +405,7 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
                 PER_CORE_APP_META(sc_config).sha_state, (uint8_t*)tuple_key, SC_SHA_HASH_KEY_LENGTH);
         #endif
 
+        // TODO: open this macro
         #if defined(MODE_LATENCY)
             /* record start time */
             if(unlikely(-1 == gettimeofday(&end_time, NULL))){

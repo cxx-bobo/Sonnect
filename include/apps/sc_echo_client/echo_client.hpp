@@ -12,7 +12,7 @@
 #include "sc_utils/distribution_gen.hpp"
 
 
-#define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 16)-1
+#define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 24)-1
 
 #define SC_ECHO_CLIENT_PAYLOAD_LEN 24
 
@@ -73,7 +73,9 @@ struct _internal_config {
     uint64_t nb_flow_per_core;
 
     /* send flow rate */
+    /* when enable pkt rate, bit rate is invalid */
     double bit_rate;
+    double pkt_rate;
 
     /* used echo ports */
     uint32_t nb_send_ports, nb_recv_ports;

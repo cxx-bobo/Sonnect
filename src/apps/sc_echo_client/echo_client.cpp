@@ -160,7 +160,7 @@ invalid_pkt_len:
         SC_ERROR_DETAILS("invalid configuration pkt_len\n");
     }
 
-    /* send flow rate */
+    /* send bit rate */
     if(!strcmp(key, "bit_rate")){
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
@@ -174,6 +174,22 @@ invalid_pkt_len:
 
 invalid_bit_rate:
         SC_ERROR_DETAILS("invalid configuration bit_rate\n");
+    }
+
+    /* send pkt rate */
+    if(!strcmp(key, "pkt_rate")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        double pkt_rate;
+        if(sc_util_atolf(value, &pkt_rate) != SC_SUCCESS) {
+            result = SC_ERROR_INVALID_VALUE;
+            goto invalid_pkt_rate;
+        }
+        INTERNAL_CONF(sc_config)->pkt_rate = pkt_rate;
+        goto _parse_app_kv_pair_exit;
+
+invalid_pkt_rate:
+        SC_ERROR_DETAILS("invalid configuration pkt_rate\n");
     }
 
     /* number of packet per burst */
@@ -230,9 +246,16 @@ int _process_enter_sender(struct sc_config *sc_config){
     PER_CORE_APP_META(sc_config).nb_confirmed_pkt = 0;
 
     /* initialize interval generator */
-    double per_core_pkt_rate = (double)INTERNAL_CONF(sc_config)->bit_rate 
-                                / (double)(sc_config->nb_used_cores/2)
-                                / (double) 8.0 / (double)INTERNAL_CONF(sc_config)->pkt_len;
+    double per_core_pkt_rate;
+    if(INTERNAL_CONF(sc_config)->pkt_rate != 0) {
+        per_core_pkt_rate = (double)INTERNAL_CONF(sc_config)->pkt_rate 
+                            / (double)1000 / (double)(sc_config->nb_used_cores/2);
+    } else {
+        per_core_pkt_rate = (double)INTERNAL_CONF(sc_config)->bit_rate 
+                            / (double)(sc_config->nb_used_cores/2)
+                            / (double) 8.0 / (double)INTERNAL_CONF(sc_config)->pkt_len;
+    }
+
     double per_core_brust_rate = (double) per_core_pkt_rate / (double)INTERNAL_CONF(sc_config)->nb_pkt_per_burst;
     double per_core_brust_interval = (double) 1.0 / (double) per_core_brust_rate; /* ns */
     PER_CORE_APP_META(sc_config).interval_generator 
@@ -240,11 +263,11 @@ int _process_enter_sender(struct sc_config *sc_config){
     PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
     PER_CORE_APP_META(sc_config).last_send_timestamp = sc_util_timestamp_ns();
 
-    // SC_THREAD_LOG("per core pkt rate: %lf G packet/second", per_core_pkt_rate);    
-    // SC_THREAD_LOG("per core brust rate: %lf G brust/second", per_core_brust_rate);
-    // SC_THREAD_LOG("per core brust interval: %lf ns, (int)%d ns",
-    //    per_core_brust_interval, (int)per_core_brust_interval);
-    // SC_THREAD_LOG("initialize interval: %lu ns", PER_CORE_APP_META(sc_config).interval);
+    SC_THREAD_LOG("per core pkt rate: %lf G packet/second", per_core_pkt_rate);    
+    SC_THREAD_LOG("per core brust rate: %lf G brust/second", per_core_brust_rate);
+    SC_THREAD_LOG("per core brust interval: %lf ns, (int)%d ns",
+       per_core_brust_interval, (int)per_core_brust_interval);
+    SC_THREAD_LOG("initialize interval: %lu ns", PER_CORE_APP_META(sc_config).interval);
 
     /* allocate memory for storing generated packet headers */
     struct sc_pkt_hdr *pkt_hdrs = (struct sc_pkt_hdr*)rte_malloc(
@@ -340,6 +363,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         if(sc_force_quit){ break; }
 
         /* check send interval */
+        /* FIXME: this is too expensive? */
         current_ns = sc_util_timestamp_ns();
         if(current_ns - PER_CORE_APP_META(sc_config).last_send_timestamp < PER_CORE_APP_META(sc_config).interval){
             continue;
