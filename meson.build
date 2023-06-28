@@ -11,7 +11,7 @@ env = environment()
 pkgconfig = find_program('pkg-config')
 
 # specified which application to use
-app = 'echo_client'
+app = 'echo_server'
 add_global_arguments('-DAPP_' + app.to_upper(), language: ['c', 'cpp'])
 
 # project name
@@ -42,10 +42,13 @@ sc_ld_args = []
 
 # indicator of whether necessary libraries were founded
 has_dpdk = false
+has_doca = false
+has_cuda = false
 
 # >>>>>>>>>>>>>> DPDK >>>>>>>>>>>>>>
 dpdk_pc_path = meson.current_source_dir() + '/' + 'third_party/dpdk-21.11/install/lib/x86_64-linux-gnu/pkgconfig/'
 dpdk_modules = ['libdpdk', 'libdpdk-libs']
+founded_dpdk_modules = []
 message('>>> Detecting DPDK, assume pc file of DPDK is located at ' + dpdk_pc_path)
 env.set('PKG_CONFIG_PATH', dpdk_pc_path)
 foreach dpdk_module : dpdk_modules
@@ -55,12 +58,15 @@ foreach dpdk_module : dpdk_modules
 	if dpdk_module_cflags.returncode() != 0 or dpdk_module_cflags.returncode() != 0 or dpdk_module_cflags.returncode() != 0
 		message('>>> Failed to find ' + dpdk_module)
 	else
+		founded_dpdk_modules += dpdk_module
 		sc_c_args += dpdk_module_cflags.stdout().split()
 		sc_ld_args += dpdk_module_ldflags.stdout().split()
-		has_dpdk = true
 		message('>>>>>> Found ' +  dpdk_module + ', version is ' + dpdk_module_version.stdout().split()[0])
 	endif
 endforeach
+if founded_dpdk_modules.length() == dpdk_modules.length()
+	has_dpdk = true
+endif
 
 
 # >>>>>>>>>>>>>> DOCA >>>>>>>>>>>>>>
@@ -72,6 +78,7 @@ doca_modules = [
 	'doca-flow-lib', 'doca-flow', 'doca-ipsec-lib', 'doca-ipsec', 'doca-regex-lib', 'doca-regex', 'doca-sha-lib',
 	'doca-sha', 'doca-telemetry-lib', 'doca-telemetry'
 ]
+founded_doca_modules = []
 message('>>> Detecting DOCA, assume pc file of DOCA is located at ' + doca_pc_path)
 env.set('PKG_CONFIG_PATH', doca_pc_path)
 foreach doca_module : doca_modules
@@ -81,16 +88,21 @@ foreach doca_module : doca_modules
 	if doca_module_cflags.returncode() != 0 or doca_module_ldflags.returncode() != 0 or doca_module_version.returncode() != 0
 		message('>>>>>> Failed to find ' + doca_module)
 	else
+		founded_doca_modules += doca_module
 		sc_c_args += doca_module_cflags.stdout().split()
 		sc_ld_args += doca_module_ldflags.stdout().split()
 		message('>>>>>> Found ' + doca_module + ', version is ' + doca_module_version.stdout().split()[0])
 	endif
 endforeach
+if founded_doca_modules.length() == doca_modules.length()
+	has_doca = true
+endif
 
 # >>>>>>>>>>>>>> CUDA >>>>>>>>>>>>>>
 cudax_desired_version = '12.1'
 cudax_pc_path = '/usr/lib/pkgconfig'
 cudax_modules = ['cublas', 'cuda', 'cudart', 'cufft', 'cufftw', 'cufile', 'cuinj64', 'curand', 'cusolver', 'cusparse']
+founded_cudax_modules = []
 message('>>> Detecting CUDA Toolkit, assume pc file of CUDA Toolkit is located at ' + cudax_pc_path)
 env.set('PKG_CONFIG_PATH', cudax_pc_path)
 foreach cudax_module : cudax_modules
@@ -100,12 +112,15 @@ foreach cudax_module : cudax_modules
 	if cudax_module_cflags.returncode() != 0 or cudax_module_ldflags.returncode() != 0 or cudax_module_version.returncode() != 0
 		message('>>>>>> Failed to find ' + cudax_module+'-'+cudax_desired_version)
 	else
+		founded_cudax_modules += cudax_module
 		sc_c_args += cudax_module_cflags.stdout().split()
 		sc_ld_args += cudax_module_ldflags.stdout().split()
 		message('>>>>>> Found ' + cudax_module + ', version is ' + cudax_module_version.stdout().split()[0])
 	endif
 endforeach
-
+if founded_cudax_modules.length() == cudax_modules.length()
+	has_cuda = true
+endif
 
 # >>>>>>>>>>>>>> Other Dependencies Found through Compiler >>>>>>>>>>>>>>
 dep = []

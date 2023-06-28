@@ -114,7 +114,7 @@ int _worker_loop(void* param){
         #if defined(ROLE_SERVER)
             for(i=0; i<sc_config->nb_used_ports; i++){
 
-                nb_rx = rte_eth_rx_burst(i, queue_id, pkt, SC_MAX_PKT_BURST);
+                nb_rx = rte_eth_rx_burst(sc_config->sc_port[i].port_id, queue_id, pkt, SC_MAX_PKT_BURST);
                 
                 if(nb_rx == 0) continue;
                 
