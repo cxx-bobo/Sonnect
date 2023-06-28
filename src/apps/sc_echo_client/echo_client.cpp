@@ -371,22 +371,16 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         sprintf(timestamp_ns, "%lu", current_ns);
 
         /* assemble pkt brust */
-        // FIXME: should use pre-allocated buffer
+        struct sc_pkt_hdr *current_used_pkt = &(PER_CORE_APP_META(sc_config).test_pkts[PER_CORE_APP_META(sc_config).last_used_flow]);
         if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
                 /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
                 /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
-                /* eth_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[
-                                    PER_CORE_APP_META(sc_config).last_used_flow
-                                ].pkt_eth_hdr,
+                /* eth_hdr */ &(current_used_pkt->pkt_eth_hdr),
                 /* vlan_enabled */ 0,
-                /* ip_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[
-                                    PER_CORE_APP_META(sc_config).last_used_flow
-                                ].pkt_ipv4_hdr,
+                /* ip_hdr */ &(current_used_pkt->pkt_ipv4_hdr),
                 /* ipv4 */ 1,
                 /* proto */ IPPROTO_UDP,
-                /* proto_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[
-                                    PER_CORE_APP_META(sc_config).last_used_flow
-                                ].pkt_udp_hdr,
+                /* proto_hdr */ &(current_used_pkt->pkt_udp_hdr),
                 /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
                 /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
                 /* payload */ timestamp_ns,
