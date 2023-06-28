@@ -150,7 +150,6 @@ sources = glob.stdout().strip().split('\n')
 # =======================================================================
 
 
-
 # build executable
 message('cflags: ' + ' '.join(sc_c_args))
 message('ldflags: ' + ' '.join(sc_ld_args))

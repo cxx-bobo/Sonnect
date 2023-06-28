@@ -363,7 +363,6 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         if(sc_force_quit){ break; }
 
         /* check send interval */
-        /* FIXME: this is too expensive? */
         current_ns = sc_util_timestamp_ns();
         if(current_ns - PER_CORE_APP_META(sc_config).last_send_timestamp < PER_CORE_APP_META(sc_config).interval){
             continue;
@@ -373,6 +372,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         sprintf(timestamp_ns, "%lu", current_ns);
 
         /* assemble pkt brust */
+        // FIXME: should use pre-allocated buffer
         if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
                 /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
                 /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,

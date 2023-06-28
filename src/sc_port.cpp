@@ -42,37 +42,37 @@ static struct rte_eth_conf port_conf_default = {
     #if RTE_VERSION >= RTE_VERSION_NUM(20, 11, 255, 255)
         // .link_speeds = RTE_ETH_LINK_SPEED_AUTONEG,
         // .rxmode = {
-        //     .mq_mode = RTE_ETH_MQ_RX_NONE,  /* init later */
-        //     .offloads = 0,                  /* init later */
+        //     .mq_mode = RTE_ETH_MQ_RX_NONE,   /* init later */
+        //     .offloads = 0,                   /* init later */
         // },
         // .txmode = {
         //     .mq_mode = RTE_ETH_MQ_TX_NONE,
-        //     .offloads = 0,                  /* init later */
+        //     .offloads = 0,                   /* init later */
         // },
         // .lpbk_mode = 0,
         // .rx_adv_conf = {
 		// 	.rss_conf = {
-		// 		.rss_key = NULL,    /* init later */
-        //         .rss_key_len = 0,   /* init later */
-		// 		.rss_hf = 0         /* init later */
+		// 		.rss_key = NULL,                /* init later */
+        //         .rss_key_len = 0,            /* init later */
+		// 		.rss_hf = 0                     /* init later */
 		// 	},
 		// },
     #else
         // .link_speeds = ETH_LINK_SPEED_AUTONEG,
         // .rxmode = {
-        //     .mq_mode = ETH_MQ_RX_NONE,      /* init later */
-        //     .offloads = 0,                  /* init later */
+        //     .mq_mode = ETH_MQ_RX_NONE,       /* init later */
+        //     .offloads = 0,                   /* init later */
         // },
         // .txmode = {
         //     .mq_mode = ETH_MQ_TX_NONE,
-        //     .offloads = 0,                  /* init later */
+        //     .offloads = 0,                   /* init later */
         // },
         // .lpbk_mode = 0,
         // .rx_adv_conf = {
         //     .rss_conf = {
-        //         .rss_key = NULL,    /* init later */
-        //         .rss_key_len = 0,   /* init later */
-        //         .rss_hf = 0,        /* init later */
+        //         .rss_key = NULL,             /* init later */
+        //         .rss_key_len = 0,            /* init later */
+        //         .rss_hf = 0,                 /* init later */
         //     }
         // },
     #endif
