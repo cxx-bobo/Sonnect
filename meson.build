@@ -45,19 +45,23 @@ has_dpdk = false
 
 # >>>>>>>>>>>>>> DPDK >>>>>>>>>>>>>>
 dpdk_pc_path = meson.current_source_dir() + '/' + 'third_party/dpdk-21.11/install/lib/x86_64-linux-gnu/pkgconfig/'
+dpdk_modules = ['libdpdk', 'libdpdk-libs']
 message('>>> Detecting DPDK, assume pc file of DPDK is located at ' + dpdk_pc_path)
 env.set('PKG_CONFIG_PATH', dpdk_pc_path)
-dpdk_cflags = run_command(pkgconfig, '--cflags', 'libdpdk', env: env, check: false)
-dpdk_ldflags = run_command(pkgconfig, '--libs', 'libdpdk', env: env, check: false) # add '--static' option if static link is needed
-dpdk_version = run_command(pkgconfig, '--modversion', 'libdpdk', env: env, check: false)
-if dpdk_cflags.returncode() != 0 or dpdk_ldflags.returncode() != 0 or dpdk_version.returncode() != 0
-	message('>>> Failed to find DPDK')
-else
-	sc_c_args += dpdk_cflags.stdout().split()
-	sc_ld_args += dpdk_ldflags.stdout().split()
-	has_dpdk = true
-	message('>>>>>> Found DPDK, version is ' + dpdk_version.stdout().split()[0])
-endif
+foreach dpdk_module : dpdk_modules
+	dpdk_module_cflags = run_command(pkgconfig, '--cflags', dpdk_module, env: env, check: false)
+	dpdk_module_ldflags = run_command(pkgconfig, '--libs', '--static', dpdk_module, env: env, check: false) # add '--static' option if static link is needed
+	dpdk_module_version = run_command(pkgconfig, '--modversion', dpdk_module, env: env, check: false)
+	if dpdk_module_cflags.returncode() != 0 or dpdk_module_cflags.returncode() != 0 or dpdk_module_cflags.returncode() != 0
+		message('>>> Failed to find ' + dpdk_module)
+	else
+		sc_c_args += dpdk_module_cflags.stdout().split()
+		sc_ld_args += dpdk_module_ldflags.stdout().split()
+		has_dpdk = true
+		message('>>>>>> Found ' +  dpdk_module + ', version is ' + dpdk_module_version.stdout().split()[0])
+	endif
+endforeach
+
 
 # >>>>>>>>>>>>>> DOCA >>>>>>>>>>>>>>
 doca_pc_path = '/opt/mellanox/doca/lib/aarch64-linux-gnu/pkgconfig/'
@@ -72,7 +76,7 @@ message('>>> Detecting DOCA, assume pc file of DOCA is located at ' + doca_pc_pa
 env.set('PKG_CONFIG_PATH', doca_pc_path)
 foreach doca_module : doca_modules
 	doca_module_cflags = run_command(pkgconfig, '--cflags', doca_module, env: env, check: false)
-	doca_module_ldflags = run_command(pkgconfig, '--libs', doca_module, env: env, check: false) # add '--static' option if static link is needed
+	doca_module_ldflags = run_command(pkgconfig, '--libs', '--static', doca_module, env: env, check: false) # add '--static' option if static link is needed
 	doca_module_version = run_command(pkgconfig, '--modversion', doca_module, env: env, check: false)
 	if doca_module_cflags.returncode() != 0 or doca_module_ldflags.returncode() != 0 or doca_module_version.returncode() != 0
 		message('>>>>>> Failed to find ' + doca_module)
@@ -91,7 +95,7 @@ message('>>> Detecting CUDA Toolkit, assume pc file of CUDA Toolkit is located a
 env.set('PKG_CONFIG_PATH', cudax_pc_path)
 foreach cudax_module : cudax_modules
 	cudax_module_cflags = run_command(pkgconfig, '--cflags', cudax_module+'-'+cudax_desired_version, env: env, check: false)
-	cudax_module_ldflags = run_command(pkgconfig, '--libs', cudax_module+'-'+cudax_desired_version, env: env, check: false) # add '--static' option if static link is needed
+	cudax_module_ldflags = run_command(pkgconfig, '--libs', '--static', cudax_module+'-'+cudax_desired_version, env: env, check: false) # add '--static' option if static link is needed
 	cudax_module_version = run_command(pkgconfig, '--modversion', cudax_module+'-'+cudax_desired_version, env: env, check: false)
 	if cudax_module_cflags.returncode() != 0 or cudax_module_ldflags.returncode() != 0 or cudax_module_version.returncode() != 0
 		message('>>>>>> Failed to find ' + cudax_module+'-'+cudax_desired_version)
