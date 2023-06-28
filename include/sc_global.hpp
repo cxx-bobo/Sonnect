@@ -88,7 +88,6 @@ struct sc_config {
     uint64_t rss_hash_field;
 
     /* dpdk memory */
-    struct rte_mempool *pktmbuf_pool;
     struct rte_mempool **rx_pktmbuf_pool;  // index: port_id * nb_rx_rings_per_port + queue_id
     struct rte_mempool **tx_pktmbuf_pool;  // index: port_id * nb_tx_rings_per_port + queue_id
     uint16_t nb_memory_channels_per_socket;
@@ -139,19 +138,7 @@ struct sc_config {
 #define INTERNAL_CONF(scc) ((struct _internal_config*)scc->app_config->internal_config)
 
 /* application specific configuration */
-struct app_config {
-    /* callback function (worker thread): operations while entering the worker loop */
-    int (*process_enter)(struct sc_config *sc_config);
-    
-    /* callback function (worker thread): processing single received packet (server mode) */
-    int (*process_pkt)(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts);
-    
-    /* callback function (worker thread): client logic (client mode) */
-    int (*process_client)(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
-    
-    /* callback function (worker thread): operations while exiting the worker loop */
-    int (*process_exit)(struct sc_config *sc_config);
-    
+struct app_config {    
     /* callback function (main thread): operations while all thread exits */
     int (*all_exit)(struct sc_config *sc_config);
 
@@ -161,14 +148,7 @@ struct app_config {
 
 /* per-core metadata */
 struct per_core_meta {
-    /* core id starts from 0 */
-    uint64_t core_seq_id;
-
-    /* name of the private memory buffer */
-    char *mbuf_pool_name;
-
-    /* per-core memory pool */
-    struct rte_mempool *pktmbuf_pool;
+    int something;
 };
 
 /* function pointer definition, for dispatching different logic to different cores */

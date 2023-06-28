@@ -262,7 +262,6 @@ int _process_enter_sender(struct sc_config *sc_config){
         = new sc_util_exponential_uint64_generator((int)per_core_brust_interval);
     PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
     PER_CORE_APP_META(sc_config).last_send_timestamp = sc_util_timestamp_ns();
-
     SC_THREAD_LOG("per core pkt rate: %lf G packet/second", per_core_pkt_rate);    
     SC_THREAD_LOG("per core brust rate: %lf G brust/second", per_core_brust_rate);
     SC_THREAD_LOG("per core brust interval: %lf ns, (int)%d ns",
