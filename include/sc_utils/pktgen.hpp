@@ -19,6 +19,7 @@
 
 /* header collection */
 struct sc_pkt_hdr {
+	/* ========== fields filled during generation ========== */
 	/* ethernet header */
 	uint8_t vlan_enabled;
 	struct rte_ether_hdr pkt_eth_hdr;
@@ -35,14 +36,22 @@ struct sc_pkt_hdr {
     /* L4 header */
 	uint8_t l4_type;
     uint16_t src_port, dst_port;
-    struct rte_udp_hdr pkt_udp_hdr;
-	struct rte_tcp_hdr pkt_tcp_hdr;
+    struct rte_udp_hdr 	pkt_udp_hdr;
+	struct rte_tcp_hdr 	pkt_tcp_hdr;
+	struct rte_sctp_hdr pkt_sctp_hdr;
 
 	/* length of the genearted packet */
 	uint32_t pkt_len;
 
+	/* pointer to the payload of this packet */
+	void *payload;
+	uint32_t payload_len;
+
 	/* pkt metadata */
 	uint64_t service_time;
+
+	/* ========== fields filled during assembling ========== */
+	uint64_t payload_offset;
 };
 
 /* data copier */
@@ -54,10 +63,16 @@ int sc_util_generate_random_ipv4_addr(uint32_t *addr);
 int sc_util_generate_random_ipv6_addr(uint8_t *addr);
 int sc_util_generate_random_pkt_hdr(struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_len, 
 	uint32_t payload_len, uint32_t nb_queues, uint32_t used_queue_id, uint32_t l3_type, 
-	uint32_t l4_type, uint64_t rss_hash_field, bool rss_affinity, uint32_t min_pkt_len);
+	uint32_t l4_type, uint64_t rss_hash_field, bool rss_affinity, uint32_t min_pkt_len,
+	void *payload);
 int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);
 
 /* rte header initializer */
+int sc_util_clone_mbuf_brust(struct rte_mempool *mp, struct rte_mbuf **mbufs, 
+	struct rte_mbuf *source_mbuf, uint64_t brust_size, void *new_payload, 
+	uint64_t new_payload_size, uint64_t new_payload_offset);
+int sc_util_assemble_packet_headers_to_mbuf(struct rte_mempool *mp, struct sc_pkt_hdr *hdr, 
+		struct rte_mbuf *pkt);
 int sc_util_generate_packet_burst_mbufs(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 

@@ -16,12 +16,23 @@
  * \param	rss_hash_field	rss hash field
  * \param	rss_affinity	whether to generate packet with rss affinity to current core
  * \param	min_pkt_len		minimum packet length
+ * \param	payload			pointer to the payload
  * \return  0 for successfully generation
+ * \todo	[1] vlan packet support
+ * 			[2] vxlan overlay packet support
  */
 int sc_util_generate_random_pkt_hdr(
-		struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_len, uint32_t payload_len, uint32_t nb_queues, 
-		uint32_t used_queue_id, uint32_t l3_type, uint32_t l4_type, uint64_t rss_hash_field,
-		bool rss_affinity, uint32_t min_pkt_len
+	struct sc_pkt_hdr *sc_pkt_hdr,
+	uint32_t pkt_len,
+	uint32_t payload_len,
+	uint32_t nb_queues,
+	uint32_t used_queue_id,
+	uint32_t l3_type,
+	uint32_t l4_type,
+	uint64_t rss_hash_field,
+	bool rss_affinity,
+	uint32_t min_pkt_len,
+	void *payload
 ){
 	int result = SC_SUCCESS;
 	uint16_t _pkt_len;
@@ -31,6 +42,10 @@ int sc_util_generate_random_pkt_hdr(
 		SC_THREAD_ERROR_DETAILS("pakcet length is too small, should be larger than %d", min_pkt_len);
 	}
 	sc_pkt_hdr->pkt_len = pkt_len;
+
+	/* setting up payload meta */
+	sc_pkt_hdr->payload_len = payload_len;
+	sc_pkt_hdr->payload = payload;
 
 	/* initialize the _pkt_len as the length of the l4 payload */
     _pkt_len = payload_len;
@@ -115,7 +130,6 @@ int sc_util_generate_random_pkt_hdr(
 		goto sc_util_generate_random_pkt_hdr_exit;
 	}
     
-
     /* assemble l3 header */
 	if(l3_type == RTE_ETHER_TYPE_IPV4){
 		if(SC_SUCCESS != sc_util_initialize_ipv4_header_proto(
@@ -164,69 +178,75 @@ int sc_util_generate_random_pkt_hdr(
         result = SC_ERROR_INTERNAL;
         goto sc_util_generate_random_pkt_hdr_exit;
     }
+	sc_pkt_hdr->vlan_enabled = false;
 
 sc_util_generate_random_pkt_hdr_exit:
     return result;
 }
 
 /*!
- * \brief   copy pkt data to mbufs chain, according to given offset
- * \param   buf     source data buffer
- * \param   len     length of the source data
- * \param   pkt     destinuation mbuf
- * \param   offset  copy offset within the destination mbuf
- * \return  0 for successfully copy
+ * \brief   clone a brust of mbufs from previous mbuf
+ * \param   mp     			rte_mempool, to allocated further segments
+ * \param   mbufs  			array to store pointers of clone mbufs
+ * \param   source_mbuf     source mbuf to be cloned
+ * \param	brust_size		number of mbufs to clone from the source mbuf
+ * \return  0 for successfully cloning	
  */
-int _sc_util_copy_buf_to_pkt_segs(void *buf, uint32_t len, struct rte_mbuf *pkt, uint32_t offset){
-	struct rte_mbuf *seg;
-	void *seg_buf;
-	unsigned copy_len;
-	
-	seg = pkt;
-	while (offset >= seg->data_len) {
-		offset -= seg->data_len;
-		seg = seg->next;
-        if(unlikely(!seg)){
-            SC_ERROR_DETAILS("reach the end of the mbuf chain");
-            return SC_ERROR_INVALID_VALUE;
-        }
-	}
-
-	copy_len = seg->data_len - offset;
-	seg_buf = rte_pktmbuf_mtod_offset(seg, char *, offset);
-	while (len > copy_len) {
-		rte_memcpy(seg_buf, buf, (size_t) copy_len);
-		len -= copy_len;
-		buf = ((char *) buf + copy_len);
-		seg = seg->next;
-		seg_buf = rte_pktmbuf_mtod(seg, void *);
-	}
-	rte_memcpy(seg_buf, buf, (size_t) len);
-
-    return SC_SUCCESS;
+int sc_util_copied_pkt_payload_to_mbuf(struct sc_pkt_hdr *hdr, struct rte_mbuf *mbuf, void *payload, uint64_t payload_size){
+	return sc_util_copy_buf_to_pkt(payload, payload_size, mbuf, hdr->payload_offset);
 }
 
 /*!
- * \brief   copy pkt data to mbufs, according to given offset
- * \param   buf     source data buffer
- * \param   len     length of the source data
- * \param   pkt     destinuation mbuf
- * \param   offset  copy offset within the destination mbuf
- * \return  0 for successfully copy
+ * \brief   clone a brust of mbufs from previous mbuf
+ * \param   mp     				rte_mempool, to allocated further segments
+ * \param   mbufs  				array to store pointers of clone mbufs
+ * \param   source_mbuf     	source mbuf to be cloned
+ * \param	brust_size			number of mbufs to clone from the source mbuf
+ * \param	new_payload			new payload to append to the new cloning mbufs
+ * \param	new_payload_size	size of the new paylaod
+ * \param	new_payload_offset	the offset of the payload to be appended
+ * \return  0 for successfully cloning	
  */
-int sc_util_copy_buf_to_pkt(void *buf, uint32_t len, struct rte_mbuf *pkt, uint32_t offset){
-	if (offset + len <= pkt->data_len) {
-		rte_memcpy(rte_pktmbuf_mtod_offset(pkt, char *, offset), buf, (size_t) len);
-		return SC_SUCCESS;
+int sc_util_clone_mbuf_brust(struct rte_mempool *mp, struct rte_mbuf **mbufs, struct rte_mbuf *source_mbuf, uint64_t brust_size, void *new_payload, uint64_t new_payload_size, uint64_t new_payload_offset){
+	uint64_t i, j;
+	int result = SC_SUCCESS;
+	for(i=0; i<brust_size; i++){
+		mbufs[i] = rte_pktmbuf_clone(source_mbuf, mp);
+		if (unlikely(!mbufs[i])) {
+			SC_THREAD_ERROR_DETAILS("failed to allocate memory for rte_mbuf");
+				result = SC_ERROR_MEMORY;
+				goto free_cloned_mbufs;
+		}
+		if(new_payload != NULL){
+			if(SC_SUCCESS != sc_util_copy_buf_to_pkt(new_payload, new_payload_size, mbufs[i], new_payload_offset)){
+				SC_THREAD_ERROR_DETAILS("failed to add payload to rte_mbuf");
+				goto free_cloned_mbufs;
+			}
+		}
 	}
-	return _sc_util_copy_buf_to_pkt_segs(buf, len, pkt, offset);
+
+	goto clone_mbuf_brust_exit;
+
+free_cloned_mbufs:
+	for(j=0; j<i; j++){ rte_pktmbuf_free(mbufs[j]); }
+
+clone_mbuf_brust_exit:
+	return result;
 }
 
+/*!
+ * \brief   assemble packet headers into a allocated rte_mbuf
+ * \param   mp     	rte_mempool, to allocated further segments
+ * \param   hdr     provided packet headers
+ * \param   pkt     target rte_mbuf
+ * \return  0 for successfully assembling
+ */
 int sc_util_assemble_packet_headers_to_mbuf(struct rte_mempool *mp, struct sc_pkt_hdr *hdr, struct rte_mbuf *pkt){
 	int i, result = SC_SUCCESS;
 	uint16_t nb_pkt_segs;
 	uint32_t assembled_pkt_len = 0;
 	size_t eth_hdr_size;
+	uint32_t l3_l4_hdr_len = 0;
 	struct rte_mbuf *pkt_seg;
 
 	/* determine the number of pkt segments */
@@ -281,9 +301,64 @@ int sc_util_assemble_packet_headers_to_mbuf(struct rte_mempool *mp, struct sc_pk
 		eth_hdr_size = sizeof(struct rte_ether_hdr) + sizeof(struct rte_vlan_hdr);
 	else
 		eth_hdr_size = sizeof(struct rte_ether_hdr);
-	sc_util_copy_buf_to_pkt(hdr->pkt_eth_hdr, eth_hdr_size, pkt, 0);
+	sc_util_copy_buf_to_pkt(&(hdr->pkt_eth_hdr), eth_hdr_size, pkt, 0);
 
-	// TODO:
+	/* copy ip and transport header to pkt */
+	if (hdr->l3_type == RTE_ETHER_TYPE_IPV4) {
+		sc_util_copy_buf_to_pkt(&(hdr->pkt_ipv4_hdr), sizeof(struct rte_ipv4_hdr), pkt, eth_hdr_size);
+		l3_l4_hdr_len = sizeof(struct rte_ipv4_hdr);
+		switch (hdr->l4_type) {
+		case IPPROTO_UDP:
+			sc_util_copy_buf_to_pkt(&(hdr->pkt_udp_hdr),
+				sizeof(struct rte_udp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv4_hdr));
+			l3_l4_hdr_len += sizeof(struct rte_udp_hdr);
+			break;
+		case IPPROTO_TCP:
+			sc_util_copy_buf_to_pkt(&(hdr->pkt_tcp_hdr),
+				sizeof(struct rte_tcp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv4_hdr));
+			l3_l4_hdr_len += sizeof(struct rte_tcp_hdr);
+			break;
+		case IPPROTO_SCTP:
+			sc_util_copy_buf_to_pkt(&(hdr->pkt_sctp_hdr),
+				sizeof(struct rte_sctp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv4_hdr));
+			l3_l4_hdr_len += sizeof(struct rte_sctp_hdr);
+			break;
+		default:
+			SC_ERROR_DETAILS("unknown l4 type: %d", hdr->l4_type);
+			result = SC_ERROR_INVALID_VALUE;
+			goto assemble_packet_headers_to_mbuf_exit;
+		}
+	} else {
+		sc_util_copy_buf_to_pkt(&(hdr->pkt_ipv6_hdr), sizeof(struct rte_ipv6_hdr), pkt, eth_hdr_size);
+		l3_l4_hdr_len = sizeof(struct rte_ipv6_hdr);
+		switch (hdr->l4_type) {
+		case IPPROTO_UDP:
+			sc_util_copy_buf_to_pkt(&(hdr->pkt_udp_hdr),
+				sizeof(struct rte_udp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv6_hdr));
+			l3_l4_hdr_len += sizeof(struct rte_udp_hdr);
+			break;
+		case IPPROTO_TCP:
+			sc_util_copy_buf_to_pkt(&(hdr->pkt_tcp_hdr),
+				sizeof(struct rte_tcp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv6_hdr));
+			l3_l4_hdr_len += sizeof(struct rte_tcp_hdr);
+			break;
+		case IPPROTO_SCTP:
+			sc_util_copy_buf_to_pkt(&(hdr->pkt_sctp_hdr),
+				sizeof(struct rte_sctp_hdr), pkt, eth_hdr_size + sizeof(struct rte_ipv6_hdr));
+			l3_l4_hdr_len += sizeof(struct rte_sctp_hdr);
+			break;
+		default:
+			SC_ERROR_DETAILS("unknown l4 type: %d", hdr->l4_type);
+			result = SC_ERROR_INVALID_VALUE;
+			goto assemble_packet_headers_to_mbuf_exit;
+		}
+	}
+
+	/* copy payload, and record payload offset */
+	if(hdr->payload != nullptr){
+		sc_util_copy_buf_to_pkt(hdr->payload, hdr->payload_len, pkt, eth_hdr_size + l3_l4_hdr_len);
+	}
+	hdr->payload_offset = eth_hdr_size + l3_l4_hdr_len;
 
 assemble_packet_headers_to_mbuf_exit:
 	return result;
@@ -310,7 +385,7 @@ int sc_util_generate_packet_burst_mbufs(struct rte_mempool *mp, struct rte_mbuf 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 
 		uint32_t pkt_len, char *payload, uint32_t payload_len){
-	int i, j, nb_pkt = 0, result = SC_SUCCESS;
+	int i, nb_pkt = 0, result = SC_SUCCESS;
 	size_t eth_hdr_size;
 	struct rte_mbuf *pkt_seg;
 	struct rte_mbuf *pkt;
@@ -454,13 +529,55 @@ generate_packet_burst_proto_exit:
 	return result;
 }
 
+/*!
+ * \brief   copy pkt data to mbufs chain, according to given offset
+ * \param   buf     source data buffer
+ * \param   len     length of the source data
+ * \param   pkt     destinuation mbuf
+ * \param   offset  copy offset within the destination mbuf
+ * \return  0 for successfully copy
+ */
+int _sc_util_copy_buf_to_pkt_segs(void *buf, uint32_t len, struct rte_mbuf *pkt, uint32_t offset){
+	struct rte_mbuf *seg;
+	void *seg_buf;
+	unsigned copy_len;
+	
+	seg = pkt;
+	while (offset >= seg->data_len) {
+		offset -= seg->data_len;
+		seg = seg->next;
+        if(unlikely(!seg)){
+            SC_ERROR_DETAILS("reach the end of the mbuf chain");
+            return SC_ERROR_INVALID_VALUE;
+        }
+	}
 
+	copy_len = seg->data_len - offset;
+	seg_buf = rte_pktmbuf_mtod_offset(seg, char *, offset);
+	while (len > copy_len) {
+		rte_memcpy(seg_buf, buf, (size_t) copy_len);
+		len -= copy_len;
+		buf = ((char *) buf + copy_len);
+		seg = seg->next;
+		seg_buf = rte_pktmbuf_mtod(seg, void *);
+	}
+	rte_memcpy(seg_buf, buf, (size_t) len);
 
+    return SC_SUCCESS;
+}
 
-
-
-
-
-
-
-
+/*!
+ * \brief   copy pkt data to mbufs, according to given offset
+ * \param   buf     source data buffer
+ * \param   len     length of the source data
+ * \param   pkt     destinuation mbuf
+ * \param   offset  copy offset within the destination mbuf
+ * \return  0 for successfully copy
+ */
+int sc_util_copy_buf_to_pkt(void *buf, uint32_t len, struct rte_mbuf *pkt, uint32_t offset){
+	if (offset + len <= pkt->data_len) {
+		rte_memcpy(rte_pktmbuf_mtod_offset(pkt, char *, offset), buf, (size_t) len);
+		return SC_SUCCESS;
+	}
+	return _sc_util_copy_buf_to_pkt_segs(buf, len, pkt, offset);
+}

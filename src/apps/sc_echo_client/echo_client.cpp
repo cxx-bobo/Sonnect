@@ -315,7 +315,8 @@ int _process_enter_sender(struct sc_config *sc_config){
             /* rss_affinity */ false,
             /* min_pkt_len */ 
                 SC_ECHO_CLIENT_PAYLOAD_LEN + sizeof(struct rte_ether_hdr) 
-                + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
+                + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr),
+            /* payload */ nullptr
         );
         if(result != SC_SUCCESS){
             SC_THREAD_ERROR("failed to generate new pkt header");
@@ -345,25 +346,23 @@ int _process_enter_sender(struct sc_config *sc_config){
         PER_CORE_APP_META(sc_config).flow_pkt_bufs[i] = pkt;
     }
 
-    /* generate rte_mbuf for each flow */
+    /*! 
+     * \brief   generate rte_mbuf for each flow, using the previous-generated header
+     * \note    we found that if we generating packets based on the previous-generated header 
+     *          after starting echo test, the generating process will take a relatively
+     *          long time (20~60us), which is not accepted while tesing packet sending rate at 
+     *          larger than around 50Mpps, so we generated mbuf here, and clone these mbuf after
+     *          starting echo test
+     */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_flow_per_core; i++){
-        if(SC_SUCCESS != sc_util_generate_packet_burst_mbufs(
+        if(SC_SUCCESS != sc_util_assemble_packet_headers_to_mbuf(
                 /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
-                /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
-                /* eth_hdr */ &(current_used_pkt->pkt_eth_hdr),
-                /* vlan_enabled */ 0,
-                /* ip_hdr */ &(current_used_pkt->pkt_ipv4_hdr),
-                /* ipv4 */ 1,
-                /* proto */ IPPROTO_UDP,
-                /* proto_hdr */ &(current_used_pkt->pkt_udp_hdr),
-                /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
-                /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
-                /* payload */ timestamp_ns,
-                /* payload_len */ 24
+                /* hdr */ &(PER_CORE_APP_META(sc_config).test_pkts[i]),
+                /* pkt */ PER_CORE_APP_META(sc_config).flow_pkt_bufs[i]
         )){
-            SC_THREAD_ERROR("failed to assemble final packet");
+            SC_THREAD_ERROR("failed to assemble packet for flow %d", i);
             result = SC_ERROR_INTERNAL;
-            goto process_client_ready_to_exit;
+            goto _process_enter_exit;
         }
     }
 
@@ -397,7 +396,7 @@ _process_enter_exit:
 int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_tx = 0, nb_send_pkt = 0, result = SC_SUCCESS;
     uint64_t current_ns = 0;
-    char timestamp_ns[24] = {0};
+    char timestamp_ns[SC_ECHO_CLIENT_PAYLOAD_LEN] = {0};
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
@@ -415,27 +414,43 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         sprintf(timestamp_ns, "%lu", current_ns);
 
         /* assemble pkt brust */
-        // FIXME: this takes too long!!!
         current_ns = sc_util_timestamp_ns();
-        struct sc_pkt_hdr *current_used_pkt = &(PER_CORE_APP_META(sc_config).test_pkts[PER_CORE_APP_META(sc_config).last_used_flow]);
-        if(SC_SUCCESS != sc_util_generate_packet_burst_mbufs(
-                /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
-                /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
-                /* eth_hdr */ &(current_used_pkt->pkt_eth_hdr),
-                /* vlan_enabled */ 0,
-                /* ip_hdr */ &(current_used_pkt->pkt_ipv4_hdr),
-                /* ipv4 */ 1,
-                /* proto */ IPPROTO_UDP,
-                /* proto_hdr */ &(current_used_pkt->pkt_udp_hdr),
-                /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
-                /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
-                /* payload */ timestamp_ns,
-                /* payload_len */ 24
+        if(SC_SUCCESS != sc_util_clone_mbuf_brust(
+            /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
+            /* mbufs */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
+            /* source_mbuf */ 
+                PER_CORE_APP_META(sc_config).flow_pkt_bufs[PER_CORE_APP_META(sc_config).last_used_flow],
+            /* burst_size */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
+            /* new_payload */ timestamp_ns,
+            /* new_payload_size */ SC_ECHO_CLIENT_PAYLOAD_LEN,
+            /* new_payload_offset */ 
+                PER_CORE_APP_META(sc_config).test_pkts[PER_CORE_APP_META(sc_config).last_used_flow].payload_offset
         )){
-            SC_THREAD_ERROR("failed to assemble final packet");
+            SC_THREAD_ERROR("failed to clone packet of flow %lu", PER_CORE_APP_META(sc_config).last_used_flow);
             result = SC_ERROR_INTERNAL;
             goto process_client_ready_to_exit;
         }
+
+        // struct sc_pkt_hdr *current_used_pkt = &(PER_CORE_APP_META(sc_config).test_pkts[PER_CORE_APP_META(sc_config).last_used_flow]);
+        // if(SC_SUCCESS != sc_util_generate_packet_burst_mbufs(
+        //         /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
+        //         /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
+        //         /* eth_hdr */ &(current_used_pkt->pkt_eth_hdr),
+        //         /* vlan_enabled */ 0,
+        //         /* ip_hdr */ &(current_used_pkt->pkt_ipv4_hdr),
+        //         /* ipv4 */ 1,
+        //         /* proto */ IPPROTO_UDP,
+        //         /* proto_hdr */ &(current_used_pkt->pkt_udp_hdr),
+        //         /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
+        //         /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
+        //         /* payload */ timestamp_ns,
+        //         /* payload_len */ 24
+        // )){
+        //     SC_THREAD_ERROR("failed to assemble final packet");
+        //     result = SC_ERROR_INTERNAL;
+        //     goto process_client_ready_to_exit;
+        // }
+
         SC_THREAD_LOG("assemble duration: %lu ns", sc_util_timestamp_ns()-current_ns);
 
         nb_send_pkt = rte_eth_tx_burst(
@@ -498,7 +513,7 @@ int _process_exit_sender(struct sc_config *sc_config){
         = PER_CORE_APP_META(sc_config).end_time.tv_sec - PER_CORE_APP_META(sc_config).start_time.tv_sec;
     total_interval_usec 
         = PER_CORE_APP_META(sc_config).end_time.tv_usec - PER_CORE_APP_META(sc_config).start_time.tv_usec;
-    SC_THREAD_LOG("[sender]: send %d packets in total", PER_CORE_APP_META(sc_config).nb_send_pkt);
+    SC_THREAD_LOG("[sender]: send %ld packets in total", PER_CORE_APP_META(sc_config).nb_send_pkt);
 
     #if defined(MODE_THROUGHPUT)
         SC_THREAD_LOG("[sender]: send throughput: %f Gbps",
