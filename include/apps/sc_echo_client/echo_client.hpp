@@ -20,6 +20,9 @@ struct _per_core_app_meta {
     /* store rte_mbuf for sending and receiving */
     struct rte_mbuf **send_pkt_bufs; 
     struct rte_mbuf **recv_pkt_bufs;
+
+    /* store rte_mbuf for each flow, used for rte_mbuf_clone */
+    struct rte_mbuf **flow_pkt_bufs;
     
     /* record whether has packet sent but not ack confirmed */
     uint64_t wait_ack;

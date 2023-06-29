@@ -233,7 +233,7 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
     /* assemble fininal pkt brust */
     // 1 segment per packet
     // packet length: 60 = eth(18) + ipv4(20) + udp(8) + data(14)
-    if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
+    if(SC_SUCCESS != sc_util_generate_packet_burst_mbufs(
             PER_CORE_MBUF_POOL(sc_config), send_pkt_bufs, &pkt_eth_hdr, 0, &pkt_ipv4_hdr, 1, IPPROTO_UDP, &pkt_udp_hdr, INTERNAL_CONF(sc_config)->nb_pkt_per_burst, INTERNAL_CONF(sc_config)->pkt_len, 1)){
         SC_THREAD_ERROR("failed to assemble final packet");
         result = SC_ERROR_INTERNAL;

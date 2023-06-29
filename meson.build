@@ -49,8 +49,8 @@ has_cuda = false
 dpdk_pc_path = meson.current_source_dir() + '/' + 'third_party/dpdk-21.11/install/lib/x86_64-linux-gnu/pkgconfig/'
 dpdk_modules = ['libdpdk', 'libdpdk-libs']
 founded_dpdk_modules = []
-message('>>> Detecting DPDK, assume pc file of DPDK is located at ' + dpdk_pc_path)
 env.set('PKG_CONFIG_PATH', dpdk_pc_path)
+message('>>> Detecting DPDK, assume pc file of DPDK is located at ' + dpdk_pc_path)
 foreach dpdk_module : dpdk_modules
 	dpdk_module_cflags = run_command(pkgconfig, '--cflags', dpdk_module, env: env, check: false)
 	dpdk_module_ldflags = run_command(pkgconfig, '--libs', '--static', dpdk_module, env: env, check: false) # add '--static' option if static link is needed

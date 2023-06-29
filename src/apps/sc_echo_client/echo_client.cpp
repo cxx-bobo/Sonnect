@@ -301,7 +301,7 @@ int _process_enter_sender(struct sc_config *sc_config){
         }
     }
 
-    /* generate random packet header */
+    /* generate random packet header for each flow */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_flow_per_core; i++){
         result = sc_util_generate_random_pkt_hdr(
             /* sc_pkt_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[i],
@@ -323,7 +323,50 @@ int _process_enter_sender(struct sc_config *sc_config){
         }
     }
     // SC_THREAD_LOG("finish generating packets");
-    
+
+    /* allocate flow_pkt_bufs, to store rte_mbuf for each flow, used for rte_mbuf_clone later */
+    PER_CORE_APP_META(sc_config).flow_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
+        sizeof(struct rte_mbuf*)*INTERNAL_CONF(sc_config)->nb_flow_per_core, 0);
+    if(unlikely(!PER_CORE_APP_META(sc_config).flow_pkt_bufs)){
+        SC_THREAD_ERROR_DETAILS("failed to allocate memory for flow_pkt_bufs");
+        result = SC_ERROR_MEMORY;
+        goto _process_enter_exit;
+    }
+    for(i=0; i<INTERNAL_CONF(sc_config)->nb_flow_per_core; i++){
+        struct rte_mbuf *pkt;
+        pkt = rte_pktmbuf_alloc(
+            PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i])
+        );
+        if (pkt == NULL) {
+			SC_ERROR_DETAILS("failed to allocate memory for rte_mbuf while initializing flow_pkt_bufs");
+			result = SC_ERROR_MEMORY;
+			goto _process_enter_exit;
+		}
+        PER_CORE_APP_META(sc_config).flow_pkt_bufs[i] = pkt;
+    }
+
+    /* generate rte_mbuf for each flow */
+    for(i=0; i<INTERNAL_CONF(sc_config)->nb_flow_per_core; i++){
+        if(SC_SUCCESS != sc_util_generate_packet_burst_mbufs(
+                /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
+                /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
+                /* eth_hdr */ &(current_used_pkt->pkt_eth_hdr),
+                /* vlan_enabled */ 0,
+                /* ip_hdr */ &(current_used_pkt->pkt_ipv4_hdr),
+                /* ipv4 */ 1,
+                /* proto */ IPPROTO_UDP,
+                /* proto_hdr */ &(current_used_pkt->pkt_udp_hdr),
+                /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
+                /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
+                /* payload */ timestamp_ns,
+                /* payload_len */ 24
+        )){
+            SC_THREAD_ERROR("failed to assemble final packet");
+            result = SC_ERROR_INTERNAL;
+            goto process_client_ready_to_exit;
+        }
+    }
+
     /* allocate array for pointers to storing send pkt_bufs */
     PER_CORE_APP_META(sc_config).send_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
         sizeof(struct rte_mbuf*)*INTERNAL_CONF(sc_config)->nb_pkt_per_burst, 0);
@@ -362,6 +405,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         if(sc_force_quit){ break; }
 
         /* check send interval */
+        /* this will cause 0.4Mpps performance loss under 66 pkt size */
         current_ns = sc_util_timestamp_ns();
         if(current_ns - PER_CORE_APP_META(sc_config).last_send_timestamp < PER_CORE_APP_META(sc_config).interval){
             continue;
@@ -371,8 +415,10 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         sprintf(timestamp_ns, "%lu", current_ns);
 
         /* assemble pkt brust */
+        // FIXME: this takes too long!!!
+        current_ns = sc_util_timestamp_ns();
         struct sc_pkt_hdr *current_used_pkt = &(PER_CORE_APP_META(sc_config).test_pkts[PER_CORE_APP_META(sc_config).last_used_flow]);
-        if(SC_SUCCESS != sc_util_generate_packet_burst_proto(
+        if(SC_SUCCESS != sc_util_generate_packet_burst_mbufs(
                 /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
                 /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
                 /* eth_hdr */ &(current_used_pkt->pkt_eth_hdr),
@@ -390,6 +436,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
             result = SC_ERROR_INTERNAL;
             goto process_client_ready_to_exit;
         }
+        SC_THREAD_LOG("assemble duration: %lu ns", sc_util_timestamp_ns()-current_ns);
 
         nb_send_pkt = rte_eth_tx_burst(
             /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
@@ -479,7 +526,7 @@ int _process_enter_receiver(struct sc_config *sc_config){
     PER_CORE_APP_META(sc_config).recv_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
         sizeof(struct rte_mbuf*)*SC_MAX_PKT_BURST*2, 0);
     if(unlikely(!PER_CORE_APP_META(sc_config).recv_pkt_bufs)){
-        SC_THREAD_ERROR_DETAILS("failed to allocate memory for send_pkt_bufs");
+        SC_THREAD_ERROR_DETAILS("failed to allocate memory for recv_pkt_bufs");
         result = SC_ERROR_MEMORY;
         goto _process_enter_receiver_exit;
     }

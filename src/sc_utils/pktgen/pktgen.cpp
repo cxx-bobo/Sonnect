@@ -30,6 +30,7 @@ int sc_util_generate_random_pkt_hdr(
 	if(pkt_len < min_pkt_len){
 		SC_THREAD_ERROR_DETAILS("pakcet length is too small, should be larger than %d", min_pkt_len);
 	}
+	sc_pkt_hdr->pkt_len = pkt_len;
 
 	/* initialize the _pkt_len as the length of the l4 payload */
     _pkt_len = payload_len;
@@ -52,6 +53,7 @@ int sc_util_generate_random_pkt_hdr(
 			result = SC_ERROR_INVALID_VALUE;
 			goto sc_util_generate_random_pkt_hdr_exit;
 		}
+		sc_pkt_hdr->l3_type = l3_type;
         
 		/* 
 		 * calculate rss hash result,
@@ -220,6 +222,73 @@ int sc_util_copy_buf_to_pkt(void *buf, uint32_t len, struct rte_mbuf *pkt, uint3
 	return _sc_util_copy_buf_to_pkt_segs(buf, len, pkt, offset);
 }
 
+int sc_util_assemble_packet_headers_to_mbuf(struct rte_mempool *mp, struct sc_pkt_hdr *hdr, struct rte_mbuf *pkt){
+	int i, result = SC_SUCCESS;
+	uint16_t nb_pkt_segs;
+	uint32_t assembled_pkt_len = 0;
+	size_t eth_hdr_size;
+	struct rte_mbuf *pkt_seg;
+
+	/* determine the number of pkt segments */
+	if(hdr->pkt_len > RTE_MBUF_DEFAULT_DATAROOM){
+		if(hdr->pkt_len % RTE_MBUF_DEFAULT_DATAROOM == 0){
+			nb_pkt_segs = hdr->pkt_len / RTE_MBUF_DEFAULT_DATAROOM;
+		} else {
+			nb_pkt_segs = hdr->pkt_len / RTE_MBUF_DEFAULT_DATAROOM + 1;
+		}
+	} else {
+		nb_pkt_segs = 1;
+	}
+
+	/* assign data_len of the first segment (root segment) of the packet to send */
+	if(hdr->pkt_len > RTE_MBUF_DEFAULT_DATAROOM){
+		pkt->data_len = RTE_MBUF_DEFAULT_DATAROOM;
+		assembled_pkt_len += RTE_MBUF_DEFAULT_DATAROOM;
+	} else {
+		pkt->data_len = hdr->pkt_len;
+		assembled_pkt_len += hdr->pkt_len;
+	}
+
+	/* assemble multiple segments inside current pkt */
+	pkt_seg = pkt;
+	for (i = 1; i < nb_pkt_segs; i++) {
+		pkt_seg->next = rte_pktmbuf_alloc(mp);
+		if (unlikely(!pkt_seg->next)) {
+			if(i == 1){
+				// if this is the first segment after root, we don't need to free any mbuf
+			} else {
+				// not the first segment after root, free all the newly allocated segments
+				pkt->next->nb_segs = i-1;
+				rte_pktmbuf_free(pkt->next);
+			}
+			SC_ERROR_DETAILS("failed to allocate memory for rte_mbuf");
+			result = SC_ERROR_MEMORY;
+			goto assemble_packet_headers_to_mbuf_exit;
+		}
+		pkt_seg = pkt_seg->next;
+		if (i != nb_pkt_segs){
+			/* not the last segment, the length is still RTE_MBUF_DEFAULT_DATAROOM */
+			pkt_seg->data_len = RTE_MBUF_DEFAULT_DATAROOM;
+			assembled_pkt_len += RTE_MBUF_DEFAULT_DATAROOM;
+		} else {
+			/* the last segment */
+			pkt_seg->data_len = hdr->pkt_len - assembled_pkt_len;
+		}
+	}
+	pkt_seg->next = NULL; /* Last segment of packet. */
+
+	if (hdr->vlan_enabled)
+		eth_hdr_size = sizeof(struct rte_ether_hdr) + sizeof(struct rte_vlan_hdr);
+	else
+		eth_hdr_size = sizeof(struct rte_ether_hdr);
+	sc_util_copy_buf_to_pkt(hdr->pkt_eth_hdr, eth_hdr_size, pkt, 0);
+
+	// TODO:
+
+assemble_packet_headers_to_mbuf_exit:
+	return result;
+}
+
 /*!
  * \brief   generate packet brust using given header info
  * \note	this function will allocate new mbufs
@@ -237,7 +306,7 @@ int sc_util_copy_buf_to_pkt(void *buf, uint32_t len, struct rte_mbuf *pkt, uint3
  * \param	payload_len			length of the payload
  * \return  0 for successfully generation
  */
-int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
+int sc_util_generate_packet_burst_mbufs(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 
 		uint32_t pkt_len, char *payload, uint32_t payload_len){

@@ -20,10 +20,13 @@
 /* header collection */
 struct sc_pkt_hdr {
 	/* ethernet header */
+	uint8_t vlan_enabled;
+	struct rte_ether_hdr pkt_eth_hdr;
+	struct rte_vlan_hdr pkt_vlan_hdr;
     char src_ether_addr[6], dst_ether_addr[6];
-    struct rte_ether_hdr pkt_eth_hdr;
-
+    
     /* L3 header */
+	uint8_t l3_type;
     uint32_t src_ipv4_addr, dst_ipv4_addr;
 	uint8_t src_ipv6_addr[16], dst_ipv6_addr[16];
     struct rte_ipv4_hdr pkt_ipv4_hdr;
@@ -55,7 +58,7 @@ int sc_util_generate_random_pkt_hdr(struct sc_pkt_hdr *sc_pkt_hdr, uint32_t pkt_
 int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);
 
 /* rte header initializer */
-int sc_util_generate_packet_burst_proto(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
+int sc_util_generate_packet_burst_mbufs(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
 		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
 		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 
 		uint32_t pkt_len, char *payload, uint32_t payload_len);
