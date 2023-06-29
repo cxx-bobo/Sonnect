@@ -68,7 +68,6 @@ int sc_util_generate_random_pkt_hdr(
 			result = SC_ERROR_INVALID_VALUE;
 			goto sc_util_generate_random_pkt_hdr_exit;
 		}
-		sc_pkt_hdr->l3_type = l3_type;
         
 		/* 
 		 * calculate rss hash result,
@@ -129,6 +128,7 @@ int sc_util_generate_random_pkt_hdr(
 		result = SC_ERROR_INVALID_VALUE;
 		goto sc_util_generate_random_pkt_hdr_exit;
 	}
+	sc_pkt_hdr->l4_type = l4_type;
     
     /* assemble l3 header */
 	if(l3_type == RTE_ETHER_TYPE_IPV4){
@@ -154,6 +154,7 @@ int sc_util_generate_random_pkt_hdr(
 			goto sc_util_generate_random_pkt_hdr_exit;
 		}
 	}
+	sc_pkt_hdr->l3_type = l3_type;
     
     /* assemble ethernet header */
     if(SC_SUCCESS != sc_util_generate_random_ether_addr(
@@ -182,56 +183,6 @@ int sc_util_generate_random_pkt_hdr(
 
 sc_util_generate_random_pkt_hdr_exit:
     return result;
-}
-
-/*!
- * \brief   clone a brust of mbufs from previous mbuf
- * \param   mp     			rte_mempool, to allocated further segments
- * \param   mbufs  			array to store pointers of clone mbufs
- * \param   source_mbuf     source mbuf to be cloned
- * \param	brust_size		number of mbufs to clone from the source mbuf
- * \return  0 for successfully cloning	
- */
-int sc_util_copied_pkt_payload_to_mbuf(struct sc_pkt_hdr *hdr, struct rte_mbuf *mbuf, void *payload, uint64_t payload_size){
-	return sc_util_copy_buf_to_pkt(payload, payload_size, mbuf, hdr->payload_offset);
-}
-
-/*!
- * \brief   clone a brust of mbufs from previous mbuf
- * \param   mp     				rte_mempool, to allocated further segments
- * \param   mbufs  				array to store pointers of clone mbufs
- * \param   source_mbuf     	source mbuf to be cloned
- * \param	brust_size			number of mbufs to clone from the source mbuf
- * \param	new_payload			new payload to append to the new cloning mbufs
- * \param	new_payload_size	size of the new paylaod
- * \param	new_payload_offset	the offset of the payload to be appended
- * \return  0 for successfully cloning	
- */
-int sc_util_clone_mbuf_brust(struct rte_mempool *mp, struct rte_mbuf **mbufs, struct rte_mbuf *source_mbuf, uint64_t brust_size, void *new_payload, uint64_t new_payload_size, uint64_t new_payload_offset){
-	uint64_t i, j;
-	int result = SC_SUCCESS;
-	for(i=0; i<brust_size; i++){
-		mbufs[i] = rte_pktmbuf_clone(source_mbuf, mp);
-		if (unlikely(!mbufs[i])) {
-			SC_THREAD_ERROR_DETAILS("failed to allocate memory for rte_mbuf");
-				result = SC_ERROR_MEMORY;
-				goto free_cloned_mbufs;
-		}
-		if(new_payload != NULL){
-			if(SC_SUCCESS != sc_util_copy_buf_to_pkt(new_payload, new_payload_size, mbufs[i], new_payload_offset)){
-				SC_THREAD_ERROR_DETAILS("failed to add payload to rte_mbuf");
-				goto free_cloned_mbufs;
-			}
-		}
-	}
-
-	goto clone_mbuf_brust_exit;
-
-free_cloned_mbufs:
-	for(j=0; j<i; j++){ rte_pktmbuf_free(mbufs[j]); }
-
-clone_mbuf_brust_exit:
-	return result;
 }
 
 /*!
