@@ -134,12 +134,13 @@ int _worker_loop(void* param){
                     nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt, nb_fwd_pkts);
                     if(unlikely(nb_tx < nb_fwd_pkts)){
                         retry = 0;
-                        while (nb_tx < nb_rx && retry++ < SC_BURST_TX_RETRIES) {
+                        while (nb_tx < nb_fwd_pkts && retry++ < SC_BURST_TX_RETRIES) {
                             nb_tx += rte_eth_tx_burst(forward_port_id, queue_id, &pkt[nb_tx], nb_fwd_pkts - nb_tx);
                         }
                     }
                     
-                    if (nb_tx < nb_rx) {
+                    if (nb_tx < nb_fwd_pkts) {
+                        SC_THREAD_WARNING_DETAILS("failed to forward %u pkts, freed", nb_fwd_pkts-nb_tx);
                         do {
                             rte_pktmbuf_free(pkt[nb_tx]);
                         } while (++nb_tx < nb_rx);
