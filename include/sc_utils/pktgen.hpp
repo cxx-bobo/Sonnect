@@ -27,14 +27,14 @@ struct sc_pkt_hdr {
     char src_ether_addr[6], dst_ether_addr[6];
     
     /* L3 header */
-	uint8_t l3_type;
+	uint32_t l3_type;
     uint32_t src_ipv4_addr, dst_ipv4_addr;
 	uint8_t src_ipv6_addr[16], dst_ipv6_addr[16];
     struct rte_ipv4_hdr pkt_ipv4_hdr;
 	struct rte_ipv6_hdr pkt_ipv6_hdr;
 
     /* L4 header */
-	uint8_t l4_type;
+	uint32_t l4_type;
     uint16_t src_port, dst_port;
     struct rte_udp_hdr 	pkt_udp_hdr;
 	struct rte_tcp_hdr 	pkt_tcp_hdr;
@@ -69,14 +69,16 @@ int sc_util_generate_ipv4_addr(uint8_t *specified_addr, uint32_t *result_addr);
 
 /* rte header initializer */
 int sc_util_clone_mbuf_brust(struct rte_mempool *mp, struct rte_mbuf **mbufs, 
-	struct rte_mbuf *source_mbuf, uint64_t brust_size, void *new_payload, 
-	uint64_t new_payload_size, uint64_t new_payload_offset);
+		struct rte_mbuf *source_mbuf, uint64_t brust_size, void *new_payload, 
+		uint64_t new_payload_size, uint64_t new_payload_offset);
 int sc_util_assemble_packet_headers_to_mbuf(struct rte_mempool *mp, struct sc_pkt_hdr *hdr, 
 		struct rte_mbuf *pkt);
-int sc_util_generate_packet_burst_mbufs(struct rte_mempool *mp, struct rte_mbuf **pkts_burst, 
-		struct rte_ether_hdr *eth_hdr, uint8_t vlan_enabled, void *ip_hdr,
-		uint8_t ipv4, uint8_t proto, void *proto_hdr, int nb_pkt_per_burst, 
-		uint32_t pkt_len, char *payload, uint32_t payload_len);
+int sc_util_copy_payload_to_packet_burst(void *payload, uint64_t payload_len, uint64_t payload_offset,
+	struct rte_mbuf **pkts_burst, uint32_t nb_pkt_per_burst);
+int sc_util_generate_packet_burst_mbufs_fast_v4_udp(struct rte_mempool *mp, struct sc_pkt_hdr *hdr,
+		struct rte_mbuf **pkts_burst, uint32_t nb_pkt_per_burst);
+int sc_util_generate_packet_burst_mbufs(struct rte_mempool *mp, struct sc_pkt_hdr *hdr, 
+		struct rte_mbuf **pkts_burst, uint32_t nb_pkt_per_burst);
 int sc_util_initialize_eth_header(struct rte_ether_hdr *eth_hdr,
 		struct rte_ether_addr *src_mac, struct rte_ether_addr *dst_mac, 
 		uint16_t ether_type, uint8_t vlan_enabled, uint16_t vlan_id, 

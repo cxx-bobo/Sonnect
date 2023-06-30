@@ -263,11 +263,11 @@ int _process_enter_sender(struct sc_config *sc_config){
     PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
     PER_CORE_APP_META(sc_config).last_send_timestamp = sc_util_timestamp_ns();
     
-    SC_THREAD_LOG("per core pkt rate: %lf G packet/second", per_core_pkt_rate);    
-    SC_THREAD_LOG("per core brust rate: %lf G brust/second", per_core_brust_rate);
-    SC_THREAD_LOG("per core brust interval: %lf ns, (int)%d ns",
-       per_core_brust_interval, (int)per_core_brust_interval);
-    SC_THREAD_LOG("initialize interval: %lu ns", PER_CORE_APP_META(sc_config).interval);
+    // SC_THREAD_LOG("per core pkt rate: %lf G packet/second", per_core_pkt_rate);    
+    // SC_THREAD_LOG("per core brust rate: %lf G brust/second", per_core_brust_rate);
+    // SC_THREAD_LOG("per core brust interval: %lf ns, (int)%d ns",
+    //    per_core_brust_interval, (int)per_core_brust_interval);
+    // SC_THREAD_LOG("initialize interval: %lu ns", PER_CORE_APP_META(sc_config).interval);
 
     /* allocate memory for storing generated packet headers */
     struct sc_pkt_hdr *pkt_hdrs = (struct sc_pkt_hdr*)rte_malloc(
@@ -307,7 +307,7 @@ int _process_enter_sender(struct sc_config *sc_config){
         result = sc_util_generate_random_pkt_hdr(
             /* sc_pkt_hdr */ &PER_CORE_APP_META(sc_config).test_pkts[i],
             /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
-            /* payload_len */ SC_ECHO_CLIENT_PAYLOAD_LEN,
+            /* payload_len */ 0,
             /* nb_queues */ sc_config->nb_rx_rings_per_port,
             /* used_queue_id */ queue_id,
             /* l3_type */ RTE_ETHER_TYPE_IPV4,
@@ -324,6 +324,12 @@ int _process_enter_sender(struct sc_config *sc_config){
             goto _process_enter_exit;
         }
     }
+    // SC_THREAD_LOG(
+    //     "generate %lu flow(s)' header, l3_type: %x, l4_type: %d",
+    //     INTERNAL_CONF(sc_config)->nb_flow_per_core,
+    //     PER_CORE_APP_META(sc_config).test_pkts[0].l3_type,
+    //     PER_CORE_APP_META(sc_config).test_pkts[0].l4_type
+    // )
 
     /* allocate array for pointers to storing send pkt_bufs */
     PER_CORE_APP_META(sc_config).send_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
@@ -369,29 +375,41 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
             continue;
         }
 
-        /* cast the time to timestamp string, as the packet payload */
-        sprintf(timestamp_ns, "%lu", current_ns);
-
+        /* obtain the packet header currently used, and setup payload info*/
+        struct sc_pkt_hdr *current_used_pkt 
+            = &(PER_CORE_APP_META(sc_config).test_pkts[PER_CORE_APP_META(sc_config).last_used_flow]);
+        
         /* generate new burst of packets */
-        struct sc_pkt_hdr *current_used_pkt = &(PER_CORE_APP_META(sc_config).test_pkts[PER_CORE_APP_META(sc_config).last_used_flow]);
-        if(SC_SUCCESS != sc_util_generate_packet_burst_mbufs(
+        if(SC_SUCCESS != sc_util_generate_packet_burst_mbufs_fast_v4_udp(
                 /* mp */ PER_CORE_TX_MBUF_POOL(sc_config, INTERNAL_CONF(sc_config)->send_port_logical_idx[i]),
+                /* hdr */ current_used_pkt,
                 /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
-                /* eth_hdr */ &(current_used_pkt->pkt_eth_hdr),
-                /* vlan_enabled */ 0,
-                /* ip_hdr */ &(current_used_pkt->pkt_ipv4_hdr),
-                /* ipv4 */ 1,
-                /* proto */ IPPROTO_UDP,
-                /* proto_hdr */ &(current_used_pkt->pkt_udp_hdr),
-                /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst,
-                /* pkt_len */ INTERNAL_CONF(sc_config)->pkt_len,
-                /* payload */ timestamp_ns,
-                /* payload_len */ 24
+                /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst
         )){
             SC_THREAD_ERROR("failed to assemble final packet");
             result = SC_ERROR_INTERNAL;
             goto process_client_ready_to_exit;
         }
+
+        /* cast the time to timestamp string, as the packet payload */
+        current_ns = sc_util_timestamp_ns();
+        sprintf(timestamp_ns, "%lu", current_ns);
+        if(SC_SUCCESS != sc_util_copy_payload_to_packet_burst(
+            /* payload */ timestamp_ns,
+            /* payload_len */ SC_ECHO_CLIENT_PAYLOAD_LEN,
+            /* payload_offset */ current_used_pkt->payload_offset,
+            /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
+            /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst
+        )){
+            SC_THREAD_ERROR("failed to copy payload to final packets");
+            result = SC_ERROR_INTERNAL;
+            goto process_client_ready_to_exit;
+        }
+
+        /* we record the copy latency here to fix the latency statistic */
+        PER_CORE_APP_META(sc_config).payload_copy_latency +=
+            (double)(sc_util_timestamp_ns() - current_ns);
+        PER_CORE_APP_META(sc_config).payload_copy_latency /= (double)2.0f;
 
         nb_send_pkt = rte_eth_tx_burst(
             /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
@@ -428,7 +446,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
     /* update metadata */
     if(nb_tx != 0){
         PER_CORE_APP_META(sc_config).nb_send_pkt += nb_tx;
-        if(PER_CORE_APP_META(sc_config).last_used_flow == INTERNAL_CONF(sc_config)->nb_flow_per_core){
+        if(PER_CORE_APP_META(sc_config).last_used_flow == INTERNAL_CONF(sc_config)->nb_flow_per_core-1){
             PER_CORE_APP_META(sc_config).last_used_flow = 0;
         } else {
             PER_CORE_APP_META(sc_config).last_used_flow += 1;
@@ -467,6 +485,8 @@ int _process_exit_sender(struct sc_config *sc_config){
     total_interval_usec 
         = PER_CORE_APP_META(sc_config).end_time.tv_usec - PER_CORE_APP_META(sc_config).start_time.tv_usec;
     SC_THREAD_LOG("[sender]: send %ld packets in total", PER_CORE_APP_META(sc_config).nb_send_pkt);
+
+    SC_THREAD_LOG("[sender]: copy to payload latency: %lf", PER_CORE_APP_META(sc_config).payload_copy_latency);
 
     #if defined(MODE_THROUGHPUT)
         SC_THREAD_LOG("[sender]: send throughput: %f Gbps, %f Mpps",
@@ -592,7 +612,7 @@ int _process_exit_receiver(struct sc_config *sc_config){
         return SC_ERROR_INTERNAL;
     }
 
-    SC_THREAD_LOG("[receiver] confirmed pkt: %u", PER_CORE_APP_META(sc_config).nb_confirmed_pkt);
+    SC_THREAD_LOG("[receiver] confirmed pkt: %lu", PER_CORE_APP_META(sc_config).nb_confirmed_pkt);
 
     return SC_SUCCESS;
 }
@@ -605,7 +625,7 @@ int _process_exit_receiver(struct sc_config *sc_config){
 int _all_exit(struct sc_config *sc_config){
     int i, j;
     size_t nb_send_pkt = 0, nb_confirmed_pkt = 0;
-    double per_core_avg_latency, all_core_avg_latency;
+    double per_core_avg_latency, per_core_payload_copy_latency, all_core_avg_latency;
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         /* reduce number of packet */
@@ -632,6 +652,13 @@ int _all_exit(struct sc_config *sc_config){
             worker_max_interval_sec = interval_sec;
             worker_max_interval_usec = interval_usec;
         }
+    }
+
+    /* calculate the average payload copy latency to fix the RTT statistic */
+    per_core_avg_latency = (double)0.0f;
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        per_core_payload_copy_latency += (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).payload_copy_latency;
+        per_core_payload_copy_latency /= (double)2.0f;
     }
 
     /* calculate latency */
@@ -668,6 +695,8 @@ int _all_exit(struct sc_config *sc_config){
         / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
     );
     SC_THREAD_LOG("[TOTAL] average RTT: %lf us", all_core_avg_latency/(double)1000);
+    SC_THREAD_LOG("[TOTAL] average RTT (fixed): %lf us",
+        (all_core_avg_latency-per_core_payload_copy_latency)/(double)1000);
 
     return SC_SUCCESS;
 }

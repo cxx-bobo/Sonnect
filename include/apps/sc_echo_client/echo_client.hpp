@@ -41,6 +41,7 @@ struct _per_core_app_meta {
     uint64_t last_send_timestamp;
     uint64_t interval;
     sc_utils_distribution_uint64_generator* interval_generator;
+    double payload_copy_latency;
     
     uint64_t nb_latency_data;
     uint64_t latency_data_pointer;
