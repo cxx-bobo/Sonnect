@@ -26,6 +26,9 @@ add_global_arguments('-DAPP_CONF_PATH=' + app_conf_path, language: ['c', 'cpp'])
 app_header_file_path = '"sc_' + app + '/' + app + '.hpp"'
 add_global_arguments('-DAPP_HEADER_FILE_PATH=' + app_header_file_path, language: ['c', 'cpp'])
 
+# specified the sub directory to include more meson.build file
+subdir('src/apps/' + project_name_abbreviation + '_' + app)
+
 # set the SC_CLOSE_MOCK_MACRO to clear mock macro definition for developing
 add_global_arguments('-DSC_CLOSE_MOCK_MACRO', language: ['c', 'cpp'])
 

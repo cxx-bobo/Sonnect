@@ -2,6 +2,8 @@
 #include "sc_utils.hpp"
 #include "sc_doca_utils/mempool.hpp"
 
+#if defined(SC_HAS_DOCA)
+
 /*!
  * \brief   create a new memory pool, according to number of elements, and element size
  * \note    the elements will be allocated within continuous memory area
@@ -130,3 +132,5 @@ uint8_t mempool_get(struct mempool *mp, struct mempool_target **result_target) {
 void mempool_put(struct mempool *mp, struct mempool_target *target) {
     list_add_tail(&(target->entry), &mp->target_free_list);
 }
+
+#endif /* SC_HAS_DOCA */

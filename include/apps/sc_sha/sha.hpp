@@ -2,6 +2,8 @@
 #define _SC_SHA_H_
 
 #include "sc_app.hpp"
+#include "sc_doca.hpp"
+#include "sc_doca_utils/doca_utils.hpp"
 #include "sc_doca_utils/mempool.hpp"
 
 #define SC_SHA_HASH_KEY_LENGTH 64
