@@ -133,12 +133,12 @@ static inline void list_del(struct list_entry *entry) {
 #define LIST_FIRST_ENTRY_OR_NULL(head_entry_ptr) ({             \    
     struct list_entry *head__ = (head_entry_ptr);               \
     struct list_entry *pos__ = (head_entry_ptr)->next;          \
-    pos__ == head__ ? pos__ : NULL;                             \
+    pos__ != head__ ? pos__ : NULL;                             \
 })
 #define LIST_FIRST_TARGET_OR_NULL(head_entry_ptr, type) ({      \
     struct list_entry *head__ = (head_entry_ptr);               \
     struct list_entry *pos__ = (head_entry_ptr)->next;          \
-    pos__ == head__ ? LIST_TARGET(pos__, type) : NULL;          \
+    pos__ != head__ ? LIST_TARGET(pos__, type) : NULL;          \
 })
 
 /*!

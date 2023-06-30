@@ -73,7 +73,7 @@ mempool_create_exit:
  * \param   mp  the memory pool to be judge
  * \return  judge result
  */
-bool is_mempool_full(struct mempool *mp) {
+bool is_mempool_empty(struct mempool *mp) {
     if (list_empty(&mp->target_free_list)) {
         return true;
     }

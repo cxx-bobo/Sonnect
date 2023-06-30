@@ -161,7 +161,7 @@ int _process_enter(struct sc_config *sc_config){
  * \param   need_forward    indicate whether need to forward packet, default to be false
  * \return  zero for successfully processing
  */
-int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
+int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
     struct timeval current_time;
     long interval_s, interval_us, interval_overall_us;
 

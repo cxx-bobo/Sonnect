@@ -125,6 +125,7 @@ int _worker_loop(void* param){
                         /* pkt */ pkt, 
                         /* nb_rx */ nb_rx,
                         /* sc_config */ sc_config,
+                        /* queue_id */ queue_id,
                         /* recv_port_id */ i, 
                         /* fwd_port_id */ &forward_port_id,
                         /* nb_fwd_pkts */ &nb_fwd_pkts

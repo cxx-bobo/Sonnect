@@ -419,7 +419,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
         );
         if(unlikely(nb_send_pkt < INTERNAL_CONF(sc_config)->nb_pkt_per_burst)){
             retry = 0;
-            while (nb_tx < INTERNAL_CONF(sc_config)->nb_pkt_per_burst 
+            while (nb_send_pkt < INTERNAL_CONF(sc_config)->nb_pkt_per_burst 
                     && retry++ < SC_ECHO_CLIENT_BURST_TX_RETRIES
             ){
                 nb_send_pkt += rte_eth_tx_burst(

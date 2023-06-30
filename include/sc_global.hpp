@@ -153,8 +153,8 @@ struct per_core_meta {
 /* function pointer definition, for dispatching different logic to different cores */
 typedef int (*process_enter_t)(struct sc_config *sc_config);
 typedef int (*process_exit_t)(struct sc_config *sc_config);
-typedef int (*process_pkt_t)(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t 
-                                recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts);
+typedef int (*process_pkt_t)(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, 
+                            uint16_t queue_id, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts);
 typedef int (*process_pkt_drop_t)(struct sc_config *sc_config, struct rte_mbuf **pkt, uint64_t nb_drop_pkts);
 typedef int (*process_client_t)(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
 

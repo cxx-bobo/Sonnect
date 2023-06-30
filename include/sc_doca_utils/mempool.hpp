@@ -51,7 +51,12 @@ struct mempool_target {
     void *addr;
 
     /* doca buffer (metadata of the memory area) */
-    struct doca_buf *buf;
+    struct doca_buf *req_buf;
+    struct doca_buf *resp_buf;
+
+    /* corresponding pkt */
+    struct rte_mbuf *pkt;
+    uint64_t pkt_len;
 };
 
 /*! 
@@ -75,9 +80,10 @@ struct mempool {
 };
 
 struct mempool* mempool_create(uint64_t num_target, uint64_t target_size);
-bool is_mempool_full(struct mempool *mp);
+bool is_mempool_empty(struct mempool *mp);
 void mempool_free(struct mempool *mp);
 uint8_t mempool_get(struct mempool *mp, struct mempool_target **result_target);
+void mempool_put(struct mempool *mp, struct mempool_target *target);
 
 #endif /* SC_HAS_DOCA */
 
