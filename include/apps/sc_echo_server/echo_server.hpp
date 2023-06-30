@@ -25,6 +25,7 @@
 
 struct _per_core_app_meta {
     uint64_t nb_forward_pkt;
+    uint64_t nb_drop_pkt;
 
     uint64_t nb_throughput;
     uint64_t throughput_pointer;
@@ -33,6 +34,7 @@ struct _per_core_app_meta {
 
     /* for calculating throughput */
     uint64_t nb_interval_forward_pkt;
+    uint64_t nb_interval_drop_pkt;
     struct timeval last_record_time;
 };
 

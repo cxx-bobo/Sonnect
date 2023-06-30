@@ -4,26 +4,6 @@
 #include "sc_log.hpp"
 
 /*!
- * \brief   initialize application (internal)
- * \param   sc_config   the global configuration
- * \return  zero for successfully initialization
- */
-int _init_app(struct sc_config *sc_config){
-    int i;
-    
-    for(i=0; i<sc_config->nb_used_cores; i++){
-        /* TODO: dispatch processing functions here */
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
-    }
-
-    SC_WARNING_DETAILS("_init_app not implemented");
-    return SC_ERROR_NOT_IMPLEMENTED;
-}
-
-/*!
  * \brief   parse application-specific key-value configuration pair
  * \param   key         the key of the config pair
  * \param   value       the value of the config pair
@@ -61,6 +41,18 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
 }
 
 /*!
+ * \brief   callback for processing packets to be dropped
+ * \param   sc_config       the global configuration
+ * \param   pkt             the packets to be dropped
+ * \param   nb_drop_pkts    number of packets to be dropped
+ * \return  zero for successfully processing
+ */
+int _process_pkt_drop(struct sc_config *sc_config, struct rte_mbuf **pkt, uint64_t nb_drop_pkts){
+    SC_WARNING_DETAILS("_process_pkt not implemented");
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
  * \brief   callback for client logic
  * \param   sc_config       the global configuration
  * \param   queue_id        the index of the queue for current core to tx/rx packet
@@ -88,5 +80,26 @@ int _process_exit(struct sc_config *sc_config){
  * \return  zero for successfully executing
  */
 int _all_exit(struct sc_config *sc_config){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   initialize application (internal)
+ * \param   sc_config   the global configuration
+ * \return  zero for successfully initialization
+ */
+int _init_app(struct sc_config *sc_config){
+    int i;
+    
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        /* TODO: dispatch processing functions here */
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func  = _process_pkt;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_drop_func = _process_pkt_drop;
+    }
+
+    SC_WARNING_DETAILS("_init_app not implemented");
     return SC_ERROR_NOT_IMPLEMENTED;
 }

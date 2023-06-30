@@ -30,6 +30,7 @@ int _worker_loop(void* param){
     process_enter_t process_enter_func = PER_CORE_WORKER_FUNC(sc_config).process_enter_func;
     #if defined(ROLE_SERVER)
         process_pkt_t process_pkt_func = PER_CORE_WORKER_FUNC(sc_config).process_pkt_func;
+        process_pkt_drop_t process_pkt_drop_func = PER_CORE_WORKER_FUNC(sc_config).process_pkt_drop_func;
     #endif
     #if defined(ROLE_CLIENT)
         process_client_t process_client_func = PER_CORE_WORKER_FUNC(sc_config).process_client_func;
@@ -119,13 +120,15 @@ int _worker_loop(void* param){
                 if(nb_rx == 0) continue;
                 
                 /* Hook Point: Packet Processing */
-                if(SC_SUCCESS != process_pkt_func(
-                    /* pkt */ pkt, 
-                    /* nb_rx */ nb_rx,
-                    /* sc_config */ sc_config,
-                    /* recv_port_id */ i, 
-                    /* fwd_port_id */ &forward_port_id,
-                    /* nb_fwd_pkts */ &nb_fwd_pkts
+                if(unlikely(
+                    SC_SUCCESS != process_pkt_func(
+                        /* pkt */ pkt, 
+                        /* nb_rx */ nb_rx,
+                        /* sc_config */ sc_config,
+                        /* recv_port_id */ i, 
+                        /* fwd_port_id */ &forward_port_id,
+                        /* nb_fwd_pkts */ &nb_fwd_pkts
+                    )
                 )){
                     SC_THREAD_WARNING("failed to process the received frame");
                 }
@@ -140,7 +143,17 @@ int _worker_loop(void* param){
                     }
                     
                     if (nb_tx < nb_fwd_pkts) {
-                        SC_THREAD_WARNING_DETAILS("failed to forward %u pkts, freed", nb_fwd_pkts-nb_tx);
+                        /* Hook Point: Packet Drop Processing */
+                        if(unlikely(
+                            SC_SUCCESS != process_pkt_drop_func(
+                                /* sc_config */ sc_config,
+                                /* pkt */ pkt+nb_tx,
+                                /* nb_drop_pkts */ nb_fwd_pkts-nb_tx
+                            )
+                        )){
+                            SC_THREAD_WARNING("failed to process the frames to be dropped");
+                        }
+
                         do {
                             rte_pktmbuf_free(pkt[nb_tx]);
                         } while (++nb_tx < nb_rx);

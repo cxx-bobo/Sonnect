@@ -179,12 +179,9 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
         if(PER_CORE_APP_META(sc_config).nb_interval_forward_pkt != 0){
             double throughput = (double)((PER_CORE_APP_META(sc_config).nb_interval_forward_pkt)*pkt[0]->pkt_len)
                 / (double)(interval_overall_us*1000) /* Gbps */;
-            // SC_THREAD_LOG("pktlen: %lu", pkt[0]->pkt_len);
-            // SC_THREAD_LOG("throughput: %lf Gbps", 
-            //     (double)((PER_CORE_APP_META(sc_config).nb_interval_forward_pkt)*pkt[0]->pkt_len)
-            //     / (double)(SC_UTIL_TIME_INTERVL_US(interval_s, interval_us)*1000)
-            // );
-
+            double drop_throughput = (double)((PER_CORE_APP_META(sc_config).nb_interval_drop_pkt)*pkt[0]->pkt_len)
+                / (double)(interval_overall_us*1000) /* Gbps */;
+            
             if(throughput != 0.0){
                 PER_CORE_APP_META(sc_config).throughput[PER_CORE_APP_META(sc_config).throughput_pointer] 
                     = throughput / (double)pkt[0]->pkt_len * (double)1000 /* MOps */;
@@ -194,18 +191,23 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
                     PER_CORE_APP_META(sc_config).throughput_pointer = 0;
                 }
 
-                SC_THREAD_LOG("throughput: %lf Mpps", throughput / (double)pkt[0]->pkt_len * (double)1000);
+                // SC_THREAD_LOG(
+                //     "throughput: %lf Mpps, drop throughput: %lf Mpps",
+                //     throughput / (double)pkt[0]->pkt_len * (double)1000,
+                //     drop_throughput / (double)pkt[0]->pkt_len * (double)1000
+                // );
             }
         } else {
-            SC_THREAD_LOG("throughput: 0.0 Mpps");
+            // SC_THREAD_LOG("throughput: 0.0 Mpps");
         }
         
         /* reset */
         PER_CORE_APP_META(sc_config).last_record_time.tv_sec = current_time.tv_sec;
         PER_CORE_APP_META(sc_config).last_record_time.tv_usec = current_time.tv_usec;
         PER_CORE_APP_META(sc_config).nb_interval_forward_pkt = 0;
+        PER_CORE_APP_META(sc_config).nb_interval_drop_pkt = 0;
     }
-
+    
     /* count */
     PER_CORE_APP_META(sc_config).nb_forward_pkt += nb_recv_pkts;
     PER_CORE_APP_META(sc_config).nb_interval_forward_pkt += nb_recv_pkts;
@@ -214,6 +216,20 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
     *nb_fwd_pkts = nb_recv_pkts;
     *fwd_port_id  = INTERNAL_CONF(sc_config)->send_port_idx[0];
 
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   callback for processing packets to be dropped
+ * \param   pkt             the packets to be dropped
+ * \param   nb_drop_pkts    number of packets to be dropped
+ * \return  zero for successfully processing
+ */
+int _process_pkt_drop(struct sc_config *sc_config, struct rte_mbuf **pkt, uint64_t nb_drop_pkts){
+    PER_CORE_APP_META(sc_config).nb_drop_pkt += nb_drop_pkts;
+    PER_CORE_APP_META(sc_config).nb_forward_pkt -= nb_drop_pkts;
+    PER_CORE_APP_META(sc_config).nb_interval_drop_pkt += nb_drop_pkts;
+    PER_CORE_APP_META(sc_config).nb_interval_forward_pkt -= nb_drop_pkts;
     return SC_SUCCESS;
 }
 
@@ -250,6 +266,7 @@ int _process_exit(struct sc_config *sc_config){
     
     SC_THREAD_LOG("average throughput: %lf MOps", PER_CORE_APP_META(sc_config).average_throughput);
     SC_THREAD_LOG("forward %u packets in total", PER_CORE_APP_META(sc_config).nb_forward_pkt);
+    SC_THREAD_LOG("drop %u packets in total", PER_CORE_APP_META(sc_config).nb_drop_pkt);
     return SC_SUCCESS;
 }
 
@@ -260,13 +277,20 @@ int _process_exit(struct sc_config *sc_config){
  */
 int _all_exit(struct sc_config *sc_config){
     int i;
+    uint64_t overall_forward = 0, overall_drop = 0;
     double overall_throughput = 0.0f;
 
     for(i=0; i<sc_config->nb_used_cores; i++){
+        overall_drop +=
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_drop_pkt;
+        overall_forward +=
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_forward_pkt;
         overall_throughput +=
             PER_CORE_APP_META_BY_CORE_ID(sc_config, i).average_throughput;
     }
 
+    SC_THREAD_LOG("[TOTAL] Forward %lu pkts", overall_forward);
+    SC_THREAD_LOG("[TOTAL] Drop %lu pkts", overall_drop);
     SC_THREAD_LOG("[TOTAL] Throughput: %lf MOps", overall_throughput);
     return SC_SUCCESS;
 }
@@ -284,6 +308,7 @@ int _init_app(struct sc_config *sc_config){
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_drop_func = _process_pkt_drop;
     }
 
     return SC_SUCCESS;

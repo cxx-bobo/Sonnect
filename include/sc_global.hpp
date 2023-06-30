@@ -153,18 +153,25 @@ struct per_core_meta {
 
 /* function pointer definition, for dispatching different logic to different cores */
 typedef int (*process_enter_t)(struct sc_config *sc_config);
+typedef int (*process_exit_t)(struct sc_config *sc_config);
 typedef int (*process_pkt_t)(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t 
                                 recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts);
+typedef int (*process_pkt_drop_t)(struct sc_config *sc_config, struct rte_mbuf **pkt, uint64_t nb_drop_pkts);
 typedef int (*process_client_t)(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
-typedef int (*process_exit_t)(struct sc_config *sc_config);
+
 
 /* dispatch different woker logic to different cores */
 struct per_core_worker_func {
-    /* per-core processing functions */
-    process_enter_t    process_enter_func;
-    process_pkt_t      process_pkt_func;
+    // common functions
+    process_enter_t     process_enter_func;
+    process_exit_t      process_exit_func;
+
+    // server functions
+    process_pkt_t       process_pkt_func;
+    process_pkt_drop_t  process_pkt_drop_func;
+
+    // client functions
     process_client_t   process_client_func;
-    process_exit_t     process_exit_func;
 };
 
 #endif // _SC_GLOBAL_H_
