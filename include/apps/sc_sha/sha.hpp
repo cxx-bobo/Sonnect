@@ -9,7 +9,7 @@
 #define SC_SHA_HASH_KEY_LENGTH      64
 #define SC_SHA_BURST_TX_RETRIES     16
 #if defined(SC_HAS_DOCA)
-    #define SHA_MEMPOOL_NB_BUF      128
+    #define SHA_MEMPOOL_NB_BUF      512
     #define SHA_MEMPOOL_BUF_SIZE    SC_SHA_HASH_KEY_LENGTH + DOCA_SHA256_BYTE_COUNT
 #endif
 
@@ -17,6 +17,12 @@ struct _per_core_app_meta {
     #if defined(SC_HAS_DOCA)
         struct mempool *mpool;
     #endif
+
+    uint64_t nb_received_pkts;
+    uint64_t nb_enqueued_pkts;
+    uint64_t nb_drop_pkts;
+    uint64_t nb_finished_pkts;
+    uint64_t nb_send_pkts;
 
     int something;
 };

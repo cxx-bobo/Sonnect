@@ -237,8 +237,10 @@ int _process_pkt_doca(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_co
     void *doca_buf_data;
     struct doca_event doca_event = {0};
 
-    struct rte_mbuf *finished_pkts[SHA_MEMPOOL_NB_BUF] = {0}, *finished_pkt;
+    struct rte_mbuf *finished_pkts[65536] = {0}, *finished_pkt;
     uint64_t nb_finished_pkts = 0;
+
+    PER_CORE_APP_META(sc_config).nb_received_pkts += nb_recv_pkts;
 
     // try best to enqueue jobs
     for(j=0; j<nb_recv_pkts; j++){
@@ -297,6 +299,10 @@ int _process_pkt_doca(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_co
         doca_buf_get_data(mpool_target->req_buf, &doca_buf_data);
 	    doca_buf_set_data(mpool_target->req_buf, doca_buf_data, SC_SHA_HASH_KEY_LENGTH);
 
+        // record rte_mbuf to the memory pool target
+        mpool_target->pkt = pkt[j];
+        mpool_target->pkt_len = rte_pktmbuf_data_len(pkt[j]);
+
         // construct sha job
         struct doca_sha_job const sha_job = {
             .base = {
@@ -332,6 +338,8 @@ int _process_pkt_doca(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_co
     for(j=nb_enqueue_pkts; j<nb_recv_pkts; j++){
         rte_pktmbuf_free(pkt[j]);
     }
+    PER_CORE_APP_META(sc_config).nb_enqueued_pkts += nb_enqueue_pkts;
+    PER_CORE_APP_META(sc_config).nb_drop_pkts += (nb_recv_pkts - nb_enqueue_pkts);
 
     // try best to retrieve jobs
     do{
@@ -346,6 +354,7 @@ int _process_pkt_doca(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_co
 
             // obtain finished packet
             finished_pkt = finished_pkts[nb_finished_pkts] = mpool_target->pkt;
+            assert(finished_pkt != NULL);
             finished_pkt->pkt_len = finished_pkt->data_len = mpool_target->pkt_len;
             finished_pkt->nb_segs = 1;
             finished_pkt->next = NULL;
@@ -353,8 +362,7 @@ int _process_pkt_doca(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_co
 
             // return back memory buffer
             mempool_put(PER_CORE_APP_META(sc_config).mpool, mpool_target);
-            if(nb_finished_pkts == SHA_MEMPOOL_NB_BUF){ break; }
-
+            if(nb_finished_pkts == sizeof(finished_pkts)){ break; }
         } else if (doca_result == DOCA_ERROR_AGAIN) {
 			break;
 		} else {
@@ -364,24 +372,29 @@ int _process_pkt_doca(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_co
 		}
     } while(doca_result == DOCA_SUCCESS);
 
+    PER_CORE_APP_META(sc_config).nb_finished_pkts += nb_finished_pkts;
+
     // send back packets
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
-        nb_send_pkts = rte_eth_tx_burst(
-            /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
-            /* queue_id */ queue_id,
-            /* tx_pkts */ finished_pkts,
-            /* nb_pkts */ nb_finished_pkts
-        );
-        if(unlikely(nb_send_pkts < nb_finished_pkts)){
-            retry = 0;
-            while (nb_send_pkts < nb_finished_pkts && retry++ < SC_SHA_BURST_TX_RETRIES){
-                nb_send_pkts += rte_eth_tx_burst(
-                    /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
-                    /* queue_id */ queue_id, 
-                    /* tx_pkts */ &finished_pkts[nb_send_pkts], 
-                    /* nb_pkts */ nb_finished_pkts - nb_send_pkts
-                );
+        if(nb_finished_pkts != 0){
+            nb_send_pkts = rte_eth_tx_burst(
+                /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
+                /* queue_id */ queue_id,
+                /* tx_pkts */ finished_pkts,
+                /* nb_pkts */ nb_finished_pkts
+            );
+            if(unlikely(nb_send_pkts < nb_finished_pkts)){
+                retry = 0;
+                while (nb_send_pkts < nb_finished_pkts && retry++ < SC_SHA_BURST_TX_RETRIES){
+                    nb_send_pkts += rte_eth_tx_burst(
+                        /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
+                        /* queue_id */ queue_id, 
+                        /* tx_pkts */ &finished_pkts[nb_send_pkts], 
+                        /* nb_pkts */ nb_finished_pkts - nb_send_pkts
+                    );
+                }
             }
+            PER_CORE_APP_META(sc_config).nb_send_pkts += nb_send_pkts;
         }
     }
 
@@ -417,6 +430,14 @@ int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_
  * \return  zero for successfully executing
  */
 int _process_exit(struct sc_config *sc_config){
+    SC_THREAD_LOG(
+        "#recv_pkts: %lu | #enqueued_pkts: %lu | #drop_pkts: %lu | #finished_pkts: %lu | #send_pkts: %lu",
+        PER_CORE_APP_META(sc_config).nb_received_pkts,
+        PER_CORE_APP_META(sc_config).nb_enqueued_pkts,
+        PER_CORE_APP_META(sc_config).nb_drop_pkts,
+        PER_CORE_APP_META(sc_config).nb_finished_pkts,
+        PER_CORE_APP_META(sc_config).nb_send_pkts
+    );
     return SC_SUCCESS;
 }
 
