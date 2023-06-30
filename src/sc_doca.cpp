@@ -6,10 +6,7 @@ DOCA_LOG_REGISTER(SC::DOCA);
 
 static int _parse_doca_kv_pair(char* key, char *value, struct sc_config* sc_config);
 static int _init_doca_flow(struct sc_config *sc_config);
-
-#if defined(SC_NEED_DOCA_SHA)
-    static int _init_doca_sha(struct sc_config *sc_config);
-#endif
+static int _init_doca_sha(struct sc_config *sc_config);
 
 /*!
  * \brief   initialize doca and corresponding resources
@@ -55,85 +52,83 @@ int init_doca(struct sc_config *sc_config, const char *doca_conf_path){
     // }
 
     /* initialize sha engine if the application need it */
-    #if defined(SC_NEED_DOCA_SHA)
-        if(SC_SUCCESS != _init_doca_sha(sc_config)){
-            SC_ERROR("failed to initialize doca sha\n");
-            result = SC_ERROR_INTERNAL;
-            goto init_doca_exit;
-        }
-    #endif // SC_NEED_DOCA_SHA
+    if(SC_SUCCESS != _init_doca_sha(sc_config)){
+        SC_ERROR("failed to initialize doca sha\n");
+        result = SC_ERROR_INTERNAL;
+        goto init_doca_exit;
+    }
 
 init_doca_exit:
     return result;
 }
 
-#if defined(SC_NEED_DOCA_SHA)
-    /*!
-    * \brief   initilize doca sha engine
-    * \param   sc_config   the global configuration
-    * \return  zero for successfully initialization
-    */
-    static int _init_doca_sha(struct sc_config *sc_config){
-        int result = SC_SUCCESS, doca_result, i;
-        struct doca_sha *sha_ctx;
-        uint32_t workq_depth = 1;		/* The sha engine will run 1 sha job */
-        uint32_t max_chunks = 2;		/* The sha engine will use 2 doca buffers */
+/*!
+* \brief   initilize doca sha engine
+* \param   sc_config   the global configuration
+* \return  zero for successfully initialization
+*/
+static int _init_doca_sha(struct sc_config *sc_config){
+    int result = SC_SUCCESS, doca_result, i;
+    struct doca_sha *sha_ctx;
+    uint32_t workq_depth = 1;		/* The sha engine will run 1 sha job */
+    uint32_t max_chunks = 2;		/* The sha engine will use 2 doca buffers */
 
-        /* create doca context */
-        /*! No need to create per-core doca context */
-        doca_result = doca_sha_create(&sha_ctx);
-        if (doca_result != DOCA_SUCCESS) {
-            SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string((doca_error_t)doca_result));
-            result = SC_ERROR_INTERNAL;
-            goto _init_doca_sha_exit;
-        }
-        DOCA_CONF(sc_config)->sha_ctx = doca_sha_as_ctx(sha_ctx);
+    /* create doca context */
+    /*! No need to create per-core doca context */
+    doca_result = doca_sha_create(&sha_ctx);
+    if (doca_result != DOCA_SUCCESS) {
+        SC_ERROR_DETAILS("unable to create sha engine: %s", doca_get_error_string((doca_error_t)doca_result));
+        result = SC_ERROR_INTERNAL;
+        goto _init_doca_sha_exit;
+    }
+    DOCA_CONF(sc_config)->sha_ctx = doca_sha_as_ctx(sha_ctx);
 
-        /* open doca sha device */
-        result = sc_doca_util_open_doca_device_with_pci(
-            &(DOCA_CONF(sc_config)->sha_pci_bdf), NULL,
-            &(DOCA_CONF(sc_config)->sha_dev)
+    /* open doca sha device */
+    result = sc_doca_util_open_doca_device_with_pci(
+        &(DOCA_CONF(sc_config)->sha_pci_bdf), NULL,
+        &(DOCA_CONF(sc_config)->sha_dev)
+    );
+    if (result != SC_SUCCESS) {
+        SC_ERROR("failed to open pci device of sha engine");
+        result = SC_ERROR_INTERNAL;
+        goto sha_destory_ctx;
+    }
+
+    /* initialize doca core object for sha engine */
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        result = sc_doca_util_init_core_objects(
+            &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_mmap),
+            DOCA_CONF(sc_config)->sha_dev,
+            &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_buf_inv),
+            DOCA_CONF(sc_config)->sha_ctx,
+            &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_workq),
+            DOCA_BUF_EXTENSION_NONE,
+            workq_depth, max_chunks,
+            (bool)(i == 0)
         );
-        if (result != SC_SUCCESS) {
-            SC_ERROR("failed to open pci device of sha engine");
+        if(result != SC_SUCCESS){
+            SC_ERROR("failed to initialize core objects for sha engine");
             result = SC_ERROR_INTERNAL;
             goto sha_destory_ctx;
         }
+        SC_LOG("Initialize DOCA core objects for SHA context for core %d", i);
+    }
+    
+    /* initialize the spin lock for SHA engine */
+    rte_spinlock_init(&DOCA_CONF(sc_config)->sha_lock);
 
-        /* initialize doca core object for sha engine */
-        for(i=0; i<sc_config->nb_used_cores; i++){
-            result = sc_doca_util_init_core_objects(
-                &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_mmap),
-                DOCA_CONF(sc_config)->sha_dev,
-                &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_buf_inv),
-                DOCA_CONF(sc_config)->sha_ctx,
-                &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_workq),
-                DOCA_BUF_EXTENSION_NONE,
-                workq_depth, max_chunks,
-                (bool)(i == 0)
-            );
-            if(result != SC_SUCCESS){
-                SC_ERROR("failed to initialize core objects for sha engine");
-                result = SC_ERROR_INTERNAL;
-                goto sha_destory_ctx;
-            }
-        }
-        
-        /* initialize the spin lock for SHA engine */
-        rte_spinlock_init(&DOCA_CONF(sc_config)->sha_lock);
+    goto _init_doca_sha_exit;
 
-        goto _init_doca_sha_exit;
-
-    sha_destory_core_objects:
-        for(i=0; i<sc_config->nb_used_cores; i++){
-            sc_doca_util_destory_core_objects(
-                &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_mmap),
-                &(DOCA_CONF(sc_config)->sha_dev),
-                &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_buf_inv),
-                DOCA_CONF(sc_config)->sha_ctx,
-                &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_workq)
-            );
-        }
+sha_destory_core_objects:
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        sc_doca_util_destory_core_objects(
+            &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_mmap),
+            &(DOCA_CONF(sc_config)->sha_dev),
+            &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_buf_inv),
+            DOCA_CONF(sc_config)->sha_ctx,
+            &(PER_CORE_DOCA_META_BY_CORE_ID(sc_config, i).sha_workq)
+        );
+    }
 
     sha_destory_ctx:
         doca_result = doca_sha_destroy(sha_ctx);
@@ -145,7 +140,6 @@ init_doca_exit:
     _init_doca_sha_exit:
         return result;
     }
-#endif
 
 
 /*!
@@ -217,20 +211,18 @@ _init_doca_flow_exit:
 static int _parse_doca_kv_pair(char* key, char *value, struct sc_config* sc_config){
     int result = SC_SUCCESS;
 
-    #if defined(SC_NEED_DOCA_SHA)
-        /* config: PCI address of SHA engine */
-        if(!strcmp(key, "sha_pci_address")){
-            value = sc_util_del_both_trim(value);
-            sc_util_del_change_line(value);
-            if(SC_SUCCESS != sc_doca_util_parse_pci_addr(
-                    value, &(DOCA_CONF(sc_config)->sha_pci_bdf))){
-                SC_ERROR("failed to parse pci address for doca sha engine");
-                result = SC_ERROR_INVALID_VALUE;
-            }
-            goto parse_doca_kv_pair_exit;
+    /* config: PCI address of SHA engine */
+    if(!strcmp(key, "sha_pci_address")){
+        value = sc_util_del_both_trim(value);
+        sc_util_del_change_line(value);
+        if(SC_SUCCESS != sc_doca_util_parse_pci_addr(
+                value, &(DOCA_CONF(sc_config)->sha_pci_bdf))){
+            SC_ERROR("failed to parse pci address for doca sha engine");
+            result = SC_ERROR_INVALID_VALUE;
         }
-    #endif
-
+        goto parse_doca_kv_pair_exit;
+    }
+    
 parse_doca_kv_pair_exit:
     return result;
 }

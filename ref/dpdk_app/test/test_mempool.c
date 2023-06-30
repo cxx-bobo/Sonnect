@@ -43,7 +43,7 @@
  *      put them back in the pool.
  */
 
-#define MEMPOOL_ELT_SIZE 2048
+#define mempool_target_SIZE 2048
 #define MAX_KEEP 16
 #define MEMPOOL_SIZE ((rte_lcore_count()*(MAX_KEEP+RTE_MEMPOOL_CACHE_MAX_SIZE))-1)
 
@@ -193,7 +193,7 @@ static int test_mempool_creation_with_exceeded_cache_size(void)
 
 	mp_cov = rte_mempool_create("test_mempool_cache_too_big",
 		MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE,
+		mempool_target_SIZE,
 		RTE_MEMPOOL_CACHE_MAX_SIZE + 32, 0,
 		NULL, NULL,
 		my_obj_init, NULL,
@@ -212,7 +212,7 @@ static int test_mempool_creation_with_invalid_flags(void)
 	struct rte_mempool *mp_cov;
 
 	mp_cov = rte_mempool_create("test_mempool_invalid_flags", MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE, 0, 0,
+		mempool_target_SIZE, 0, 0,
 		NULL, NULL,
 		NULL, NULL,
 		SOCKET_ID_ANY, ~RTE_MEMPOOL_VALID_USER_FLAGS);
@@ -334,7 +334,7 @@ test_mempool_sp_sc(void)
 	/* create a mempool with single producer/consumer ring */
 	if (mp_spsc == NULL) {
 		mp_spsc = rte_mempool_create("test_mempool_sp_sc", MEMPOOL_SIZE,
-			MEMPOOL_ELT_SIZE, 0, 0,
+			mempool_target_SIZE, 0, 0,
 			my_mp_init, NULL,
 			my_obj_init, NULL,
 			SOCKET_ID_ANY,
@@ -441,7 +441,7 @@ test_mempool_same_name_twice_creation(void)
 	struct rte_mempool *mp_tc, *mp_tc2;
 
 	mp_tc = rte_mempool_create("test_mempool_same_name", MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE, 0, 0,
+		mempool_target_SIZE, 0, 0,
 		NULL, NULL,
 		NULL, NULL,
 		SOCKET_ID_ANY, 0);
@@ -450,7 +450,7 @@ test_mempool_same_name_twice_creation(void)
 		RET_ERR();
 
 	mp_tc2 = rte_mempool_create("test_mempool_same_name", MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE, 0, 0,
+		mempool_target_SIZE, 0, 0,
 		NULL, NULL,
 		NULL, NULL,
 		SOCKET_ID_ANY, 0);
@@ -517,7 +517,7 @@ test_mempool_events(int (*populate)(struct rte_mempool *mp))
 
 	static const size_t callback_num = 3;
 	static const size_t mempool_num = 2;
-	static const unsigned int mempool_elt_size = 64;
+	static const unsigned int mempool_target_size = 64;
 	static const unsigned int mempool_size = 64;
 
 	struct test_mempool_events_data data[callback_num];
@@ -544,7 +544,7 @@ test_mempool_events(int (*populate)(struct rte_mempool *mp))
 	memset(&data, 0, sizeof(data));
 	strcpy(name, "empty0");
 	mp[0] = rte_mempool_create_empty(name, mempool_size,
-					 mempool_elt_size, 0, 0,
+					 mempool_target_size, 0, 0,
 					 SOCKET_ID_ANY, 0);
 	RTE_TEST_ASSERT_NOT_NULL(mp[0], "Cannot create mempool %s: %s",
 				 name, rte_strerror(rte_errno));
@@ -577,7 +577,7 @@ test_mempool_events(int (*populate)(struct rte_mempool *mp))
 	memset(&data, 0, sizeof(data));
 	strcpy(name, "empty1");
 	mp[1] = rte_mempool_create_empty(name, mempool_size,
-					 mempool_elt_size, 0, 0,
+					 mempool_target_size, 0, 0,
 					 SOCKET_ID_ANY, 0);
 	RTE_TEST_ASSERT_NOT_NULL(mp[1], "Cannot create mempool %s: %s",
 				 name, rte_strerror(rte_errno));
@@ -686,7 +686,7 @@ test_mempool_events_safety(void)
 					    &sdata[1]);
 
 	mp = rte_mempool_create_empty("empty", MEMPOOL_SIZE,
-				      MEMPOOL_ELT_SIZE, 0, 0,
+				      mempool_target_SIZE, 0, 0,
 				      SOCKET_ID_ANY, 0);
 	RTE_TEST_ASSERT_NOT_NULL(mp, "Cannot create mempool: %s",
 				 rte_strerror(rte_errno));
@@ -745,7 +745,7 @@ test_mempool_flag_non_io_set_when_no_iova_contig_set(void)
 	const struct rte_memzone *mz = NULL;
 	void *virt;
 	rte_iova_t iova;
-	size_t size = MEMPOOL_ELT_SIZE * 16;
+	size_t size = mempool_target_SIZE * 16;
 	struct rte_mempool *mp = NULL;
 	int ret;
 
@@ -754,7 +754,7 @@ test_mempool_flag_non_io_set_when_no_iova_contig_set(void)
 	virt = mz->addr;
 	iova = mz->iova;
 	mp = rte_mempool_create_empty("empty", MEMPOOL_SIZE,
-				      MEMPOOL_ELT_SIZE, 0, 0,
+				      mempool_target_SIZE, 0, 0,
 				      SOCKET_ID_ANY, RTE_MEMPOOL_F_NO_IOVA_CONTIG);
 	RTE_TEST_ASSERT_NOT_NULL(mp, "Cannot create mempool: %s",
 				 rte_strerror(rte_errno));
@@ -785,7 +785,7 @@ test_mempool_flag_non_io_unset_when_populated_with_valid_iova(void)
 	const struct rte_memzone *mz = NULL;
 	void *virt;
 	rte_iova_t iova;
-	size_t total_size = MEMPOOL_ELT_SIZE * MEMPOOL_SIZE;
+	size_t total_size = mempool_target_SIZE * MEMPOOL_SIZE;
 	size_t block_size = total_size / 3;
 	struct rte_mempool *mp = NULL;
 	int ret;
@@ -800,7 +800,7 @@ test_mempool_flag_non_io_unset_when_populated_with_valid_iova(void)
 	virt = mz->addr;
 	iova = mz->iova;
 	mp = rte_mempool_create_empty("empty", MEMPOOL_SIZE,
-				      MEMPOOL_ELT_SIZE, 0, 0,
+				      mempool_target_SIZE, 0, 0,
 				      SOCKET_ID_ANY, 0);
 	RTE_TEST_ASSERT_NOT_NULL(mp, "Cannot create mempool: %s",
 				 rte_strerror(rte_errno));
@@ -856,7 +856,7 @@ test_mempool(void)
 
 	/* create a mempool (without cache) */
 	mp_nocache = rte_mempool_create("test_nocache", MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE, 0, 0,
+		mempool_target_SIZE, 0, 0,
 		NULL, NULL,
 		my_obj_init, NULL,
 		SOCKET_ID_ANY, 0);
@@ -868,7 +868,7 @@ test_mempool(void)
 
 	/* create a mempool (with cache) */
 	mp_cache = rte_mempool_create("test_cache", MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE,
+		mempool_target_SIZE,
 		RTE_MEMPOOL_CACHE_MAX_SIZE, 0,
 		NULL, NULL,
 		my_obj_init, NULL,
@@ -882,7 +882,7 @@ test_mempool(void)
 	/* create an empty mempool  */
 	mp_stack_anon = rte_mempool_create_empty("test_stack_anon",
 		MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE,
+		mempool_target_SIZE,
 		RTE_MEMPOOL_CACHE_MAX_SIZE, 0,
 		SOCKET_ID_ANY, 0);
 
@@ -903,7 +903,7 @@ test_mempool(void)
 	/* create a mempool  */
 	mp_stack_mempool_iter = rte_mempool_create("test_iter_obj",
 		MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE,
+		mempool_target_SIZE,
 		RTE_MEMPOOL_CACHE_MAX_SIZE, 0,
 		NULL, NULL,
 		my_obj_init, NULL,
@@ -926,7 +926,7 @@ test_mempool(void)
 	/* create a mempool with an external handler */
 	mp_stack = rte_mempool_create_empty("test_stack",
 		MEMPOOL_SIZE,
-		MEMPOOL_ELT_SIZE,
+		mempool_target_SIZE,
 		RTE_MEMPOOL_CACHE_MAX_SIZE, 0,
 		SOCKET_ID_ANY, 0);
 
@@ -948,7 +948,7 @@ test_mempool(void)
 	printf("Testing %s mempool handler\n", default_pool_ops);
 	default_pool = rte_mempool_create_empty("default_pool",
 						MEMPOOL_SIZE,
-						MEMPOOL_ELT_SIZE,
+						mempool_target_SIZE,
 						RTE_MEMPOOL_CACHE_MAX_SIZE, 0,
 						SOCKET_ID_ANY, 0);
 

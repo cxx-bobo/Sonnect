@@ -3,7 +3,7 @@
 
 #if defined(SC_HAS_DOCA)
     #include "sc_doca.hpp"
-    #include "sc_doca_utils.hpp"
+    #include "sc_doca_utils/doca_utils.hpp"
 #endif
 
 int __cm_update(const char* key, struct sc_config *sc_config);

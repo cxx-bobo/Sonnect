@@ -12,7 +12,7 @@
 
 #if defined(SC_HAS_DOCA)
     #include "sc_doca.hpp"
-    #include "sc_doca_utils.hpp"
+    #include "sc_doca_utils/doca_utils.hpp"
 #endif
 
 /* type of the sketch counter */

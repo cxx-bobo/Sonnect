@@ -21,7 +21,6 @@ extern volatile bool sc_force_quit;
  */
 #if !defined(SC_CLOSE_MOCK_MACRO)
     #define SC_HAS_DOCA
-    #define SC_NEED_DOCA_SHA
     #define MODE_THROUGHPUT
     #define MODE_LATENCY
 #endif // SC_CLOSE_MOCK_MACRO

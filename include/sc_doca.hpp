@@ -5,7 +5,7 @@
 #include <rte_spinlock.h>
 
 #include "sc_global.hpp"
-#include "sc_doca_utils.hpp"
+#include "sc_doca_utils/doca_utils.hpp"
 
 #if defined(SC_HAS_DOCA)
 
@@ -57,12 +57,10 @@ struct doca_config {
     struct doca_flow_pipe *doca_flow_pipes[SC_DOCA_FLOW_MAX_NB_PIPES];
 
     /* sha configurations */
-    #if defined(SC_NEED_DOCA_SHA)
-        rte_spinlock_t sha_lock;                /* spinlock use to access SHA engine under multi-thread */
-        struct doca_pci_bdf sha_pci_bdf;        /* pci bus-device-function index of sha engine */
-        struct doca_dev *sha_dev;		        /* doca device of sha engine */
-        struct doca_ctx *sha_ctx;			    /* doca context for sha engine */
-    #endif // SC_HAS_DOCA && SC_NEED_DOCA_SHA
+    rte_spinlock_t sha_lock;                /* spinlock use to access SHA engine under multi-thread */
+    struct doca_pci_bdf sha_pci_bdf;        /* pci bus-device-function index of sha engine */
+    struct doca_dev *sha_dev;		        /* doca device of sha engine */
+    struct doca_ctx *sha_ctx;			    /* doca context for sha engine */
 
     /* doca per-core meta */
     struct per_core_doca_meta *per_core_doca_meta;
@@ -78,16 +76,14 @@ struct per_core_doca_meta {
     uint8_t something;
 
     /* SHA engine per-core meta */
-    #if defined(SC_NEED_DOCA_SHA)
-        struct doca_mmap *sha_mmap;             /* memory map for sha engine */
-        struct doca_buf_inventory *sha_buf_inv; /* buffer inventory for sha engine */
-        struct doca_workq *sha_workq;           /* work queue for sha engine */
-        struct doca_buf *sha_src_doca_buf;      /* pointer to the doca_buf of source data */
-        struct doca_buf *sha_dst_doca_buf;      /* pointer to the doca_buf of destination data */
-        char *sha_src_buffer;                   /* pointer to the source data buffer */
-        char *sha_dst_buffer;                   /* pointer to the SHA result buffer */
-        struct doca_sha_job *sha_job;           /* pointer to the SHA job */
-    #endif
+    struct doca_mmap *sha_mmap;             /* memory map for sha engine */
+    struct doca_buf_inventory *sha_buf_inv; /* buffer inventory for sha engine */
+    struct doca_workq *sha_workq;           /* work queue for sha engine */
+    struct doca_buf *sha_src_doca_buf;      /* pointer to the doca_buf of source data */
+    struct doca_buf *sha_dst_doca_buf;      /* pointer to the doca_buf of destination data */
+    char *sha_src_buffer;                   /* pointer to the source data buffer */
+    char *sha_dst_buffer;                   /* pointer to the SHA result buffer */
+    struct doca_sha_job *sha_job;           /* pointer to the SHA job */
 };
 
 

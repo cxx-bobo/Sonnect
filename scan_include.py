@@ -10,6 +10,7 @@ kArgvIndex_project = 1
 include_dirs = [
     "include",
     "include/apps",
+    "include/{}_doca_utils".format(sys.argv[kArgvIndex_project]),
     "include/{}_utils".format(sys.argv[kArgvIndex_project])
 ]
 

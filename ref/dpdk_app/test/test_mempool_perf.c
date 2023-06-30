@@ -64,7 +64,7 @@
 
 #define N 65536
 #define TIME_S 5
-#define MEMPOOL_ELT_SIZE 2048
+#define mempool_target_SIZE 2048
 #define MAX_KEEP 128
 #define MEMPOOL_SIZE ((rte_lcore_count()*(MAX_KEEP+RTE_MEMPOOL_CACHE_MAX_SIZE))-1)
 
@@ -289,7 +289,7 @@ test_mempool_perf(void)
 
 	/* create a mempool (without cache) */
 	mp_nocache = rte_mempool_create("perf_test_nocache", MEMPOOL_SIZE,
-					MEMPOOL_ELT_SIZE, 0, 0,
+					mempool_target_SIZE, 0, 0,
 					NULL, NULL,
 					my_obj_init, NULL,
 					SOCKET_ID_ANY, 0);
@@ -298,7 +298,7 @@ test_mempool_perf(void)
 
 	/* create a mempool (with cache) */
 	mp_cache = rte_mempool_create("perf_test_cache", MEMPOOL_SIZE,
-				      MEMPOOL_ELT_SIZE,
+				      mempool_target_SIZE,
 				      RTE_MEMPOOL_CACHE_MAX_SIZE, 0,
 				      NULL, NULL,
 				      my_obj_init, NULL,
@@ -310,7 +310,7 @@ test_mempool_perf(void)
 	/* Create a mempool based on Default handler */
 	default_pool = rte_mempool_create_empty("default_pool",
 						MEMPOOL_SIZE,
-						MEMPOOL_ELT_SIZE,
+						mempool_target_SIZE,
 						0, 0,
 						SOCKET_ID_ANY, 0);
 

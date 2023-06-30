@@ -48,7 +48,7 @@ typedef void (*case_clean_t)(unsigned lcore_id);
 #define MAX_ITER_ONCE                       (4)
 #define MAX_LPM_ITER_TIMES                  (6)
 
-#define MEMPOOL_ELT_SIZE                    (sizeof(uint32_t))
+#define mempool_target_SIZE                    (sizeof(uint32_t))
 #define MEMPOOL_SIZE                        (4)
 
 #define MAX_LCORES	(RTE_MAX_MEMZONE / (MAX_ITER_MULTI * 4U))
@@ -177,7 +177,7 @@ mempool_create_lookup(__rte_unused void *arg)
 	/* create the same mempool simultaneously on all threads */
 	for (i = 0; i < MAX_ITER_ONCE; i++) {
 		mp = rte_mempool_create("fr_test_once",  MEMPOOL_SIZE,
-					MEMPOOL_ELT_SIZE, 0, 0,
+					mempool_target_SIZE, 0, 0,
 					NULL, NULL,
 					my_obj_init, NULL,
 					SOCKET_ID_ANY, 0);
@@ -189,7 +189,7 @@ mempool_create_lookup(__rte_unused void *arg)
 	for (i = 0; i < MAX_ITER_MULTI; i++) {
 		snprintf(mempool_name, sizeof(mempool_name), "fr_test_%d_%d", lcore_self, i);
 		mp = rte_mempool_create(mempool_name, MEMPOOL_SIZE,
-						MEMPOOL_ELT_SIZE, 0, 0,
+						mempool_target_SIZE, 0, 0,
 						NULL, NULL,
 						my_obj_init, NULL,
 						SOCKET_ID_ANY, 0);

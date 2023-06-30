@@ -1,7 +1,7 @@
 #include "mempool.h"
 
 int is_mempool_empty(struct mempool * mp) {
-    if (list_empty(&mp->elt_free_list)) {
+    if (list_empty(&mp->target_free_list)) {
         return 1;
     }
 
@@ -27,34 +27,34 @@ struct mempool * mempool_create(int num_elt, size_t elt_size) {
     mp->elt_size = elt_size;
     mp->size = total_size;
 
-    init_list_head(&mp->elt_free_list);
-    init_list_head(&mp->elt_used_list);
+    init_list_head(&mp->target_free_list);
+    init_list_head(&mp->target_used_list);
 
-    struct mempool_elt * elts = (struct mempool_elt *)calloc(num_elt, sizeof(struct mempool_elt));
+    struct mempool_target * targets = (struct mempool_target *)calloc(num_elt, sizeof(struct mempool_target));
 
     /* Segment the region into pieces */
     for (int i = 0; i < num_elt; i++) {
-        // struct mempool_elt * elt = (struct mempool_elt *)calloc(1, sizeof(struct mempool_elt));
-        struct mempool_elt * elt = (struct mempool_elt *)&elts[i];
+        // struct mempool_target * elt = (struct mempool_target *)calloc(1, sizeof(struct mempool_target));
+        struct mempool_target * elt = (struct mempool_target *)&targets[i];
         elt->mp = mp;
         elt->addr = mp->addr + i * elt_size;
-        list_add_tail(&elt->list, &mp->elt_free_list);
+        list_add_tail(&elt->list, &mp->target_free_list);
     }
 #if 0
     mp->elt_size = elt_size;
     mp->size = total_size;
 
-    init_list_head(&mp->elt_free_list);
-    init_list_head(&mp->elt_used_list);
+    init_list_head(&mp->target_free_list);
+    init_list_head(&mp->target_used_list);
 
-    struct mempool_elt * elts = (struct mempool_elt *)calloc(num_elt, sizeof(struct mempool_elt));
+    struct mempool_target * targets = (struct mempool_target *)calloc(num_elt, sizeof(struct mempool_target));
 
     /* Segment the region into pieces */
     for (int i = 0; i < num_elt; i++) {
-        // struct mempool_elt * elt = (struct mempool_elt *)calloc(1, sizeof(struct mempool_elt) + elt_size);
-        struct mempool_elt * elt = (struct mempool_elt *)&elts[i];
+        // struct mempool_target * elt = (struct mempool_target *)calloc(1, sizeof(struct mempool_target) + elt_size);
+        struct mempool_target * elt = (struct mempool_target *)&targets[i];
         elt->mp = mp;
-        list_add_tail(&elt->list, &mp->elt_free_list);
+        list_add_tail(&elt->list, &mp->target_free_list);
     }
 #endif
 
@@ -68,12 +68,12 @@ failed:
 
 /*----------------------------------------------------------------------------*/
 void mempool_free(struct mempool * mp) {
-    struct mempool_elt * elt, * temp;
-    list_for_each_entry_safe(elt, temp, &mp->elt_free_list, list) {
+    struct mempool_target * elt, * temp;
+    list_for_each_entry_safe(elt, temp, &mp->target_free_list, list) {
         free(elt);
     }
 
-    list_for_each_entry_safe(elt, temp, &mp->elt_used_list, list) {
+    list_for_each_entry_safe(elt, temp, &mp->target_used_list, list) {
         free(elt);
     }
 
@@ -84,8 +84,8 @@ void mempool_free(struct mempool * mp) {
 }
 
 /*----------------------------------------------------------------------------*/
-int mempool_get(struct mempool * mp, struct mempool_elt ** obj) {
-    struct mempool_elt * elt = list_first_entry_or_null(&mp->elt_free_list, struct mempool_elt, list);
+int mempool_get(struct mempool * mp, struct mempool_target ** obj) {
+    struct mempool_target * elt = list_first_entry_or_null(&mp->target_free_list, struct mempool_target, list);
 
     if (!elt) {
         *obj = NULL;
@@ -93,7 +93,7 @@ int mempool_get(struct mempool * mp, struct mempool_elt ** obj) {
     }
     
     list_del_init(&elt->list);
-    // list_add_tail(&elt->list, &mp->elt_used_list);
+    // list_add_tail(&elt->list, &mp->target_used_list);
 
     // *obj = elt->addr;
     *obj = elt;
@@ -102,8 +102,8 @@ int mempool_get(struct mempool * mp, struct mempool_elt ** obj) {
 }
 
 /*----------------------------------------------------------------------------*/
-void mempool_put(struct mempool * mp, struct mempool_elt * elt) {
+void mempool_put(struct mempool * mp, struct mempool_target * elt) {
     // list_del_init(&elt->list);
     // memset(elt->addr, 0, mp->elt_size);
-    list_add_tail(&elt->list, &mp->elt_free_list);
+    list_add_tail(&elt->list, &mp->target_free_list);
 }
