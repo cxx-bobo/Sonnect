@@ -696,7 +696,7 @@ int _all_exit(struct sc_config *sc_config){
     );
     SC_THREAD_LOG("[TOTAL] average RTT: %lf us", all_core_avg_latency/(double)1000);
     SC_THREAD_LOG("[TOTAL] average RTT (fixed): %lf us",
-        (all_core_avg_latency-per_core_payload_copy_latency)/(double)1000);
+        (all_core_avg_latency - per_core_payload_copy_latency)/(double)1000);
 
     return SC_SUCCESS;
 }
