@@ -39,7 +39,7 @@ struct _per_core_app_meta {
 };
 
 /* definition of internal config */
-struct _internal_config {
+struct _internal_config {    
     /* used echo ports */
     uint32_t nb_send_ports, nb_recv_ports;
     uint32_t send_port_idx[SC_MAX_NB_PORTS], recv_port_idx[SC_MAX_NB_PORTS];

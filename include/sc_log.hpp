@@ -10,6 +10,8 @@ extern char current_time_str[128];
 extern pthread_mutex_t timer_mutex;
 extern pthread_mutex_t thread_log_mutex;
 
+extern __thread uint32_t perthread_lcore_logical_id;
+
 int init_logging_thread(struct sc_config *sc_config);
 int launch_logging_thread_async(struct sc_config *sc_config);
 int join_logging_thread(struct sc_config *sc_config);
@@ -44,6 +46,14 @@ fflush(stderr);\
 pthread_mutex_lock(&timer_mutex);\
 fprintf(stderr, "\033[31m%s\033[0m \033[101m\033[97m lcore %u Error \033[0m ", current_time_str, rte_lcore_id());\
 pthread_mutex_unlock(&timer_mutex);\
+fprintf(stderr, __VA_ARGS__);\
+fprintf(stderr, "\n");\
+fflush(stderr);\
+}
+
+#define SC_THREAD_ERROR_LOCKLESS(...) \
+{\
+fprintf(stderr, "\033[31m%s\033[0m \033[101m\033[97m lcore %u Error \033[0m ", current_time_str, perthread_lcore_logical_id);\
 fprintf(stderr, __VA_ARGS__);\
 fprintf(stderr, "\n");\
 fflush(stderr);\
@@ -90,6 +100,14 @@ fprintf(stdout, "\n");\
 fflush(stdout);\
 }
 
+#define SC_THREAD_WARNING_LOCKLESS(...) \
+{\
+fprintf(stdout, "\033[31m%s\033[0m \033[103m\033[97m lcore %u Warning \033[0m ", current_time_str, perthread_lcore_logical_id);\
+fprintf(stdout, __VA_ARGS__);\
+fprintf(stdout, "\n");\
+fflush(stdout);\
+}
+
 #define SC_THREAD_WARNING_DETAILS(...) \
 {\
 SC_WARNING(__VA_ARGS__)\
@@ -128,6 +146,14 @@ fflush(stdout);\
 pthread_mutex_lock(&timer_mutex);\
 fprintf(stdout, "\033[31m%s\033[0m \033[104m\033[97m lcore %u Debug \033[0m ", current_time_str, rte_lcore_id());\
 pthread_mutex_unlock(&timer_mutex);\
+fprintf(stdout, __VA_ARGS__);\
+fprintf(stdout, "\n");\
+fflush(stdout);\
+}
+
+#define SC_THREAD_LOG_LOCKLESS(...) \
+{\
+fprintf(stdout, "\033[31m%s\033[0m \033[104m\033[97m lcore %u Debug \033[0m ", current_time_str, rte_lcore_id());\
 fprintf(stdout, __VA_ARGS__);\
 fprintf(stdout, "\n");\
 fflush(stdout);\

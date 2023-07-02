@@ -6,6 +6,8 @@
 
 extern volatile bool sc_force_quit;
 
+__thread uint32_t perthread_lcore_logical_id;
+
 /*!
  * \brief   initialize worker loop after enter it
  * \param   sc_config   the global configuration
@@ -27,6 +29,11 @@ int _worker_loop(void* param){
     int lcore_id_from_zero;
     uint64_t nb_fwd_pkts = 0;
     struct sc_config *sc_config = (struct sc_config*)param;
+
+    /* record lcore id starts from 0 */
+    lcore_id_from_zero = rte_lcore_index(rte_lcore_id());
+    perthread_lcore_logical_id = lcore_id_from_zero;
+
     process_enter_t process_enter_func = PER_CORE_WORKER_FUNC(sc_config).process_enter_func;
     #if defined(ROLE_SERVER)
         process_pkt_t process_pkt_func = PER_CORE_WORKER_FUNC(sc_config).process_pkt_func;
@@ -45,8 +52,7 @@ int _worker_loop(void* param){
         bool ready_to_exit = false;
     #endif // ROLE_CLIENT
 
-    /* record lcore id starts from 0 */
-    lcore_id_from_zero = rte_lcore_index(rte_lcore_id());
+    
 
     /* initialize woker loop */
     result = __worker_loop_init(sc_config);

@@ -118,19 +118,22 @@ struct sc_config {
         void *doca_config;
     #endif
 };
-#define PER_CORE_META(scc) ((struct per_core_meta*)scc->per_core_meta)[rte_lcore_index(rte_lcore_id())]
+
+extern __thread uint32_t perthread_lcore_logical_id;
+
+#define PER_CORE_META(scc) ((struct per_core_meta*)scc->per_core_meta)[perthread_lcore_logical_id]
 #define PER_CORE_META_BY_CORE_ID(scc, id) ((struct per_core_meta*)scc->per_core_meta)[id]
 
 #define PER_CORE_RX_MBUF_POOL(scc, logical_port_id) \
-    scc->rx_pktmbuf_pool[RX_QUEUE_MEMORY_POOL_ID(scc,logical_port_id,rte_lcore_index(rte_lcore_id()))]
+    scc->rx_pktmbuf_pool[RX_QUEUE_MEMORY_POOL_ID(scc,logical_port_id,perthread_lcore_logical_id)]
 #define PER_CORE_TX_MBUF_POOL(scc, logical_port_id) \
-    scc->tx_pktmbuf_pool[TX_QUEUE_MEMORY_POOL_ID(scc,logical_port_id,rte_lcore_index(rte_lcore_id()))]
+    scc->tx_pktmbuf_pool[TX_QUEUE_MEMORY_POOL_ID(scc,logical_port_id,perthread_lcore_logical_id)]
 
-#define PER_CORE_APP_META(scc) ((struct _per_core_app_meta*)scc->per_core_app_meta)[rte_lcore_index(rte_lcore_id())]
+#define PER_CORE_APP_META(scc) ((struct _per_core_app_meta*)scc->per_core_app_meta)[perthread_lcore_logical_id]
 #define PER_CORE_APP_META_BY_CORE_ID(scc, id) ((struct _per_core_app_meta*)scc->per_core_app_meta)[id]
 
 #define PER_CORE_WORKER_FUNC(scc)((struct per_core_worker_func*)scc->per_core_worker_funcs)\
-        [rte_lcore_index(rte_lcore_id())]
+        [perthread_lcore_logical_id]
 #define PER_CORE_WORKER_FUNC_BY_CORE_ID(scc, id)((struct per_core_worker_func*)scc->per_core_worker_funcs)\
         [id]
 

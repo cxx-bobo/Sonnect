@@ -191,11 +191,11 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
                     PER_CORE_APP_META(sc_config).throughput_pointer = 0;
                 }
 
-                // SC_THREAD_LOG(
-                //     "throughput: %lf Mpps, drop throughput: %lf Mpps",
-                //     throughput / (double)pkt[0]->pkt_len * (double)1000,
-                //     drop_throughput / (double)pkt[0]->pkt_len * (double)1000
-                // );
+                SC_THREAD_LOG(
+                    "throughput: %lf Mpps, drop throughput: %lf Mpps",
+                    throughput / (double)pkt[0]->pkt_len * (double)1000,
+                    drop_throughput / (double)pkt[0]->pkt_len * (double)1000
+                );
             }
         } else {
             // SC_THREAD_LOG("throughput: 0.0 Mpps");

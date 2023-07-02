@@ -70,8 +70,8 @@ init_doca_exit:
 static int _init_doca_sha(struct sc_config *sc_config){
     int result = SC_SUCCESS, doca_result, i;
     struct doca_sha *sha_ctx;
-    uint32_t workq_depth = 1024;    /* The sha engine will run 1 sha job */
-    uint32_t max_chunks = 1024;		/* The sha engine will use 512 doca buffers */
+    uint32_t workq_depth = 128;    /* The sha engine will run 1 sha job */
+    uint32_t max_chunks = 256;	   /* The sha engine will use 512 doca buffers */
 
     /* create doca context */
     /*! No need to create per-core doca context */

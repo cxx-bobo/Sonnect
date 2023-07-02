@@ -3,26 +3,49 @@
 
 #include "sc_app.hpp"
 #include "sc_doca.hpp"
-#include "sc_doca_utils/doca_utils.hpp"
 #include "sc_doca_utils/mempool.hpp"
+#include "sc_doca_utils/doca_utils.hpp"
+
 
 #define SC_SHA_HASH_KEY_LENGTH      64
 #define SC_SHA_BURST_TX_RETRIES     16
+
 #if defined(SC_HAS_DOCA)
-    #define SHA_MEMPOOL_NB_BUF      512
-    #define SHA_MEMPOOL_BUF_SIZE    SC_SHA_HASH_KEY_LENGTH + DOCA_SHA256_BYTE_COUNT
+    /* open loop macro */
+    #define SHA_MEMPOOL_NB_BUF      128
+    #define SHA_MEMPOOL_BUF_SIZE    (SC_SHA_HASH_KEY_LENGTH + DOCA_SHA256_BYTE_COUNT)
+
+    /* close loop macro */
+    #define SHA_CLOSELOOP_NB_BUF    128
+    #define SHA_CLOSELOOP_BUF_SIZE  (SC_SHA_HASH_KEY_LENGTH + DOCA_SHA256_BYTE_COUNT)
 #endif
 
 struct _per_core_app_meta {
+    
     #if defined(SC_HAS_DOCA)
+        /* open loop data */
         struct mempool *mpool;
+
+         /* close loop data */
+        void *cl_job_data;
+        uint64_t cl_job_data_size;
+        struct doca_buf **req_buf_ptrs;
+        struct doca_buf **resp_buf_ptrs;
     #endif
+
+    struct timeval last_record_time;
 
     uint64_t nb_received_pkts;
     uint64_t nb_enqueued_pkts;
     uint64_t nb_drop_pkts;
     uint64_t nb_finished_pkts;
     uint64_t nb_send_pkts;
+
+    uint64_t interval_nb_received_pkts;
+    uint64_t interval_nb_enqueued_pkts;
+    uint64_t interval_nb_drop_pkts;
+    uint64_t interval_nb_finished_pkts;
+    uint64_t interval_nb_send_pkts;
 
     int something;
 };

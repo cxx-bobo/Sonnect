@@ -65,9 +65,12 @@ struct doca_config {
     /* doca per-core meta */
     struct per_core_doca_meta *per_core_doca_meta;
 };
+
+extern __thread uint32_t perthread_lcore_logical_id;
+
 #define DOCA_CONF(scc) ((struct doca_config*)scc->doca_config)
 #define PER_CORE_DOCA_META(scc) \
-    ((struct per_core_doca_meta*)((struct doca_config*)scc->doca_config)->per_core_doca_meta)[rte_lcore_index(rte_lcore_id())]
+    ((struct per_core_doca_meta*)((struct doca_config*)scc->doca_config)->per_core_doca_meta)[perthread_lcore_logical_id]
 #define PER_CORE_DOCA_META_BY_CORE_ID(scc, id) \
     ((struct per_core_doca_meta*)((struct doca_config*)scc->doca_config)->per_core_doca_meta)[id]
 
