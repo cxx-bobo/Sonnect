@@ -225,12 +225,23 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
 
     send_ns = sc_util_timestamp_ns();
     for(i=0; i<nb_recv_pkts; i++){
+        /* skip empty payload packet */
+        // if(unlikely(pkt[i]->buf_addr == NULL)){
+        //     continue;
+        // }
+
         payload_timestamp = rte_pktmbuf_mtod_offset(
             pkt[i], struct sc_timestamp_table*, 
             sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
         );
-        
+
+        /* skip wrong payload packet */
+        if(unlikely(payload_timestamp->timestamp_type != SC_TIMESTAMP_HALF_TYPE)){
+            continue;
+        }
+
         /* add both the recv & send timestamp to the timestamp table */
+        // FIXME: the following timestamp record will drag down the throughput (33M -> 20M for single core)
         sc_util_add_half_timestamp(payload_timestamp, recv_ns);
         sc_util_add_half_timestamp(payload_timestamp, send_ns);
     }

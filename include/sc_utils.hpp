@@ -68,18 +68,18 @@ uint8_t sc_util_random_unsigned_int8();
  * \return  extract byte
  */
 template<typename data_type, typename index_type>
-__inline__ uint8_t sc_util_get_ith_byte(data_type data, index_type i){
+inline uint8_t sc_util_get_ith_byte(data_type data, index_type i){
     return ((data>>i))&0x000000ff;
 }
 
 template<typename data_type, typename index_type, uint32_t byte_size>
-__inline__ data_type _sc_util_bytes_to_number(const uint8_t *raw, uint32_t depth){
+inline data_type _sc_util_bytes_to_number(const uint8_t *raw, uint32_t depth){
     return depth == byte_size - 1 ? raw[depth]
         : raw[depth] + _sc_util_bytes_to_number<data_type, index_type, byte_size>(raw, depth+1);
 }
 
 template<typename data_type, typename index_type, uint64_t byte_size>
-__inline__ data_type sc_util_bytes_to_number(const uint8_t *raw){
+inline data_type sc_util_bytes_to_number(const uint8_t *raw){
     return _sc_util_bytes_to_number<data_type, index_type, byte_size>(raw, 0);
 }
 

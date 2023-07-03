@@ -27,15 +27,14 @@ struct sc_timestamp_table {
  * \param   sc_ts               the target timestamp table
  * \param   new_timestamp_ns    the full-length 64-bits nanosecond timestamp
  */
-__inline__ void sc_util_add_short_timestamp(struct sc_timestamp_table* sc_ts, uint64_t new_timestamp_ns){
-    uint8_t nb_timestamp = sc_ts->nb_timestamp;
-    uint8_t j;
-    assert(sc_ts->timestamp_type == SC_TIMESTAMP_SHORT_TYPE);
-    assert(nb_timestamp < 10);
-    for(j=0; j<SC_SHORT_TIMESTAMP_LEN; j++){ 
-        sc_ts->raw_payload[j+nb_timestamp*SC_SHORT_TIMESTAMP_LEN] 
-            = sc_util_get_ith_byte<uint64_t, uint8_t>(new_timestamp_ns, j);
-    }
+inline void sc_util_add_short_timestamp(struct sc_timestamp_table* sc_ts, uint64_t new_timestamp_ns){
+    // assert(sc_ts->timestamp_type == SC_TIMESTAMP_SHORT_TYPE);
+    // assert(sc_ts->nb_timestamp < 10);
+    rte_memcpy(
+        /* dst */ &(sc_ts->raw_payload[sc_ts->nb_timestamp*SC_SHORT_TIMESTAMP_LEN]),
+        /* src */ &new_timestamp_ns,
+        /* size */ SC_SHORT_TIMESTAMP_LEN
+    );
     sc_ts->nb_timestamp += 1;
 }
 
@@ -43,17 +42,16 @@ __inline__ void sc_util_add_short_timestamp(struct sc_timestamp_table* sc_ts, ui
  * \brief   add a new half timestamp to the timestamp table
  * \param   sc_ts               the target timestamp table
  * \param   new_timestamp_ns    the full-length 64-bits nanosecond timestamp
+ * \FIXME: this function will take 28 ~ 1348 CPU cycles, should be optimized
  */
-__inline__ void sc_util_add_half_timestamp(struct sc_timestamp_table* sc_ts, uint64_t new_timestamp_ns){
-    uint8_t nb_timestamp = sc_ts->nb_timestamp;
-    uint8_t j;
-    assert(sc_ts->timestamp_type == SC_TIMESTAMP_HALF_TYPE);
-    assert(nb_timestamp < 5);
-    for(j=0; j<SC_HALF_TIMESTAMP_LEN; j++){ 
-        sc_ts->raw_payload[j+nb_timestamp*SC_HALF_TIMESTAMP_LEN] 
-            = sc_util_get_ith_byte<uint64_t, uint8_t>(new_timestamp_ns, j);
-    }
-    
+inline void sc_util_add_half_timestamp(struct sc_timestamp_table* sc_ts, uint64_t new_timestamp_ns){
+    // assert(sc_ts->timestamp_type == SC_TIMESTAMP_HALF_TYPE);
+    // assert(sc_ts->nb_timestamp < 5);
+    rte_memcpy(
+        /* dst */ &(sc_ts->raw_payload[sc_ts->nb_timestamp*SC_HALF_TIMESTAMP_LEN]),
+        /* src */ &new_timestamp_ns,
+        /* size */ SC_HALF_TIMESTAMP_LEN
+    );
     sc_ts->nb_timestamp += 1;
 }
 
@@ -62,16 +60,14 @@ __inline__ void sc_util_add_half_timestamp(struct sc_timestamp_table* sc_ts, uin
  * \param   sc_ts               the target timestamp table
  * \param   new_timestamp_ns    the full-length 64-bits nanosecond timestamp
  */
-__inline__ void sc_util_add_full_timestamp(struct sc_timestamp_table* sc_ts, uint64_t new_timestamp_ns){
-    uint8_t nb_timestamp = sc_ts->nb_timestamp;
-    uint8_t j;
-    assert(sc_ts->timestamp_type == SC_TIMESTAMP_FULL_TYPE);
-    assert(nb_timestamp < 2);
-    for(j=0; j<SC_FULL_TIMESTAMP_LEN; j++){ 
-        sc_ts->raw_payload[j+nb_timestamp*SC_FULL_TIMESTAMP_LEN] 
-            = sc_util_get_ith_byte<uint64_t, uint8_t>(new_timestamp_ns, j);
-    }
-    
+inline void sc_util_add_full_timestamp(struct sc_timestamp_table* sc_ts, uint64_t new_timestamp_ns){
+    // assert(sc_ts->timestamp_type == SC_TIMESTAMP_FULL_TYPE);
+    // assert(sc_ts->nb_timestamp < 2);
+    rte_memcpy(
+        /* dst */ &(sc_ts->raw_payload[sc_ts->nb_timestamp*SC_FULL_TIMESTAMP_LEN]),
+        /* src */ &new_timestamp_ns,
+        /* size */ SC_FULL_TIMESTAMP_LEN
+    );
     sc_ts->nb_timestamp += 1;
 }
 
@@ -81,7 +77,7 @@ __inline__ void sc_util_add_full_timestamp(struct sc_timestamp_table* sc_ts, uin
  * \param   index   index of the target timestamp
  * \return  the result timestamp
  */
-__inline__ uint16_t sc_util_get_short_timestamp(struct sc_timestamp_table* sc_ts, uint8_t index){
+inline uint16_t sc_util_get_short_timestamp(struct sc_timestamp_table* sc_ts, uint8_t index){
     assert(sc_ts->timestamp_type == SC_TIMESTAMP_SHORT_TYPE);
     assert(index < sc_ts->nb_timestamp);
     uint8_t *payload = sc_ts->raw_payload;
@@ -97,7 +93,7 @@ __inline__ uint16_t sc_util_get_short_timestamp(struct sc_timestamp_table* sc_ts
  * \param   index   index of the target timestamp
  * \return  the result timestamp
  */
-__inline__ uint32_t sc_util_get_half_timestamp(struct sc_timestamp_table* sc_ts, uint8_t index){
+inline uint32_t sc_util_get_half_timestamp(struct sc_timestamp_table* sc_ts, uint8_t index){
     assert(sc_ts->timestamp_type == SC_TIMESTAMP_HALF_TYPE);
     assert(index < sc_ts->nb_timestamp);
     uint8_t *payload = sc_ts->raw_payload;
@@ -115,7 +111,7 @@ __inline__ uint32_t sc_util_get_half_timestamp(struct sc_timestamp_table* sc_ts,
  * \param   index   index of the target timestamp
  * \return  the result timestamp
  */
-__inline__ uint64_t sc_util_get_full_timestamp(struct sc_timestamp_table* sc_ts, uint8_t index){
+inline uint64_t sc_util_get_full_timestamp(struct sc_timestamp_table* sc_ts, uint8_t index){
     assert(sc_ts->timestamp_type == SC_TIMESTAMP_FULL_TYPE);
     assert(index < sc_ts->nb_timestamp);
     uint8_t *payload = sc_ts->raw_payload;

@@ -224,6 +224,9 @@ int _init_single_port(uint16_t port_index, uint16_t port_logical_index, struct s
         }
 
         /* TX offload capacity check and config */
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MULTI_SEGS){
+            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MULTI_SEGS;
+        }
         if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE){
             port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MBUF_FAST_FREE;
         }
