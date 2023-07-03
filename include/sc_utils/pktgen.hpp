@@ -73,7 +73,7 @@ int sc_util_clone_mbuf_brust(struct rte_mempool *mp, struct rte_mbuf **mbufs,
 		uint64_t new_payload_size, uint64_t new_payload_offset);
 int sc_util_assemble_packet_headers_to_mbuf(struct rte_mempool *mp, struct sc_pkt_hdr *hdr, 
 		struct rte_mbuf *pkt);
-int sc_util_copy_payload_to_packet_burst(void *payload, uint64_t payload_len, uint64_t payload_offset,
+int sc_util_copy_payload_to_packet_burst(void *payload, uint64_t payload_len, uint64_t *payload_offset,
 	struct rte_mbuf **pkts_burst, uint32_t nb_pkt_per_burst);
 int sc_util_generate_packet_burst_mbufs_fast_v4_udp(struct rte_mempool *mp, struct sc_pkt_hdr *hdr,
 		struct rte_mbuf **pkts_burst, uint32_t nb_pkt_per_burst);

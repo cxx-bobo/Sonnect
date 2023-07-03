@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "sc_global.hpp"
 #include "sc_worker.hpp"
 #include "sc_app.hpp"
@@ -315,7 +316,7 @@ int _process_enter_sender(struct sc_config *sc_config){
             /* rss_hash_field */ sc_config->rss_hash_field,
             /* rss_affinity */ false,
             /* min_pkt_len */ 
-                SC_ECHO_CLIENT_PAYLOAD_LEN + sizeof(struct rte_ether_hdr) 
+                sizeof(struct sc_timestamp_table) + sizeof(struct rte_ether_hdr) 
                 + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr),
             /* payload */ nullptr
         );
@@ -361,7 +362,7 @@ _process_enter_exit:
 int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_tx = 0, nb_send_pkt = 0, result = SC_SUCCESS, retry;
     uint64_t current_ns = 0;
-    char timestamp_ns[SC_ECHO_CLIENT_PAYLOAD_LEN] = {0};
+    struct sc_timestamp_table sc_ts = {0};
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
@@ -391,13 +392,20 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
             goto process_client_ready_to_exit;
         }
 
-        /* cast the time to timestamp string, as the packet payload */
-        current_ns = sc_util_timestamp_ns();
-        sprintf(timestamp_ns, "%lu", current_ns);
+        /* set the timestamp number as 1, and the accuracy as short */
+        sc_ts.nb_timestamp = 1;
+        sc_ts.timestamp_type = SC_TIMESTAMP_SHORT_TYPE;
+
+        /* 
+         * record the timestamp
+         */
+        sc_util_add_half_timestamp(&sc_ts, sc_util_timestamp_ns());
+
+        /* copy timestamp to payload */
         if(SC_SUCCESS != sc_util_copy_payload_to_packet_burst(
-            /* payload */ timestamp_ns,
-            /* payload_len */ SC_ECHO_CLIENT_PAYLOAD_LEN,
-            /* payload_offset */ current_used_pkt->payload_offset,
+            /* payload */ &sc_ts,
+            /* payload_len */ sizeof(sc_ts),
+            /* payload_offset */ &(current_used_pkt->payload_offset),
             /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
             /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst
         )){
@@ -488,14 +496,12 @@ int _process_exit_sender(struct sc_config *sc_config){
 
     SC_THREAD_LOG("[sender]: copy to payload latency: %lf", PER_CORE_APP_META(sc_config).payload_copy_latency);
 
-    #if defined(MODE_THROUGHPUT)
-        SC_THREAD_LOG("[sender]: send throughput: %f Gbps, %f Mpps",
-            (float)(PER_CORE_APP_META(sc_config).nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
-            / (float)(SC_UTIL_TIME_INTERVL_US(total_interval_sec, total_interval_usec) * 1000),
-            (float)(PER_CORE_APP_META(sc_config).nb_send_pkt)
-            / (float)(SC_UTIL_TIME_INTERVL_US(total_interval_sec, total_interval_usec))
-        );
-    #endif
+    SC_THREAD_LOG("[sender]: send throughput: %f Gbps, %f Mpps",
+        (float)(PER_CORE_APP_META(sc_config).nb_send_pkt * INTERNAL_CONF(sc_config)->pkt_len * 8) 
+        / (float)(SC_UTIL_TIME_INTERVL_US(total_interval_sec, total_interval_usec) * 1000),
+        (float)(PER_CORE_APP_META(sc_config).nb_send_pkt)
+        / (float)(SC_UTIL_TIME_INTERVL_US(total_interval_sec, total_interval_usec))
+    );
 
 _process_exit_exit:
     return result;
@@ -540,9 +546,9 @@ _process_enter_receiver_exit:
  * \return  zero for successfully executing
  */
 int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
-    int i, j, nb_rx = 0, nb_recv_pkt = 0, result = SC_SUCCESS;
-    char *origin_timestamp;
-    uint64_t current_ns, origin_ns;
+    int i, j, k, nb_rx = 0, nb_recv_pkt = 0, result = SC_SUCCESS;
+    struct sc_timestamp_table *payload_timestamp;
+    uint64_t current_ns;
 
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_recv_ports; i++){
         memset(PER_CORE_APP_META(sc_config).recv_pkt_bufs, 0, sizeof(struct rte_mbuf*)*SC_MAX_PKT_BURST*2);
@@ -562,27 +568,29 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
         PER_CORE_APP_META(sc_config).nb_confirmed_pkt += nb_recv_pkt;
 
         for(j=0; j<nb_recv_pkt; j++) {
-            /* record latency (assume its a ipv4 + udp packet) */
-            origin_timestamp = rte_pktmbuf_mtod_offset(
-                PER_CORE_APP_META(sc_config).recv_pkt_bufs[j], char*, 
+            /* extract the timestamp struct */
+            payload_timestamp = rte_pktmbuf_mtod_offset(
+                PER_CORE_APP_META(sc_config).recv_pkt_bufs[j], struct sc_timestamp_table*, 
                 sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
             );
 
-            if(SC_SUCCESS != sc_util_atoui_64(origin_timestamp, &origin_ns)){
-                // SC_THREAD_WARNING("failed to cast timestamp payload to uint64_t");
-                goto free_recv_pkt_mbuf;
-            }
+            /* add receive timestamp to the timestamp table */
+            sc_util_add_half_timestamp(payload_timestamp, current_ns);
+            
+            /* copy the timestamp table to local collection */
+            memcpy(
+                /* dst */ PER_CORE_APP_META(sc_config).ts_tables 
+                    + PER_CORE_APP_META(sc_config).ts_tables_pointer,
+                /* src */ payload_timestamp,
+                /* size */ sizeof(struct sc_timestamp_table)
+            );
 
-            PER_CORE_APP_META(sc_config).latency_ns[
-                PER_CORE_APP_META(sc_config).latency_data_pointer
-            ] = current_ns - origin_ns;
-
-            PER_CORE_APP_META(sc_config).latency_data_pointer += 1;
-            if(PER_CORE_APP_META(sc_config).latency_data_pointer == SC_ECHO_CLIENT_MAX_LATENCY_NB){
-                PER_CORE_APP_META(sc_config).latency_data_pointer = 0;
+            PER_CORE_APP_META(sc_config).ts_tables_pointer += 1;
+            if(PER_CORE_APP_META(sc_config).ts_tables_pointer == SC_ECHO_CLIENT_NB_TS_TABLE){
+                PER_CORE_APP_META(sc_config).ts_tables_pointer = 0;
             }
-            if(PER_CORE_APP_META(sc_config).nb_latency_data < SC_ECHO_CLIENT_MAX_LATENCY_NB){
-                PER_CORE_APP_META(sc_config).nb_latency_data += 1;
+            if(PER_CORE_APP_META(sc_config).nb_ts_tables < SC_ECHO_CLIENT_NB_TS_TABLE){
+                PER_CORE_APP_META(sc_config).nb_ts_tables += 1;
             }
 
 free_recv_pkt_mbuf:
@@ -623,9 +631,45 @@ int _process_exit_receiver(struct sc_config *sc_config){
  * \return  zero for successfully executing
  */
 int _all_exit(struct sc_config *sc_config){
-    int i, j;
+    int result = SC_SUCCESS;
+    uint8_t nb_timestamp = 0;
+    uint32_t i, j, k;
+    struct sc_timestamp_table* sc_ts;
     size_t nb_send_pkt = 0, nb_confirmed_pkt = 0;
     double per_core_avg_latency, per_core_payload_copy_latency, all_core_avg_latency;
+    long worker_max_interval_sec = 0, worker_max_interval_usec = 0;
+    char profiling_file_name[512] = {0};
+    FILE * fp;
+
+    /* calculate the average payload copy latency to fix the RTT statistic */
+    per_core_payload_copy_latency = (double)0.0f;
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        per_core_payload_copy_latency += (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).payload_copy_latency;
+        per_core_payload_copy_latency /= (double)2.0f;
+    }
+
+    // record latency data
+    sprintf(profiling_file_name, "latency.txt");
+    fp = fopen(profiling_file_name, "w");
+    if (!fp) {
+        SC_ERROR("failed to create/open log file to store latency statistics");
+        result = SC_ERROR_INTERNAL;
+        goto all_exit_exit;
+    }
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        for(j=0; j<PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_ts_tables; j++){
+            sc_ts = &(PER_CORE_APP_META_BY_CORE_ID(sc_config, i).ts_tables[j]);
+            fprintf(
+                /* fd */ fp, "%lu\t%lu\t%lu\t%lu\t%lu\n", 
+                /* core_id */ i,
+                /* client send time */ 
+                    sc_util_get_half_timestamp(sc_ts, 0) + (uint32_t)per_core_payload_copy_latency,
+                /* server recv time */ sc_util_get_half_timestamp(sc_ts, 1),
+                /* server send time */ sc_util_get_half_timestamp(sc_ts, 2),
+                /* client recv time */ sc_util_get_half_timestamp(sc_ts, 3)
+            );
+        }
+    }
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         /* reduce number of packet */
@@ -635,8 +679,6 @@ int _all_exit(struct sc_config *sc_config){
     SC_LOG("[TOTAL] number of send packet: %ld, number of confirm packet: %ld",
         nb_send_pkt, nb_confirmed_pkt
     );
-
-    long worker_max_interval_sec = 0, worker_max_interval_usec = 0;
 
     /* record maximum duration */
     for(i=0; i<sc_config->nb_used_cores; i++){
@@ -653,24 +695,6 @@ int _all_exit(struct sc_config *sc_config){
             worker_max_interval_usec = interval_usec;
         }
     }
-
-    /* calculate the average payload copy latency to fix the RTT statistic */
-    per_core_avg_latency = (double)0.0f;
-    for(i=0; i<sc_config->nb_used_cores; i++){
-        per_core_payload_copy_latency += (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).payload_copy_latency;
-        per_core_payload_copy_latency /= (double)2.0f;
-    }
-
-    /* calculate latency */
-    for(i=0; i<sc_config->nb_used_cores; i++){
-        per_core_avg_latency = (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).latency_ns[0];
-        for(j=1; j<PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_latency_data; j++){
-            per_core_avg_latency 
-                = (per_core_avg_latency + (double)PER_CORE_APP_META_BY_CORE_ID(sc_config, i).latency_ns[j])/(double)2;
-        }
-        all_core_avg_latency += per_core_avg_latency;
-    }
-    all_core_avg_latency /= ((double)sc_config->nb_used_cores/(double)2.0f);
 
     SC_THREAD_LOG("[TOTAL] duration: %lu us",
         SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec)
@@ -694,10 +718,8 @@ int _all_exit(struct sc_config *sc_config){
         (float)(nb_confirmed_pkt) 
         / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
     );
-    SC_THREAD_LOG("[TOTAL] average RTT: %lf us", all_core_avg_latency/(double)1000);
-    SC_THREAD_LOG("[TOTAL] average RTT (fixed): %lf us",
-        (all_core_avg_latency - per_core_payload_copy_latency)/(double)1000);
 
+all_exit_exit:
     return SC_SUCCESS;
 }
 

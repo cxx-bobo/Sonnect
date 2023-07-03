@@ -11,7 +11,7 @@ env = environment()
 pkgconfig = find_program('pkg-config')
 
 # specified which application to use
-app = 'sha'
+app = 'echo_server'
 add_global_arguments('-DAPP_' + app.to_upper(), language: ['c', 'cpp'])
 
 # project name

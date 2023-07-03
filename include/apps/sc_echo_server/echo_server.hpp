@@ -2,10 +2,6 @@
 #define _SC_ECHO_SERVER_H_
 
 /* for cpp linkage */
-#ifdef __cplusplus
-    extern "C" {
-#endif
-
 #include <sys/time.h>
 #include <rte_ether.h>
 #include <rte_launch.h>
@@ -20,6 +16,7 @@
 #include <rte_mbuf_core.h>
 
 #include "sc_global.hpp"
+#include "sc_utils/timestamp.hpp"
 
 #define SC_ECHO_SERVER_NB_THROUGHPUT 131072
 
@@ -51,10 +48,5 @@ struct _internal_config {
 int _init_app(struct sc_config *sc_config);
 int _parse_app_kv_pair(char* key, char *value, struct sc_config* sc_config);
 int _all_exit(struct sc_config *sc_config);
-
-/* for cpp linkage */
-#ifdef __cplusplus
-    }
-#endif
 
 #endif

@@ -330,13 +330,13 @@ assemble_packet_headers_to_mbuf_exit:
  * \note	this function will take 10us to copy 24 bytes payload for 512 packets with length 66
  * \param   payload				the layload data
  * \param	payload_len			the length of payload
- * \param	payload_offset		the offset to the payload
+ * \param	payload_offset		pointer to the offset to the payload
  * \param   pkts_burst 			produced packet burst
  * \param	nb_pkt_per_burst 	number of packets within the produced burst
  * \return  0 for successfully generation
  */
 int sc_util_copy_payload_to_packet_burst(
-	void *payload, uint64_t payload_len, uint64_t payload_offset,
+	void *payload, uint64_t payload_len, uint64_t *payload_offset,
 	struct rte_mbuf **pkts_burst, uint32_t nb_pkt_per_burst
 ){
 	uint64_t i;
@@ -345,13 +345,15 @@ int sc_util_copy_payload_to_packet_burst(
 	#pragma unroll
 	for (i = 0; i < nb_pkt_per_burst; i++) {
 		if(unlikely(
-			SC_SUCCESS != sc_util_copy_buf_to_pkt(payload, payload_len, pkts_burst[i], payload_offset)
+			SC_SUCCESS != sc_util_copy_buf_to_pkt(payload, payload_len, pkts_burst[i], *payload_offset)
 		)){
 			SC_THREAD_ERROR("failed to copy payload to %luth pkt", i);
 			result = SC_ERROR_INTERNAL;
 			goto copy_payload_to_packet_burst_exit;
 		}
 	}
+
+	*payload_offset += payload_len;
 
 copy_payload_to_packet_burst_exit:
 	return result;

@@ -162,9 +162,16 @@ int _process_enter(struct sc_config *sc_config){
  * \return  zero for successfully processing
  */
 int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
+    uint64_t i;
     struct timeval current_time;
+    struct sc_timestamp_table *payload_timestamp;
+    uint64_t recv_ns, send_ns;
     long interval_s, interval_us, interval_overall_us;
 
+    /* record recv time */
+    recv_ns = sc_util_timestamp_ns();
+
+    // FIXME: move the print info to log thread
     /* record current time */
     if(unlikely(-1 == gettimeofday(&current_time, NULL))){
         SC_THREAD_ERROR_DETAILS("failed to obtain current time");
@@ -215,6 +222,18 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
     /* set as forwarded, default to first send port */
     *nb_fwd_pkts = nb_recv_pkts;
     *fwd_port_id  = INTERNAL_CONF(sc_config)->send_port_idx[0];
+
+    send_ns = sc_util_timestamp_ns();
+    for(i=0; i<nb_recv_pkts; i++){
+        payload_timestamp = rte_pktmbuf_mtod_offset(
+            pkt[i], struct sc_timestamp_table*, 
+            sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
+        );
+        
+        /* add both the recv & send timestamp to the timestamp table */
+        sc_util_add_half_timestamp(payload_timestamp, recv_ns);
+        sc_util_add_half_timestamp(payload_timestamp, send_ns);
+    }
 
     return SC_SUCCESS;
 }

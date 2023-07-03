@@ -28,6 +28,7 @@ enum {
     SC_ERROR_NOT_IMPLEMENTED
 };
 
+
 /* core operation */
 int sc_util_stick_this_thread_to_core(uint32_t core_id);
 int sc_util_check_core_id(uint32_t core_id);
@@ -58,5 +59,28 @@ uint32_t sc_util_random_unsigned_int32();
 uint64_t sc_util_random_unsigned_int64();
 uint16_t sc_util_random_unsigned_int16();
 uint8_t sc_util_random_unsigned_int8();
+
+/* byte operation */
+/*!
+ * \brief   get the ith byte inside data
+ * \param   data    the data to be masked
+ * \param   i       the specified byte index
+ * \return  extract byte
+ */
+template<typename data_type, typename index_type>
+__inline__ uint8_t sc_util_get_ith_byte(data_type data, index_type i){
+    return ((data>>i))&0x000000ff;
+}
+
+template<typename data_type, typename index_type, uint32_t byte_size>
+__inline__ data_type _sc_util_bytes_to_number(const uint8_t *raw, uint32_t depth){
+    return depth == byte_size - 1 ? raw[depth]
+        : raw[depth] + _sc_util_bytes_to_number<data_type, index_type, byte_size>(raw, depth+1);
+}
+
+template<typename data_type, typename index_type, uint64_t byte_size>
+__inline__ data_type sc_util_bytes_to_number(const uint8_t *raw){
+    return _sc_util_bytes_to_number<data_type, index_type, byte_size>(raw, 0);
+}
 
 #endif

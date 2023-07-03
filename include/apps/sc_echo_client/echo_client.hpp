@@ -10,12 +10,10 @@
 #include "sc_utils.hpp"
 #include "sc_utils/pktgen.hpp"
 #include "sc_utils/distribution_gen.hpp"
+#include "sc_utils/timestamp.hpp"
 
 
-#define SC_ECHO_CLIENT_MAX_LATENCY_NB (1UL << 24)-1
-
-#define SC_ECHO_CLIENT_PAYLOAD_LEN 24
-
+#define SC_ECHO_CLIENT_NB_TS_TABLE (1UL << 20)-1
 #define SC_ECHO_CLIENT_BURST_TX_RETRIES 16
 
 struct _per_core_app_meta {
@@ -43,9 +41,9 @@ struct _per_core_app_meta {
     sc_utils_distribution_uint64_generator* interval_generator;
     double payload_copy_latency;
     
-    uint64_t nb_latency_data;
-    uint64_t latency_data_pointer;
-    uint64_t latency_ns[SC_ECHO_CLIENT_MAX_LATENCY_NB];
+    uint64_t nb_ts_tables;
+    uint64_t ts_tables_pointer;
+    struct sc_timestamp_table ts_tables[SC_ECHO_CLIENT_NB_TS_TABLE];
 };
 
 /* definition of internal config */

@@ -111,8 +111,8 @@ static inline void list_del(struct list_entry *entry) {
  * \param   entry_ptr   pointer to the entry
  * \param   type        type of the target
  */
-#define LIST_ENTRY(target_ptr) ((struct list_entry*)target_ptr)
-#define LIST_TARGET(entry_ptr, type) ((type*)entry_ptr)
+#define SC_UTIL_LIST_ENTRY(target_ptr) ((struct list_entry*)target_ptr)
+#define SC_UTIL_LIST_TARGET(entry_ptr, type) ((type*)entry_ptr)
 
 
 /*!
@@ -122,7 +122,7 @@ static inline void list_del(struct list_entry *entry) {
  */
 #define LIST_FIRST_ENTRY(head_entry_ptr) ((head_entry_ptr)->next)
 #define LIST_FIRST_TARGET(head_entry_ptr, type) \
-    (LIST_TARGET(LIST_FIRST_ENTRY(head_entry_ptr), type))
+    (SC_UTIL_LIST_TARGET(LIST_FIRST_ENTRY(head_entry_ptr), type))
 
 /*!
  * \brief   get the first entry/target inside the link list, return
@@ -138,7 +138,7 @@ static inline void list_del(struct list_entry *entry) {
 #define LIST_FIRST_TARGET_OR_NULL(head_entry_ptr, type) ({      \
     struct list_entry *head__ = (head_entry_ptr);               \
     struct list_entry *pos__ = (head_entry_ptr)->next;          \
-    pos__ != head__ ? LIST_TARGET(pos__, type) : NULL;          \
+    pos__ != head__ ? SC_UTIL_LIST_TARGET(pos__, type) : NULL;          \
 })
 
 /*!
@@ -147,7 +147,7 @@ static inline void list_del(struct list_entry *entry) {
  * \param   type        type of the target
  */
 #define LIST_PREV_TARGET(target_ptr, type) \
-    (LIST_TARGET(LIST_ENTRY(target_ptr)->prev, type))
+    (SC_UTIL_LIST_TARGET(SC_UTIL_LIST_ENTRY(target_ptr)->prev, type))
 
 
 /*!
@@ -156,7 +156,7 @@ static inline void list_del(struct list_entry *entry) {
  * \param   type        type of the target
  */
 #define LIST_NEXT_TARGET(target_ptr, type) \
-    (LIST_TARGET(LIST_ENTRY(target_ptr)->next, type))
+    (SC_UTIL_LIST_TARGET(SC_UTIL_LIST_ENTRY(target_ptr)->next, type))
 
 /*!
  * \brief   iterate over a list,
@@ -167,9 +167,9 @@ static inline void list_del(struct list_entry *entry) {
  * \param   head_ptr    pointer to the head entry of the link list
  */
 #define LIST_FOR_EACH_SAFE(target_iter, target_iter_temp, head_entry_ptr, type) \
-    for(target_iter=LIST_NEXT_TARGET(LIST_TARGET(head_entry_ptr, type), type),  \
+    for(target_iter=LIST_NEXT_TARGET(SC_UTIL_LIST_TARGET(head_entry_ptr, type), type),  \
         target_iter_temp=LIST_NEXT_TARGET(target_iter, type);                   \
-        target_iter!=LIST_TARGET(head_entry_ptr, type);                         \ 
+        target_iter!=SC_UTIL_LIST_TARGET(head_entry_ptr, type);                         \ 
         target_iter=target_iter_temp,                                           \
         target_iter_temp=LIST_NEXT_TARGET(target_iter_temp, type)               \
     )
