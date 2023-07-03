@@ -394,7 +394,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
 
         /* set the timestamp number as 1, and the accuracy as short */
         sc_ts.nb_timestamp = 1;
-        sc_ts.timestamp_type = SC_TIMESTAMP_SHORT_TYPE;
+        sc_ts.timestamp_type = SC_TIMESTAMP_HALF_TYPE;
 
         /* 
          * record the timestamp
