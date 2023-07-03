@@ -362,7 +362,10 @@ _process_enter_exit:
 int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit){
     int i, j, nb_tx = 0, nb_send_pkt = 0, result = SC_SUCCESS, retry;
     uint64_t current_ns = 0;
-    struct sc_timestamp_table sc_ts = {0};
+
+    #if defined(SC_ECHO_CLIENT_GET_LATENCY)
+        struct sc_timestamp_table sc_ts = {0};
+    #endif // defined(SC_ECHO_CLIENT_GET_LATENCY)
 
     /* send packet */
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_ports; i++){
@@ -392,32 +395,33 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
             goto process_client_ready_to_exit;
         }
 
-        /* set the timestamp number as 1, and the accuracy as short */
-        sc_ts.nb_timestamp = 1;
-        sc_ts.timestamp_type = SC_TIMESTAMP_HALF_TYPE;
+        #if defined(SC_ECHO_CLIENT_GET_LATENCY)
+            /* set the accuracy as short */
+            sc_ts.timestamp_type = SC_TIMESTAMP_HALF_TYPE;
 
-        /* 
-         * record the timestamp
-         */
-        sc_util_add_half_timestamp(&sc_ts, sc_util_timestamp_ns());
+            /* 
+             * record the timestamp
+             */
+            sc_util_add_full_timestamp(&sc_ts, sc_util_timestamp_ns());
 
-        /* copy timestamp to payload */
-        if(SC_SUCCESS != sc_util_copy_payload_to_packet_burst(
-            /* payload */ &sc_ts,
-            /* payload_len */ sizeof(sc_ts),
-            /* payload_offset */ &(current_used_pkt->payload_offset),
-            /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
-            /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst
-        )){
-            SC_THREAD_ERROR("failed to copy payload to final packets");
-            result = SC_ERROR_INTERNAL;
-            goto process_client_ready_to_exit;
-        }
+            /* copy timestamp to payload */
+            if(SC_SUCCESS != sc_util_copy_payload_to_packet_burst(
+                /* payload */ &sc_ts,
+                /* payload_len */ sizeof(sc_ts),
+                /* payload_offset */ &(current_used_pkt->payload_offset),
+                /* pkts_burst */ PER_CORE_APP_META(sc_config).send_pkt_bufs,
+                /* nb_pkt_per_burst */ INTERNAL_CONF(sc_config)->nb_pkt_per_burst
+            )){
+                SC_THREAD_ERROR("failed to copy payload to final packets");
+                result = SC_ERROR_INTERNAL;
+                goto process_client_ready_to_exit;
+            }
 
-        /* we record the copy latency here to fix the latency statistic */
-        PER_CORE_APP_META(sc_config).payload_copy_latency +=
-            (double)(sc_util_timestamp_ns() - current_ns);
-        PER_CORE_APP_META(sc_config).payload_copy_latency /= (double)2.0f;
+            /* we record the copy latency here to fix the latency statistic */
+            PER_CORE_APP_META(sc_config).payload_copy_latency +=
+                (double)(sc_util_timestamp_ns() - current_ns);
+            PER_CORE_APP_META(sc_config).payload_copy_latency /= (double)2.0f;
+        #endif // defined(SC_ECHO_CLIENT_GET_LATENCY)
 
         nb_send_pkt = rte_eth_tx_burst(
             /* port_id */ INTERNAL_CONF(sc_config)->send_port_idx[i],
@@ -566,19 +570,26 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
         if(nb_recv_pkt == 0) { continue; }
         
         PER_CORE_APP_META(sc_config).nb_confirmed_pkt += nb_recv_pkt;
-
+        
         for(j=0; j<nb_recv_pkt; j++) {
             /* extract the timestamp struct */
             payload_timestamp = rte_pktmbuf_mtod_offset(
                 PER_CORE_APP_META(sc_config).recv_pkt_bufs[j], struct sc_timestamp_table*, 
                 sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
             );
-
-            /* add receive timestamp to the timestamp table */
-            sc_util_add_half_timestamp(payload_timestamp, current_ns);
             
+            /* skip wrong payload packet */
+            if(unlikely(payload_timestamp->timestamp_type != SC_TIMESTAMP_HALF_TYPE)){
+                continue;
+            }
+
+            #if defined(SC_ECHO_CLIENT_GET_LATENCY)
+                /* add receive timestamp to the timestamp table */
+                sc_util_add_half_timestamp(payload_timestamp, current_ns);
+            #endif defined(SC_ECHO_CLIENT_GET_LATENCY)
+
             /* copy the timestamp table to local collection */
-            memcpy(
+            rte_memcpy(
                 /* dst */ PER_CORE_APP_META(sc_config).ts_tables 
                     + PER_CORE_APP_META(sc_config).ts_tables_pointer,
                 /* src */ payload_timestamp,
@@ -660,10 +671,9 @@ int _all_exit(struct sc_config *sc_config){
         for(j=0; j<PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_ts_tables; j++){
             sc_ts = &(PER_CORE_APP_META_BY_CORE_ID(sc_config, i).ts_tables[j]);
             fprintf(
-                /* fd */ fp, "%lu\t%lu\t%lu\t%lu\t%lu\n", 
+                /* fd */ fp, "%u\t%u\t%u\t%u\t%u\n", 
                 /* core_id */ i,
-                /* client send time */ 
-                    sc_util_get_half_timestamp(sc_ts, 0) + (uint32_t)per_core_payload_copy_latency,
+                /* client send time */ sc_util_get_half_timestamp(sc_ts, 0),
                 /* server recv time */ sc_util_get_half_timestamp(sc_ts, 1),
                 /* server send time */ sc_util_get_half_timestamp(sc_ts, 2),
                 /* client recv time */ sc_util_get_half_timestamp(sc_ts, 3)
