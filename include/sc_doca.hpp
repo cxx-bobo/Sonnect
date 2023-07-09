@@ -31,7 +31,7 @@
 
 #include "sc_global.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 
 int init_doca(struct sc_config *sc_config, const char *doca_conf_path);
 struct per_core_doca_meta;

@@ -1,7 +1,7 @@
 #include "sc_global.hpp"
 #include "sc_sha/sha.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 #include "sc_utils/pktgen.hpp"
 #include "sc_utils/timestamp.hpp"
 
@@ -778,7 +778,7 @@ int _process_exit(struct sc_config *sc_config){
  * \param   sc_config   the global configuration
  * \return  zero for successfully executing
  */
-int _all_exit(struct sc_config *sc_config){
+int _worker_all_exit(struct sc_config *sc_config){
     return SC_SUCCESS;
 }
 

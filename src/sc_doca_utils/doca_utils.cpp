@@ -1,6 +1,6 @@
 #include "sc_global.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 #include "sc_doca_utils/doca_utils.hpp"
 
 #if defined(SC_HAS_DOCA)

@@ -15,8 +15,6 @@
 #define IPV4_ADDR(a, b, c, d)(((a & 0xff) << 24) | ((b & 0xff) << 16) | \
 		((c & 0xff) << 8) | (d & 0xff))
 
-#define SC_UTIL_TIME_INTERVL_US(sec, usec) usec + sec * 1000 * 1000
-
 /* header collection */
 struct sc_pkt_hdr {
 	/* ========== fields filled during generation ========== */

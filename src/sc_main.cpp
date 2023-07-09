@@ -14,7 +14,7 @@
 #include "sc_utils.hpp"
 #include "sc_worker.hpp"
 #include "sc_app.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 #if defined(SC_HAS_DOCA)
   #include "sc_doca.hpp"
 #endif
@@ -149,16 +149,16 @@ int main(int argc, char **argv){
   }
   SC_LOG("initialized worker threads");
 
-  /* initailize logging thread */
-  if(init_logging_thread(sc_config) != SC_SUCCESS){
-    SC_ERROR("failed to initialize logging thread\n");
+  /* initailize control-plane thread */
+  if(init_control_thread(sc_config) != SC_SUCCESS){
+    SC_ERROR("failed to initialize control-plane thread\n");
     result = EXIT_FAILURE;
     goto sc_exit;
   }
   SC_LOG("initialized logging threads");
 
-  /* launch logging thread */
-  if(launch_logging_thread_async(sc_config) != SC_SUCCESS){
+  /* launch control-plane thread */
+  if(launch_control_thread_async(sc_config) != SC_SUCCESS){
     SC_ERROR("failed to launch logging thread\n");
     result = EXIT_FAILURE;
     goto sc_exit;
@@ -352,8 +352,8 @@ static int _check_configuration(struct sc_config *sc_config, int argc, char **ar
         not an error, but giving warnings
      */
     for(i=0; i<sc_config->nb_used_cores; i++){
-        if(sc_config->core_ids[i] == sc_config->log_core_id){
-            SC_WARNING_DETAILS("the core for logging is conflict with other worker cores");
+        if(sc_config->core_ids[i] == sc_config->control_core_id){
+            SC_WARNING_DETAILS("the core for control plane is conflict with other worker cores");
             break;
         }
     }
@@ -750,20 +750,20 @@ invalid_nb_memory_channels_per_socket:
     }
 
     /* config: the core for logging */
-    else if(!strcmp(key, "log_core_id")){
-        uint32_t log_core_id;
+    else if(!strcmp(key, "control_core_id")){
+        uint32_t control_core_id;
         value = sc_util_del_both_trim(value);
         sc_util_del_change_line(value);
-        if (sc_util_atoui_32(value, &log_core_id) != SC_SUCCESS) {
+        if (sc_util_atoui_32(value, &control_core_id) != SC_SUCCESS) {
             result = SC_ERROR_INVALID_VALUE;
-            goto invalid_log_core_id;
+            goto invalid_control_core_id;
         }
 
-        sc_config->log_core_id = log_core_id;
+        sc_config->control_core_id = control_core_id;
         goto exit;
 
-invalid_log_core_id:
-        SC_ERROR_DETAILS("invalid configuration log_core_id\n");
+invalid_control_core_id:
+        SC_ERROR_DETAILS("invalid configuration control_core_id\n");
     }
 
     /* config: whether to enable test duration limit */

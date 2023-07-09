@@ -1,7 +1,7 @@
 #include "sc_global.hpp"
 #include "sc_utils/pktgen.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 #include "sc_utils/rss.hpp"
 #include "sc_utils/timestamp.hpp"
 

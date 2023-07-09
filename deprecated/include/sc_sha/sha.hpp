@@ -49,7 +49,7 @@ int _process_enter(struct sc_config *sc_config);
 int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts);
 int _process_client(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
 int _process_exit(struct sc_config *sc_config);
-int _all_exit(struct sc_config *sc_config);
+int _worker_all_exit(struct sc_config *sc_config);
 
 void sha256_process_arm(uint32_t state[8], const uint8_t data[], uint32_t length);
 void sha256_process_x86(uint32_t state[8], const uint8_t data[], uint32_t length);

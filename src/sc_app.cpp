@@ -1,7 +1,7 @@
 #include "sc_global.hpp"
 #include "sc_utils.hpp"
 #include "sc_app.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 
 /*!
  * \brief   initialize application
@@ -31,18 +31,29 @@ int init_app(struct sc_config *sc_config, const char *app_conf_path){
     sc_config->app_config->internal_config = _internal_config;
 
     /* allocate per-core worker function array */
-    struct per_core_worker_func *per_core_worker_func = NULL;
-    per_core_worker_func = (struct per_core_worker_func*)rte_malloc(NULL, sizeof(struct per_core_worker_func)
+    struct per_core_worker_func *per_core_worker_funcs = NULL;
+    per_core_worker_funcs = (struct per_core_worker_func*)rte_malloc(NULL, sizeof(struct per_core_worker_func)
                             *sc_config->nb_used_cores, 0);
-    if(unlikely(!per_core_worker_func)){
-        SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_worker_func");
+    if(unlikely(!per_core_worker_funcs)){
+        SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_worker_funcs");
         return SC_ERROR_MEMORY;
     }
-    memset(per_core_worker_func, 0, sizeof(struct per_core_worker_func)*sc_config->nb_used_cores);
-    sc_config->per_core_worker_funcs = per_core_worker_func;
+    memset(per_core_worker_funcs, 0, sizeof(struct per_core_worker_func)*sc_config->nb_used_cores);
+    sc_config->per_core_worker_funcs = per_core_worker_funcs;
+
+    /* allocate per-core control function array */
+    struct per_core_control_func *per_core_control_funcs = NULL;
+    per_core_control_funcs = (struct per_core_control_func*)rte_malloc(NULL, sizeof(struct per_core_control_func)
+                            *sc_config->nb_used_cores, 0);
+    if(unlikely(!per_core_control_funcs)){
+        SC_ERROR_DETAILS("failed to rte_malloc memory for per_core_control_funcs");
+        return SC_ERROR_MEMORY;
+    }
+    memset(per_core_control_funcs, 0, sizeof(struct per_core_control_func)*sc_config->nb_used_cores);
+    sc_config->per_core_control_funcs = per_core_control_funcs;
 
     /* specify the all exit callback function */
-    sc_config->app_config->all_exit = _all_exit;
+    sc_config->app_config->worker_all_exit = _worker_all_exit;
 
     /* open application configuration file */
     fp = fopen(app_conf_path, "r");

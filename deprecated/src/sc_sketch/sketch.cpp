@@ -1,7 +1,7 @@
 #include "sc_global.hpp"
 #include "sc_sketch/sketch.h"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 
 #include "sc_utils/map.hpp"
 
@@ -412,6 +412,6 @@ process_exit_exit:
  * \param   sc_config   the global configuration
  * \return  zero for successfully executing
  */
-int _all_exit(struct sc_config *sc_config){
+int _worker_all_exit(struct sc_config *sc_config){
     return SC_ERROR_NOT_IMPLEMENTED;
 }

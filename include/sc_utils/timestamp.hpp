@@ -6,6 +6,8 @@
 
 #include "sc_utils.hpp"
 
+#define SC_UTIL_TIME_INTERVL_US(sec, usec) usec + sec * 1000 * 1000
+
 #define SC_FULL_TIMESTAMP_LEN 8
 #define SC_HALF_TIMESTAMP_LEN 4     /* 4,294,967,296 ns */
 #define SC_SHORT_TIMESTAMP_LEN 2    /* 65536 ns */

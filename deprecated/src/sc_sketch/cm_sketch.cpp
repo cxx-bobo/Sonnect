@@ -1,6 +1,6 @@
 #include "sc_global.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 #include "sc_sketch/sketch.h"
 #include "sc_sketch/cm_sketch.h"
 #include "sc_sketch/spooky-c.h"

@@ -2,7 +2,7 @@
 #include "sc_worker.hpp"
 #include "sc_utils.hpp"
 #include "sc_mbuf.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 
 extern volatile bool sc_force_quit;
 
@@ -52,8 +52,6 @@ int _worker_loop(void* param){
         bool ready_to_exit = false;
     #endif // ROLE_CLIENT
 
-    
-
     /* initialize woker loop */
     result = __worker_loop_init(sc_config);
     if(result != SC_SUCCESS){
@@ -61,6 +59,7 @@ int _worker_loop(void* param){
         goto worker_exit;
     }
 
+    /* determain the queue id */
     for(i=0; i<sc_config->nb_used_cores; i++){
         if(sc_config->core_ids[i] == rte_lcore_id()){
             queue_id = i;
@@ -82,41 +81,12 @@ int _worker_loop(void* param){
         }
     }
 
-    /* record thread start time while test duration limitation is enabled */
-    if(sc_config->enable_test_duration_limit && lcore_id_from_zero == 0){
-        if(unlikely(-1 == gettimeofday(&sc_config->test_duration_start_time, NULL))){
-            SC_THREAD_ERROR_DETAILS("failed to obtain start time");
-            result = SC_ERROR_INTERNAL;
-            goto worker_exit;
-        }
-    }
-
     /* Hook Point: Enter */    
     if(SC_SUCCESS != process_enter_func(sc_config)){
         SC_THREAD_WARNING("error occurs while executing enter callback\n");
     }
 
     while(!sc_force_quit){
-        /* 
-         * use core 0 to shutdown the application while test duration 
-         * limitation is enabled and the limitation is reached
-         */
-        if(sc_config->enable_test_duration_limit && lcore_id_from_zero == 0){
-            /* record current time */
-            if(unlikely(-1 == gettimeofday(&sc_config->test_duration_end_time, NULL))){
-                SC_THREAD_ERROR_DETAILS("failed to obtain end time");
-                result = SC_ERROR_INTERNAL;
-                goto worker_exit;
-            }
-
-            /* reach the duration limitation, quit all threads */
-            if(sc_config->test_duration_end_time.tv_sec - sc_config->test_duration_start_time.tv_sec 
-                >= sc_config->test_duration){
-                    sc_force_quit = true;
-                    break;
-            }
-        }
-
         /* role: server */
         #if defined(ROLE_SERVER)
             for(i=0; i<sc_config->nb_used_ports; i++){
@@ -229,8 +199,8 @@ int launch_worker_threads(struct sc_config *sc_config){
     launch_worker_threads_async(sc_config);
     rte_eal_mp_wait_lcore();
 
-    /* Hook Point: all exit */
-    if(sc_config->app_config->all_exit(sc_config) != SC_SUCCESS){
+    /* Hook Point: Worker All Exit */
+    if(sc_config->app_config->worker_all_exit(sc_config) != SC_SUCCESS){
         SC_THREAD_WARNING("error occured while executing all exit callbacks");
     }
 

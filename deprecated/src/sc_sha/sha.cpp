@@ -3,7 +3,7 @@
 #include "sc_utils/tail_latency.hpp"
 #include "sc_utils/pktgen.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 #include "sc_app.hpp"
 
 int __reload_sha_state(struct sc_config *sc_config);
@@ -564,7 +564,7 @@ _process_exit_exit:
  * \param   sc_config   the global configuration
  * \return  zero for successfully executing
  */
-int _all_exit(struct sc_config *sc_config){
+int _worker_all_exit(struct sc_config *sc_config){
     int i;
     uint64_t nb_processed_pkt = 0;
 

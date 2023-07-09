@@ -1,9 +1,10 @@
 #include "sc_global.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 #include "sc_utils/pktgen.hpp"
 #include "sc_utils/tail_latency.hpp"
 #include "sc_utils/sort.hpp"
+#include "sc_utils/timestamp.hpp"
 
 int __bubble_sort(long *data, uint64_t length, bool is_increament);
 

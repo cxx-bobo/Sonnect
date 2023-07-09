@@ -14,7 +14,7 @@
 #include <rte_ether.h>
 
 #include "sc_global.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 
 /*!
  * \brief all return status

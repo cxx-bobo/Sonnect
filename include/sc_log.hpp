@@ -1,5 +1,5 @@
-#ifndef _SC_LOG_H_
-#define _SC_LOG_H_
+#ifndef _SC_LOG_HPP_
+#define _SC_LOG_HPP_
 
 #include <time.h>
 #include <pthread.h>
@@ -12,9 +12,9 @@ extern pthread_mutex_t thread_log_mutex;
 
 extern __thread uint32_t perthread_lcore_logical_id;
 
-int init_logging_thread(struct sc_config *sc_config);
-int launch_logging_thread_async(struct sc_config *sc_config);
-int join_logging_thread(struct sc_config *sc_config);
+int init_control_thread(struct sc_config *sc_config);
+int launch_control_thread_async(struct sc_config *sc_config);
+int join_control_thread(struct sc_config *sc_config);
 
 #define SC_LOG_ENABLE true
 

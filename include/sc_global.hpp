@@ -63,9 +63,9 @@ struct sc_config {
     uint32_t core_ids[SC_MAX_NB_CORES];
     uint32_t nb_used_cores;
 
-    /* logging */
-    uint32_t log_core_id;
-    pthread_t *logging_thread;
+    /* control */
+    uint32_t control_core_id;
+    pthread_t *control_thread;
     pthread_mutex_t *timer_mutex;
 
     /* dpdk port */
@@ -97,21 +97,23 @@ struct sc_config {
     /* application per-core metadata */
     void *per_core_app_meta;
 
-    /* worker functions dispatching */
+    /* per-core worker functions dispatching */
     struct per_core_worker_func *per_core_worker_funcs;
-
-    /* per-core metadata */
-    struct per_core_meta *per_core_meta;
 
     /* pthread barrier for sync all worker thread */
     pthread_barrier_t pthread_barrier;
 
+    /* per-core control function dispatching */
+    struct per_core_control_func *per_core_control_funcs;
+
+    /* per-core metadata */
+    struct per_core_meta *per_core_meta;
+
     /* test duration (of worker) */
     bool enable_test_duration_limit;
-    uint64_t test_duration;
+    uint64_t test_duration;     // unit: seconds
     struct timeval test_duration_start_time;
     struct timeval test_duration_end_time;
-    struct timeval test_duration_tick_time;
 
     /* doca specific configurations */
     #if defined(SC_HAS_DOCA)
@@ -137,12 +139,17 @@ extern __thread uint32_t perthread_lcore_logical_id;
 #define PER_CORE_WORKER_FUNC_BY_CORE_ID(scc, id)((struct per_core_worker_func*)scc->per_core_worker_funcs)\
         [id]
 
+#define PER_CORE_CONTROL_FUNC(scc)((struct per_core_control_func*)scc->per_core_control_funcs)\
+        [perthread_lcore_logical_id]
+#define PER_CORE_CONTROL_FUNC_BY_CORE_ID(scc, id)((struct per_core_control_func*)scc->per_core_control_funcs)\
+        [id]
+
 #define INTERNAL_CONF(scc) ((struct _internal_config*)scc->app_config->internal_config)
 
 /* application specific configuration */
 struct app_config {    
-    /* callback function (main thread): operations while all thread exits */
-    int (*all_exit)(struct sc_config *sc_config);
+    /* callback function (main thread): operations while all worker thread exits */
+    int (*worker_all_exit)(struct sc_config *sc_config);
 
     /* internal configuration of the application */
     void *internal_config;
@@ -162,6 +169,10 @@ typedef int (*process_pkt_drop_t)(struct sc_config *sc_config, struct rte_mbuf *
 typedef int (*process_client_t)(struct sc_config *sc_config, uint16_t queue_id, bool *ready_to_exit);
 
 
+typedef int (*control_enter_t)(struct sc_config *sc_config, uint32_t worker_core_id);
+typedef int (*control_infly_t)(struct sc_config *sc_config, uint32_t worker_core_id);
+typedef int (*control_exit_t)(struct sc_config *sc_config, uint32_t worker_core_id);
+
 /* dispatch different woker logic to different cores */
 struct per_core_worker_func {
     // common functions
@@ -173,7 +184,19 @@ struct per_core_worker_func {
     process_pkt_drop_t  process_pkt_drop_func;
 
     // client functions
-    process_client_t   process_client_func;
+    process_client_t   process_client_func;    
+};
+
+struct per_core_control_func {
+    control_enter_t control_enter_func;
+    control_infly_t control_infly_func;
+    control_exit_t control_exit_func;
+
+    // interval of the execution of infly function
+    uint64_t infly_interval;    // unit: us
+
+    // the latest timestamp of the execution of infly function
+    struct timeval infly_last_time;
 };
 
 #endif // _SC_GLOBAL_H_

@@ -1,9 +1,10 @@
 #include "sc_global.hpp"
 #include "sc_echo_server/echo_server.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 #include "sc_app.hpp"
 #include "sc_utils/pktgen.hpp"
+#include "sc_utils/timestamp.hpp"
 
 /*!
  * \brief   parse application-specific key-value configuration pair
@@ -308,7 +309,7 @@ int _process_exit(struct sc_config *sc_config){
  * \param   sc_config   the global configuration
  * \return  zero for successfully executing
  */
-int _all_exit(struct sc_config *sc_config){
+int _worker_all_exit(struct sc_config *sc_config){
     int i;
     uint64_t overall_forward = 0, overall_drop = 0;
     double overall_throughput = 0.0f;

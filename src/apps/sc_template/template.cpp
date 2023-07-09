@@ -1,7 +1,7 @@
 #include "sc_global.hpp"
 #include "sc_template/template.h"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 
 /*!
  * \brief   parse application-specific key-value configuration pair
@@ -79,7 +79,37 @@ int _process_exit(struct sc_config *sc_config){
  * \param   sc_config   the global configuration
  * \return  zero for successfully executing
  */
-int _all_exit(struct sc_config *sc_config){
+int _worker_all_exit(struct sc_config *sc_config){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   callback while entering control-plane thread
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully initialization
+ */
+int _control_enter(struct sc_config *sc_config, uint32_t worker_core_id){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   callback during control-plane thread runtime
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully execution
+ */
+int _control_infly(struct sc_config *sc_config, uint32_t worker_core_id){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   callback while exiting control-plane thread
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully execution
+ */
+int _control_exit(struct sc_config *sc_config, uint32_t worker_core_id){
     return SC_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -92,12 +122,17 @@ int _init_app(struct sc_config *sc_config){
     int i;
     
     for(i=0; i<sc_config->nb_used_cores; i++){
-        /* TODO: dispatch processing functions here */
+        /* worker functions */
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client;
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func  = _process_pkt;
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_drop_func = _process_pkt_drop;
+
+        /* control functions */
+        PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_enter_func = _control_enter;
+        PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_infly_func = _control_infly;
+        PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_exit_func = _control_exit;
     }
 
     SC_WARNING_DETAILS("_init_app not implemented");

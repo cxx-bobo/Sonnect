@@ -9,7 +9,7 @@
 #include "sc_utils/rss.hpp"
 #include "sc_utils/tail_latency.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 
 /*!
  * \brief   parse application-specific key-value configuration pair
@@ -648,7 +648,7 @@ int _process_exit_receiver(struct sc_config *sc_config){
  * \param   sc_config   the global configuration
  * \return  zero for successfully executing
  */
-int _all_exit(struct sc_config *sc_config){
+int _worker_all_exit(struct sc_config *sc_config){
     int result = SC_SUCCESS;
     uint8_t nb_timestamp = 0;
     uint32_t i, j, k;
@@ -672,7 +672,7 @@ int _all_exit(struct sc_config *sc_config){
     if (!fp) {
         SC_ERROR("failed to create/open log file to store latency statistics");
         result = SC_ERROR_INTERNAL;
-        goto all_exit_exit;
+        goto worker_all_exit_exit;
     }
     for(i=sc_config->nb_used_cores/2; i<sc_config->nb_used_cores; i++){
         for(j=0; j<PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_ts_tables; j++){
@@ -734,8 +734,70 @@ int _all_exit(struct sc_config *sc_config){
         / (float)(SC_UTIL_TIME_INTERVL_US(worker_max_interval_sec, worker_max_interval_usec))
     );
 
-all_exit_exit:
+worker_all_exit_exit:
     return SC_SUCCESS;
+}
+
+/*!
+ * \brief   callback while entering control-plane thread (for sender)
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully initialization
+ */
+int _control_enter_sender(struct sc_config *sc_config, uint32_t worker_core_id){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   callback during control-plane thread runtime (for sender)
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully execution
+ */
+int _control_infly_sender(struct sc_config *sc_config, uint32_t worker_core_id){
+    SC_LOG("hello from receiver control from core %u", worker_core_id);
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   callback while exiting control-plane thread (for sender)
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully execution
+ */
+int _control_exit_sender(struct sc_config *sc_config, uint32_t worker_core_id){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   callback while entering control-plane thread (for receiver)
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully initialization
+ */
+int _control_enter_receiver(struct sc_config *sc_config, uint32_t worker_core_id){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   callback during control-plane thread runtime (for receiver)
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully execution
+ */
+int _control_infly_receiver(struct sc_config *sc_config, uint32_t worker_core_id){
+    SC_LOG("hello from receiver control from core %u", worker_core_id);
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   callback while exiting control-plane thread (for receiver)
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully execution
+ */
+int _control_exit_receiver(struct sc_config *sc_config, uint32_t worker_core_id){
+    return SC_ERROR_NOT_IMPLEMENTED;
 }
 
 /*!
@@ -746,50 +808,55 @@ all_exit_exit:
 int _init_app(struct sc_config *sc_config){
     int i;
 
-    // if(sc_config->nb_used_cores % 2 != 0){
-    //     SC_ERROR_DETAILS("number of used cores (%u) should be a power of 2",
-    //         sc_config->nb_used_cores
-    //     );
-    //     return SC_ERROR_INVALID_VALUE;
-    // }
+    if(sc_config->nb_used_cores % 2 != 0){
+        SC_ERROR_DETAILS("number of used cores (%u) should be a power of 2",
+            sc_config->nb_used_cores
+        );
+        return SC_ERROR_INVALID_VALUE;
+    }
 
-    // if(sc_config->nb_used_cores != sc_config->nb_rx_rings_per_port*2){
-    //     SC_ERROR_DETAILS("number of rx queues (%u) should be half of the number of used cores (%u)",
-    //         sc_config->nb_rx_rings_per_port,
-    //         sc_config->nb_used_cores
-    //     );
-    //     return SC_ERROR_INVALID_VALUE;
-    // }
+    if(sc_config->nb_used_cores != sc_config->nb_rx_rings_per_port*2){
+        SC_ERROR_DETAILS("number of rx queues (%u) should be half of the number of used cores (%u)",
+            sc_config->nb_rx_rings_per_port,
+            sc_config->nb_used_cores
+        );
+        return SC_ERROR_INVALID_VALUE;
+    }
 
-    // if(sc_config->nb_used_cores != sc_config->nb_tx_rings_per_port*2){
-    //     SC_ERROR_DETAILS("number of tx queues (%u) should be half of the number of used cores (%u)",
-    //         sc_config->nb_tx_rings_per_port,
-    //         sc_config->nb_used_cores
-    //     );
-    //     return SC_ERROR_INVALID_VALUE;
-    // }
+    if(sc_config->nb_used_cores != sc_config->nb_tx_rings_per_port*2){
+        SC_ERROR_DETAILS("number of tx queues (%u) should be half of the number of used cores (%u)",
+            sc_config->nb_tx_rings_per_port,
+            sc_config->nb_used_cores
+        );
+        return SC_ERROR_INVALID_VALUE;
+    }
 
     /* 
         dispatch processing functions:
-            using half of cores for sending, half of cores for receiving
+        using half of cores for sending, half of cores for receiving
     */
     for(i=0; i<sc_config->nb_used_cores; i++){
-        /* sender */
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_sender;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_sender;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_sender;
-
-        // if(i < sc_config->nb_used_cores/2){
-        //     /* sender */
-        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_sender;
-        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_sender;
-        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_sender;
-        // } else {
-        //     /* receiver */
-        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_receiver;
-        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_receiver;
-        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_receiver;
-        // }
+        if(i < sc_config->nb_used_cores/2){
+            /* sender (worker functions) */
+            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_sender;
+            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_sender;
+            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_sender;
+            /* sender (control functions) */
+            PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_enter_func = _control_enter_sender;
+            PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_infly_func = _control_infly_sender;
+            PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_exit_func = _control_exit_sender;
+            PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).infly_interval = 1000000;
+        } else {
+            /* receiver (worker functions) */
+            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_receiver;
+            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_receiver;
+            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_receiver;
+            /* sender (control functions) */
+            PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_enter_func = _control_enter_receiver;
+            PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_infly_func = _control_infly_receiver;
+            PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_exit_func = _control_exit_receiver;
+            PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).infly_interval = 1000000;
+        }
     }
 
     return SC_SUCCESS;

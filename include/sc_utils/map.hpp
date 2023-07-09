@@ -8,7 +8,7 @@
 
 #include "sc_global.hpp"
 #include "sc_utils.hpp"
-#include "sc_log.hpp"
+#include "sc_control_plane.hpp"
 
 typedef struct kv_entry {
     void *key;
