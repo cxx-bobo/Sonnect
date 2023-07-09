@@ -3,6 +3,7 @@
 #include "sc_utils.hpp"
 #include "sc_log.hpp"
 #include "sc_utils/pktgen.hpp"
+#include "sc_utils/timestamp.hpp"
 
 /*!
  * \brief   parse application-specific key-value configuration pair
@@ -577,12 +578,17 @@ int doca_result, result = SC_SUCCESS;
     uint64_t nb_finished_pkts = 0;
     struct timeval current_time;
     long interval_s, interval_us, interval_overall_us;
-
     double received_pkts_throughput = 0.0f;
     double enqueued_pkts_throughput = 0.0f;
     double finished_pkts_throughput = 0.0f;
     double send_pkts_throughput = 0.0f;
     double drop_pkts_throughput = 0.0f;
+
+    #if defined(SC_SHA_GET_LATENCY)
+        struct sc_timestamp_table *payload_timestamp;
+        uint64_t recv_ns, send_ns;
+        recv_ns = sc_util_timestamp_ns();
+    #endif // defined(SC_SHA_GET_LATENCY)
 
     PER_CORE_APP_META(sc_config).nb_received_pkts += nb_recv_pkts;
     PER_CORE_APP_META(sc_config).interval_nb_received_pkts += nb_recv_pkts;
@@ -654,46 +660,71 @@ int doca_result, result = SC_SUCCESS;
     PER_CORE_APP_META(sc_config).nb_finished_pkts += nb_finished_pkts;
     PER_CORE_APP_META(sc_config).interval_nb_finished_pkts += nb_finished_pkts;
 
-    /* record current time */
-    if(unlikely(-1 == gettimeofday(&current_time, NULL))){
-        SC_THREAD_ERROR_DETAILS("failed to obtain current time");
-        return SC_ERROR_INTERNAL;
-    }
+    #if defined(SC_SHA_GET_LATENCY)
+        send_ns = sc_util_timestamp_ns();
+        for(i=0; i<nb_recv_pkts; i++){
+            /* skip empty payload packet */
+            // if(unlikely(pkt[i]->buf_addr == NULL)){
+            //     continue;
+            // }
 
-    if(rte_lcore_id() == 0){
-        interval_s = current_time.tv_sec - PER_CORE_APP_META(sc_config).last_record_time.tv_sec;
-        interval_us = current_time.tv_usec - PER_CORE_APP_META(sc_config).last_record_time.tv_usec;
-        interval_overall_us = SC_UTIL_TIME_INTERVL_US(interval_s, interval_us);
-
-        if(interval_overall_us >= 1000000){
-            for(i=0; i<sc_config->nb_used_cores; i++){
-                received_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_received_pkts))
-                        / (double)(interval_overall_us) /* Mops */;
-                enqueued_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_enqueued_pkts))
-                        / (double)(interval_overall_us) /* Mops */;
-                finished_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_finished_pkts))
-                        / (double)(interval_overall_us) /* Mops */;
-                send_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_send_pkts))
-                        / (double)(interval_overall_us) /* Mops */;
-                drop_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_drop_pkts))
-                        / (double)(interval_overall_us) /* Mops */;
-                
-                PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_received_pkts = 0.0f;
-                PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_enqueued_pkts = 0.0f;
-                PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_finished_pkts = 0.0f;
-                PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_send_pkts = 0.0f;
-                PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_drop_pkts = 0.0f;
-            }
-            
-            printf(
-                "throughput: receive %lf Mops | enqueue %lf Mops | drop %lf Mops | finished %lf Mops | send %lf Mops\n",
-                received_pkts_throughput, enqueued_pkts_throughput, drop_pkts_throughput,
-                finished_pkts_throughput, send_pkts_throughput
+            payload_timestamp = rte_pktmbuf_mtod_offset(
+                pkt[i], struct sc_timestamp_table*, 
+                sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
             );
 
-            PER_CORE_APP_META(sc_config).last_record_time = current_time;
+            /* skip wrong payload packet */
+            if(unlikely(payload_timestamp->timestamp_type != SC_TIMESTAMP_FULL_TYPE)){
+                continue;
+            }
+
+            /* add both the recv & send timestamp to the timestamp table */
+            // FIXME: the following timestamp record will drag down the throughput (33M -> 20M for single core)
+            sc_util_add_full_timestamp(payload_timestamp, recv_ns);
+            sc_util_add_full_timestamp(payload_timestamp, send_ns);
         }
-    }
+    #endif
+
+    /* record current time */
+    // if(unlikely(-1 == gettimeofday(&current_time, NULL))){
+    //     SC_THREAD_ERROR_DETAILS("failed to obtain current time");
+    //     return SC_ERROR_INTERNAL;
+    // }
+
+    // if(rte_lcore_id() == 0){
+    //     interval_s = current_time.tv_sec - PER_CORE_APP_META(sc_config).last_record_time.tv_sec;
+    //     interval_us = current_time.tv_usec - PER_CORE_APP_META(sc_config).last_record_time.tv_usec;
+    //     interval_overall_us = SC_UTIL_TIME_INTERVL_US(interval_s, interval_us);
+
+    //     if(interval_overall_us >= 1000000){
+    //         for(i=0; i<sc_config->nb_used_cores; i++){
+    //             received_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_received_pkts))
+    //                     / (double)(interval_overall_us) /* Mops */;
+    //             enqueued_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_enqueued_pkts))
+    //                     / (double)(interval_overall_us) /* Mops */;
+    //             finished_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_finished_pkts))
+    //                     / (double)(interval_overall_us) /* Mops */;
+    //             send_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_send_pkts))
+    //                     / (double)(interval_overall_us) /* Mops */;
+    //             drop_pkts_throughput += (double)((PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_drop_pkts))
+    //                     / (double)(interval_overall_us) /* Mops */;
+                
+    //             PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_received_pkts = 0.0f;
+    //             PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_enqueued_pkts = 0.0f;
+    //             PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_finished_pkts = 0.0f;
+    //             PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_send_pkts = 0.0f;
+    //             PER_CORE_APP_META_BY_CORE_ID(sc_config, i).interval_nb_drop_pkts = 0.0f;
+    //         }
+            
+    //         SC_THREAD_LOG_LOCKLESS(
+    //             "throughput: receive %lf Mops | enqueue %lf Mops | drop %lf Mops | finished %lf Mops | send %lf Mops\n",
+    //             received_pkts_throughput, enqueued_pkts_throughput, drop_pkts_throughput,
+    //             finished_pkts_throughput, send_pkts_throughput
+    //         );
+
+    //         PER_CORE_APP_META(sc_config).last_record_time = current_time;
+    //     }
+    // }
 
     *nb_fwd_pkts = nb_recv_pkts;
     *fwd_port_id  = INTERNAL_CONF(sc_config)->send_port_idx[0];

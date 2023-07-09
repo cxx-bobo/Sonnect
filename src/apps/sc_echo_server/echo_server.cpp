@@ -164,12 +164,13 @@ int _process_enter(struct sc_config *sc_config){
 int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
     uint64_t i;
     struct timeval current_time;
-    struct sc_timestamp_table *payload_timestamp;
-    uint64_t recv_ns, send_ns;
     long interval_s, interval_us, interval_overall_us;
-
-    /* record recv time */
-    recv_ns = sc_util_timestamp_ns();
+    
+    #if defined(SC_ECHO_SERVER_GET_LATENCY)
+        struct sc_timestamp_table *payload_timestamp;
+        uint64_t recv_ns, send_ns;
+        recv_ns = sc_util_timestamp_ns();
+    #endif // defined(SC_ECHO_SERVER_GET_LATENCY)
 
     // FIXME: move the print info to log thread
     /* record current time */
@@ -198,11 +199,11 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
                     PER_CORE_APP_META(sc_config).throughput_pointer = 0;
                 }
 
-                SC_THREAD_LOG(
-                    "throughput: %lf Mpps, drop throughput: %lf Mpps",
-                    throughput / (double)pkt[0]->pkt_len * (double)1000,
-                    drop_throughput / (double)pkt[0]->pkt_len * (double)1000
-                );
+                // SC_THREAD_LOG(
+                //     "throughput: %lf Mpps, drop throughput: %lf Mpps",
+                //     throughput / (double)pkt[0]->pkt_len * (double)1000,
+                //     drop_throughput / (double)pkt[0]->pkt_len * (double)1000
+                // );
             }
         } else {
             // SC_THREAD_LOG("throughput: 0.0 Mpps");
@@ -223,28 +224,30 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
     *nb_fwd_pkts = nb_recv_pkts;
     *fwd_port_id  = INTERNAL_CONF(sc_config)->send_port_idx[0];
 
-    send_ns = sc_util_timestamp_ns();
-    for(i=0; i<nb_recv_pkts; i++){
-        /* skip empty payload packet */
-        // if(unlikely(pkt[i]->buf_addr == NULL)){
-        //     continue;
-        // }
+    #if defined(SC_ECHO_SERVER_GET_LATENCY)
+        send_ns = sc_util_timestamp_ns();
+        for(i=0; i<nb_recv_pkts; i++){
+            /* skip empty payload packet */
+            // if(unlikely(pkt[i]->buf_addr == NULL)){
+            //     continue;
+            // }
 
-        payload_timestamp = rte_pktmbuf_mtod_offset(
-            pkt[i], struct sc_timestamp_table*, 
-            sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
-        );
+            payload_timestamp = rte_pktmbuf_mtod_offset(
+                pkt[i], struct sc_timestamp_table*, 
+                sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
+            );
 
-        /* skip wrong payload packet */
-        if(unlikely(payload_timestamp->timestamp_type != SC_TIMESTAMP_HALF_TYPE)){
-            continue;
+            /* skip wrong payload packet */
+            if(unlikely(payload_timestamp->timestamp_type != SC_TIMESTAMP_HALF_TYPE)){
+                continue;
+            }
+
+            /* add both the recv & send timestamp to the timestamp table */
+            // FIXME: the following timestamp record will drag down the throughput (33M -> 20M for single core)
+            sc_util_add_full_timestamp(payload_timestamp, recv_ns);
+            sc_util_add_full_timestamp(payload_timestamp, send_ns);
         }
-
-        /* add both the recv & send timestamp to the timestamp table */
-        // FIXME: the following timestamp record will drag down the throughput (33M -> 20M for single core)
-        sc_util_add_half_timestamp(payload_timestamp, recv_ns);
-        sc_util_add_half_timestamp(payload_timestamp, send_ns);
-    }
+    #endif // defined(SC_ECHO_SERVER_GET_LATENCY)
 
     return SC_SUCCESS;
 }
