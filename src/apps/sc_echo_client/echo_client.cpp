@@ -397,7 +397,7 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
 
         #if defined(SC_ECHO_CLIENT_GET_LATENCY)
             /* set the accuracy as short */
-            sc_ts.timestamp_type = SC_TIMESTAMP_HALF_TYPE;
+            sc_ts.timestamp_type = SC_TIMESTAMP_FULL_TYPE;
 
             /* 
              * record the timestamp
@@ -452,6 +452,8 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
 
         /* update sending timestamp and interval */
         PER_CORE_APP_META(sc_config).last_send_timestamp = current_ns;
+
+        /* FIXME: use timer to control the interval (according to a parameter) */
         PER_CORE_APP_META(sc_config).interval = PER_CORE_APP_META(sc_config).interval_generator->next();
     }
 
@@ -579,16 +581,21 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
             );
             
             /* skip wrong payload packet */
-            if(unlikely(payload_timestamp->timestamp_type != SC_TIMESTAMP_HALF_TYPE)){
+            if(unlikely(payload_timestamp->timestamp_type != SC_TIMESTAMP_FULL_TYPE)){
                 continue;
             }
 
             #if defined(SC_ECHO_CLIENT_GET_LATENCY)
                 /* add receive timestamp to the timestamp table */
-                sc_util_add_half_timestamp(payload_timestamp, current_ns);
+                sc_util_add_full_timestamp(payload_timestamp, current_ns);
+
+                if(sc_util_get_full_timestamp(payload_timestamp, 1) < sc_util_get_full_timestamp(payload_timestamp, 0)){
+                    SC_THREAD_WARNING("why!: t2: %lu, t1: %lu", sc_util_get_full_timestamp(payload_timestamp, 1), sc_util_get_full_timestamp(payload_timestamp, 0));
+                }
             #endif defined(SC_ECHO_CLIENT_GET_LATENCY)
 
             /* copy the timestamp table to local collection */
+            
             rte_memcpy(
                 /* dst */ PER_CORE_APP_META(sc_config).ts_tables 
                     + PER_CORE_APP_META(sc_config).ts_tables_pointer,
@@ -667,16 +674,14 @@ int _all_exit(struct sc_config *sc_config){
         result = SC_ERROR_INTERNAL;
         goto all_exit_exit;
     }
-    for(i=0; i<sc_config->nb_used_cores; i++){
+    for(i=sc_config->nb_used_cores/2; i<sc_config->nb_used_cores; i++){
         for(j=0; j<PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_ts_tables; j++){
             sc_ts = &(PER_CORE_APP_META_BY_CORE_ID(sc_config, i).ts_tables[j]);
             fprintf(
-                /* fd */ fp, "%u\t%u\t%u\t%u\t%u\n", 
+                /* fd */ fp, "%u\t%lu\t%lu\n", 
                 /* core_id */ i,
-                /* client send time */ sc_util_get_half_timestamp(sc_ts, 0),
-                /* server recv time */ sc_util_get_half_timestamp(sc_ts, 1),
-                /* server send time */ sc_util_get_half_timestamp(sc_ts, 2),
-                /* client recv time */ sc_util_get_half_timestamp(sc_ts, 3)
+                /* t1 */ sc_util_get_full_timestamp(sc_ts, 0),
+                /* t2 */ sc_util_get_full_timestamp(sc_ts, 1)
             );
         }
     }
@@ -741,45 +746,50 @@ all_exit_exit:
 int _init_app(struct sc_config *sc_config){
     int i;
 
-    if(sc_config->nb_used_cores % 2 != 0){
-        SC_ERROR_DETAILS("number of used cores (%u) should be a power of 2",
-            sc_config->nb_used_cores
-        );
-        return SC_ERROR_INVALID_VALUE;
-    }
+    // if(sc_config->nb_used_cores % 2 != 0){
+    //     SC_ERROR_DETAILS("number of used cores (%u) should be a power of 2",
+    //         sc_config->nb_used_cores
+    //     );
+    //     return SC_ERROR_INVALID_VALUE;
+    // }
 
-    if(sc_config->nb_used_cores != sc_config->nb_rx_rings_per_port*2){
-        SC_ERROR_DETAILS("number of rx queues (%u) should be half of the number of used cores (%u)",
-            sc_config->nb_rx_rings_per_port,
-            sc_config->nb_used_cores
-        );
-        return SC_ERROR_INVALID_VALUE;
-    }
+    // if(sc_config->nb_used_cores != sc_config->nb_rx_rings_per_port*2){
+    //     SC_ERROR_DETAILS("number of rx queues (%u) should be half of the number of used cores (%u)",
+    //         sc_config->nb_rx_rings_per_port,
+    //         sc_config->nb_used_cores
+    //     );
+    //     return SC_ERROR_INVALID_VALUE;
+    // }
 
-    if(sc_config->nb_used_cores != sc_config->nb_tx_rings_per_port*2){
-        SC_ERROR_DETAILS("number of tx queues (%u) should be half of the number of used cores (%u)",
-            sc_config->nb_tx_rings_per_port,
-            sc_config->nb_used_cores
-        );
-        return SC_ERROR_INVALID_VALUE;
-    }
+    // if(sc_config->nb_used_cores != sc_config->nb_tx_rings_per_port*2){
+    //     SC_ERROR_DETAILS("number of tx queues (%u) should be half of the number of used cores (%u)",
+    //         sc_config->nb_tx_rings_per_port,
+    //         sc_config->nb_used_cores
+    //     );
+    //     return SC_ERROR_INVALID_VALUE;
+    // }
 
     /* 
         dispatch processing functions:
             using half of cores for sending, half of cores for receiving
     */
     for(i=0; i<sc_config->nb_used_cores; i++){
-        if(i < sc_config->nb_used_cores/2){
-            /* sender */
-            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_sender;
-            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_sender;
-            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_sender;
-        } else {
-            /* receiver */
-            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_receiver;
-            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_receiver;
-            PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_receiver;
-        }
+        /* sender */
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_sender;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_sender;
+        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_sender;
+
+        // if(i < sc_config->nb_used_cores/2){
+        //     /* sender */
+        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_sender;
+        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_sender;
+        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_sender;
+        // } else {
+        //     /* receiver */
+        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_receiver;
+        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_client_func = _process_client_receiver;
+        //     PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit_receiver;
+        // }
     }
 
     return SC_SUCCESS;
