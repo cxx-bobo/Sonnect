@@ -532,7 +532,7 @@ int _process_enter_receiver(struct sc_config *sc_config){
 
     /* allocate array for pointers to storing received pkt_bufs */
     PER_CORE_APP_META(sc_config).recv_pkt_bufs = (struct rte_mbuf **)rte_malloc(NULL, 
-        sizeof(struct rte_mbuf*)*SC_MAX_PKT_BURST*2, 0);
+        sizeof(struct rte_mbuf*)*SC_MAX_RX_PKT_BURST*2, 0);
     if(unlikely(!PER_CORE_APP_META(sc_config).recv_pkt_bufs)){
         SC_THREAD_ERROR_DETAILS("failed to allocate memory for recv_pkt_bufs");
         result = SC_ERROR_MEMORY;
@@ -563,13 +563,13 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
     uint64_t current_ns;
 
     for(i=0; i<INTERNAL_CONF(sc_config)->nb_recv_ports; i++){
-        memset(PER_CORE_APP_META(sc_config).recv_pkt_bufs, 0, sizeof(struct rte_mbuf*)*SC_MAX_PKT_BURST*2);
+        memset(PER_CORE_APP_META(sc_config).recv_pkt_bufs, 0, sizeof(struct rte_mbuf*)*SC_MAX_RX_PKT_BURST*2);
 
         nb_recv_pkt = rte_eth_rx_burst(
             /* port_id */ INTERNAL_CONF(sc_config)->recv_port_idx[i], 
             /* queue_id */ queue_id, 
             /* rx_pkts */ PER_CORE_APP_META(sc_config).recv_pkt_bufs, 
-            /* nb_pkts */ SC_MAX_PKT_BURST
+            /* nb_pkts */ SC_MAX_RX_PKT_BURST
         );
 
         /* record the receiving timestamp */
