@@ -25,9 +25,8 @@ int __worker_loop_init(struct sc_config *sc_config) {
  */
 int _worker_loop(void* param){
     int result = SC_SUCCESS;
-    uint16_t i, j, queue_id, forward_port_id, nb_rx, nb_tx, retry;
+    uint16_t i, j, queue_id, nb_rx;
     int lcore_id_from_zero;
-    uint64_t nb_fwd_pkts = 0;
     struct sc_config *sc_config = (struct sc_config*)param;
 
     /* record lcore id starts from 0 */
@@ -45,7 +44,7 @@ int _worker_loop(void* param){
     process_exit_t process_exit_func = PER_CORE_WORKER_FUNC(sc_config).process_exit_func;
 
     #if defined(ROLE_SERVER)
-        struct rte_mbuf *pkt[SC_MAX_PKT_BURST*2];
+        struct rte_mbuf *pkt[SC_MAX_RX_PKT_BURST*2];
     #endif // ROLE_SERVER
 
     #if defined(ROLE_CLIENT)
@@ -92,7 +91,7 @@ int _worker_loop(void* param){
         #if defined(ROLE_SERVER)
             for(i=0; i<sc_config->nb_used_ports; i++){
 
-                nb_rx = rte_eth_rx_burst(sc_config->sc_port[i].port_id, queue_id, pkt, SC_MAX_PKT_BURST);
+                nb_rx = rte_eth_rx_burst(sc_config->sc_port[i].port_id, queue_id, pkt, SC_MAX_RX_PKT_BURST);
                 
                 if(nb_rx == 0) continue;
                 
@@ -103,43 +102,11 @@ int _worker_loop(void* param){
                         /* nb_rx */ nb_rx,
                         /* sc_config */ sc_config,
                         /* queue_id */ queue_id,
-                        /* recv_port_id */ i, 
-                        /* fwd_port_id */ &forward_port_id,
-                        /* nb_fwd_pkts */ &nb_fwd_pkts
+                        /* recv_port_id */ i
                     )
                 )){
                     SC_THREAD_WARNING_LOCKLESS("failed to process the received frame");
                 }
-
-                if(nb_fwd_pkts > 0){
-                    nb_tx = rte_eth_tx_burst(forward_port_id, queue_id, pkt, nb_fwd_pkts);
-                    if(unlikely(nb_tx < nb_fwd_pkts)){
-                        retry = 0;
-                        while (nb_tx < nb_fwd_pkts && retry++ < SC_BURST_TX_RETRIES) {
-                            nb_tx += rte_eth_tx_burst(forward_port_id, queue_id, &pkt[nb_tx], nb_fwd_pkts - nb_tx);
-                        }
-                    }
-                    
-                    if (nb_tx < nb_fwd_pkts) {
-                        /* Hook Point: Packet Drop Processing */
-                        if(unlikely(
-                            SC_SUCCESS != process_pkt_drop_func(
-                                /* sc_config */ sc_config,
-                                /* pkt */ pkt+nb_tx,
-                                /* nb_drop_pkts */ nb_fwd_pkts-nb_tx
-                            )
-                        )){
-                            SC_THREAD_WARNING_LOCKLESS("failed to process the frames to be dropped");
-                        }
-
-                        do {
-                            rte_pktmbuf_free(pkt[nb_tx]);
-                        } while (++nb_tx < nb_rx);
-                    }
-                }
-                
-                // reset need forward flag
-                nb_fwd_pkts = 0;
             }
         #endif // ROLE_SERVER
 

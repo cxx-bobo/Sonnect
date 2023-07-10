@@ -321,7 +321,7 @@ process_enter_doca_closeloop_exit:
  * \param   need_forward    indicate whether need to forward packet, default to be false
  * \return  zero for successfully processing
  */
-int _process_pkt_doca_openloop(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
+int _process_pkt_doca_openloop(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id){
     int doca_result, result = SC_SUCCESS;
     uint64_t i, j, nb_enqueue_pkts, nb_send_pkts, retry;
     struct rte_ether_hdr *_eth_addr;
@@ -565,7 +565,7 @@ int _process_pkt_doca_openloop(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, str
  * \param   need_forward    indicate whether need to forward packet, default to be false
  * \return  zero for successfully processing
  */
-int _process_pkt_doca_closeloop(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
+int _process_pkt_doca_closeloop(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id){
 int doca_result, result = SC_SUCCESS;
     uint64_t i, j, nb_enqueue_pkts = 0, nb_send_pkts = 0, retry;
     struct rte_ether_hdr *_eth_addr;
@@ -725,9 +725,6 @@ int doca_result, result = SC_SUCCESS;
     //         PER_CORE_APP_META(sc_config).last_record_time = current_time;
     //     }
     // }
-
-    *nb_fwd_pkts = nb_recv_pkts;
-    *fwd_port_id  = INTERNAL_CONF(sc_config)->send_port_idx[0];
 
 process_pkt_doca_closeloop_exit:
     return result;
