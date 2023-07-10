@@ -762,41 +762,69 @@ int _control_infly_sender(struct sc_config *sc_config, uint32_t worker_core_id){
     uint64_t i;
     uint64_t current_ns;
     uint64_t record_interval, nb_interval_send_pkt, nb_interval_drop_pkt;
-    uint32_t target_core_id;
+    uint32_t target_core_id, target_logical_core_id;
     double send_throughput, drop_throughput;
+    double overall_send_throughput=0.0f, overall_drop_throughput=0.0f, overall_theory_throughput=0.0f;
 
-    char print_title[1024] = {0};
-    char print_send_statistics[1024] = {0};
-    char print_drop_statistics[1024] = {0};
+    char print_title[2048] = {0};
+    char print_send_statistics[2048] = {0};
+    char print_drop_statistics[2048] = {0};
+    char print_theory_statistics[2048] = {0};
     
-    sprintf(print_title, "| Core Index |");
-    sprintf(print_send_statistics, "| Send Thrpt |");
-    sprintf(print_drop_statistics, "| Drop Thrpt |");
+    sprintf(print_title,                "| Core Index |");
+    sprintf(print_send_statistics,      "| Send Thrpt |");
+    sprintf(print_drop_statistics,      "| Drop Thrpt |");
+    sprintf(print_theory_statistics,    "| Theo Thrpt |");
 
     // print statistics by first sender core's control function
     if(worker_core_id == INTERNAL_CONF(sc_config)->send_core_idx[0]){
         for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_cores; i++){
             current_ns = sc_util_timestamp_ns();
-            target_core_id = INTERNAL_CONF(sc_config)->send_core_idx[i];
-            record_interval = current_ns - PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).last_send_record_timestamp;
-            nb_interval_send_pkt = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_send_pkt;
-            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_send_pkt = 0;
-            nb_interval_drop_pkt = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_drop_pkt;
-            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_drop_pkt = 0;
-            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).last_send_record_timestamp = current_ns;
 
+            // obtain both the logical and physical core id
+            target_core_id = INTERNAL_CONF(sc_config)->send_core_idx[i];
+            sc_util_get_logical_core_id_by_core_id(sc_config, target_core_id, &target_logical_core_id);
+
+            // calculate interval
+            record_interval = current_ns 
+                - PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).last_send_record_timestamp;
+            
+            // calculate #send-pkts and #drop-pkts within the pass interval,
+            // then reset metadata
+            nb_interval_send_pkt 
+                = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).nb_interval_send_pkt;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).nb_interval_send_pkt = 0;
+            nb_interval_drop_pkt 
+                = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).nb_interval_drop_pkt;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).nb_interval_drop_pkt = 0;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).last_send_record_timestamp = current_ns;
+
+            // calculate throughput
             send_throughput = ((double)nb_interval_send_pkt) / ((double)record_interval) * ((double)1000.f);
             drop_throughput = ((double)nb_interval_drop_pkt) / ((double)record_interval) * ((double)1000.f);
 
+            overall_send_throughput += send_throughput;
+            overall_drop_throughput += drop_throughput;
+            overall_theory_throughput += send_throughput + drop_throughput;
+
+            // insert log string 
             if(target_core_id < 10)
                 sprintf(print_title, "%s     Core %u    |", print_title, target_core_id);
             else
                 sprintf(print_title, "%s    Core %u    |", print_title, target_core_id);
             sprintf(print_send_statistics, "%s %lf Mpps |", print_send_statistics, send_throughput);
             sprintf(print_drop_statistics, "%s %lf Mpps |", print_drop_statistics, drop_throughput);
+            sprintf(print_theory_statistics, "%s %lf Mpps |", print_theory_statistics, send_throughput+drop_throughput);
         }
 
-        SC_LOG("Sender Throughput\n%s\n%s\n%s", print_title, print_send_statistics, print_drop_statistics);
+        sprintf(print_title, "%s    Overall    |", print_title);
+        sprintf(print_send_statistics, "%s %lf Mpps |", print_send_statistics, overall_send_throughput);
+        sprintf(print_drop_statistics, "%s %lf Mpps |", print_drop_statistics, overall_drop_throughput);
+        sprintf(print_theory_statistics, "%s %lf Mpps |", print_theory_statistics, overall_theory_throughput);
+
+        // print log
+        SC_LOG("Sender Throughput\n%s\n%s\n%s\n%s",
+            print_title, print_send_statistics, print_drop_statistics, print_theory_statistics);
     }
 
     return SC_SUCCESS;
@@ -832,35 +860,49 @@ int _control_infly_receiver(struct sc_config *sc_config, uint32_t worker_core_id
     uint64_t i;
     uint64_t current_ns;
     uint64_t record_interval, nb_interval_recv_pkt;
-    uint32_t target_core_id;
+    uint32_t target_core_id, target_logical_core_id;
     double recv_throughput;
 
-    char print_title[1024] = {0};
-    char print_send_statistics[1024] = {0};
+    char print_title[2048] = {0};
+    char print_recv_statistics[2048] = {0};
     
     sprintf(print_title,                "| Core Index |");
-    sprintf(print_send_statistics,      "| Recv Thrpt |");
+    sprintf(print_recv_statistics,      "| Recv Thrpt |");
 
     // print statistics by first receiver core's control function
     if(worker_core_id == INTERNAL_CONF(sc_config)->recv_core_idx[0]){
         for(i=0; i<INTERNAL_CONF(sc_config)->nb_recv_cores; i++){
             current_ns = sc_util_timestamp_ns();
-            target_core_id = INTERNAL_CONF(sc_config)->recv_core_idx[i];
-            record_interval = current_ns - PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).last_recv_record_timestamp;
-            nb_interval_recv_pkt = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_recv_pkt;
-            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_recv_pkt = 0;
-            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).last_recv_record_timestamp = current_ns;
 
+            // obtain both the logical and physical core id
+            target_core_id = INTERNAL_CONF(sc_config)->recv_core_idx[i];
+            sc_util_get_logical_core_id_by_core_id(sc_config, target_core_id, &target_logical_core_id);
+
+            // calculate interval
+            record_interval = current_ns 
+                - PER_CORE_APP_META_BY_CORE_ID(sc_config,target_logical_core_id).last_recv_record_timestamp;
+
+            // calculate #pkts within the pass interval
+            nb_interval_recv_pkt 
+                = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).nb_interval_recv_pkt;
+
+            // reset metadata
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).nb_interval_recv_pkt = 0;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_logical_core_id).last_recv_record_timestamp = current_ns;
+
+            // calculate throughput
             recv_throughput = ((double)nb_interval_recv_pkt) / ((double)record_interval) * ((double)1000.f);
 
+            // insert log string
             if(target_core_id < 10)
                 sprintf(print_title, "%s     Core %u    |", print_title, target_core_id);
             else
                 sprintf(print_title, "%s    Core %u    |", print_title, target_core_id);
-            sprintf(print_send_statistics, "%s %lf Mpps |", print_send_statistics, recv_throughput);
+            sprintf(print_recv_statistics, "%s %lf Mpps |", print_recv_statistics, recv_throughput);
         }
 
-        SC_LOG("Receiver Throughput\n%s\n%s\n", print_title, print_send_statistics);
+        // print log
+        SC_LOG("Receiver Throughput\n%s\n%s\n", print_title, print_recv_statistics);
     }
 
     return SC_SUCCESS;
