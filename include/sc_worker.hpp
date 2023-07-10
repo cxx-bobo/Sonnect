@@ -14,7 +14,8 @@
 #include <rte_version.h>
 #include <rte_mbuf_core.h>
 
-#define SC_MAX_PKT_BURST 32
+#define SC_MAX_RX_PKT_BURST 32
+#define SC_MAX_TX_PKT_BURST 32
 #define SC_NUM_PRIVATE_MBUFS_PER_CORE 32767
 #define SC_BURST_TX_RETRIES 16
 

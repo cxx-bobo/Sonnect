@@ -3,6 +3,7 @@
 #include "sc_utils.hpp"
 #include "sc_control_plane.hpp"
 #include "sc_app.hpp"
+#include "sc_mbuf.hpp"
 #include "sc_utils/pktgen.hpp"
 #include "sc_utils/timestamp.hpp"
 
@@ -162,94 +163,68 @@ int _process_enter(struct sc_config *sc_config){
  * \param   need_forward    indicate whether need to forward packet, default to be false
  * \return  zero for successfully processing
  */
-int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id, uint16_t *fwd_port_id, uint64_t *nb_fwd_pkts){
-    uint64_t i;
-    struct timeval current_time;
-    long interval_s, interval_us, interval_overall_us;
-    
+int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config *sc_config, uint16_t queue_id, uint16_t recv_port_id){
+    uint32_t fwd_port_id;
+    uint64_t i, nb_fwd_pkts=0, forward_queue_len=0, temp_nb_fwd_pkts=0;
+    struct rte_mbuf **forward_queue = PER_CORE_APP_META(sc_config).forward_queue;
+
+    fwd_port_id = INTERNAL_CONF(sc_config)->send_port_idx[0];
+
     #if defined(SC_ECHO_SERVER_GET_LATENCY)
         struct sc_timestamp_table *payload_timestamp;
         uint64_t recv_ns, send_ns;
         recv_ns = sc_util_timestamp_ns();
     #endif // defined(SC_ECHO_SERVER_GET_LATENCY)
 
-    // FIXME: move the print info to log thread
-    /* record current time */
-    if(unlikely(-1 == gettimeofday(&current_time, NULL))){
-        SC_THREAD_ERROR_DETAILS("failed to obtain current time");
-        return SC_ERROR_INTERNAL;
-    }
-
-    interval_s = current_time.tv_sec - PER_CORE_APP_META(sc_config).last_record_time.tv_sec;
-    interval_us = current_time.tv_usec - PER_CORE_APP_META(sc_config).last_record_time.tv_usec;
-    interval_overall_us = SC_UTIL_TIME_INTERVL_US(interval_s, interval_us);
-
-    if(interval_overall_us >= 1000 * 500){
-        if(PER_CORE_APP_META(sc_config).nb_interval_forward_pkt != 0){
-            double throughput = (double)((PER_CORE_APP_META(sc_config).nb_interval_forward_pkt)*pkt[0]->pkt_len)
-                / (double)(interval_overall_us*1000) /* Gbps */;
-            double drop_throughput = (double)((PER_CORE_APP_META(sc_config).nb_interval_drop_pkt)*pkt[0]->pkt_len)
-                / (double)(interval_overall_us*1000) /* Gbps */;
-            
-            if(throughput != 0.0){
-                PER_CORE_APP_META(sc_config).throughput[PER_CORE_APP_META(sc_config).throughput_pointer] 
-                    = throughput / (double)pkt[0]->pkt_len * (double)1000 /* MOps */;
-                PER_CORE_APP_META(sc_config).nb_throughput += 1;
-                PER_CORE_APP_META(sc_config).throughput_pointer += 1;
-                if(PER_CORE_APP_META(sc_config).throughput_pointer == SC_ECHO_SERVER_NB_THROUGHPUT){
-                    PER_CORE_APP_META(sc_config).throughput_pointer = 0;
-                }
-
-                // SC_THREAD_LOG(
-                //     "throughput: %lf Mpps, drop throughput: %lf Mpps",
-                //     throughput / (double)pkt[0]->pkt_len * (double)1000,
-                //     drop_throughput / (double)pkt[0]->pkt_len * (double)1000
-                // );
+    for(i=0; i<nb_recv_pkts; i++){
+        #if defined(SC_ECHO_SERVER_GET_LATENCY)
+            // skip empty payload packet
+            if(unlikely(pkt[i]->buf_addr == NULL)){
+                continue;
             }
-        } else {
-            // SC_THREAD_LOG("throughput: 0.0 Mpps");
-        }
-        
-        /* reset */
-        PER_CORE_APP_META(sc_config).last_record_time.tv_sec = current_time.tv_sec;
-        PER_CORE_APP_META(sc_config).last_record_time.tv_usec = current_time.tv_usec;
-        PER_CORE_APP_META(sc_config).nb_interval_forward_pkt = 0;
-        PER_CORE_APP_META(sc_config).nb_interval_drop_pkt = 0;
-    }
-    
-    /* count */
-    PER_CORE_APP_META(sc_config).nb_forward_pkt += nb_recv_pkts;
-    PER_CORE_APP_META(sc_config).nb_interval_forward_pkt += nb_recv_pkts;
-    
-    /* set as forwarded, default to first send port */
-    *nb_fwd_pkts = nb_recv_pkts;
-    *fwd_port_id  = INTERNAL_CONF(sc_config)->send_port_idx[0];
-
-    #if defined(SC_ECHO_SERVER_GET_LATENCY)
-        send_ns = sc_util_timestamp_ns();
-        for(i=0; i<nb_recv_pkts; i++){
-            /* skip empty payload packet */
-            // if(unlikely(pkt[i]->buf_addr == NULL)){
-            //     continue;
-            // }
-
+            
             payload_timestamp = rte_pktmbuf_mtod_offset(
                 pkt[i], struct sc_timestamp_table*, 
                 sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr)
             );
 
-            /* skip wrong payload packet */
+            // skip wrong payload packet
             if(unlikely(payload_timestamp->timestamp_type != SC_TIMESTAMP_HALF_TYPE)){
                 continue;
             }
 
-            /* add both the recv & send timestamp to the timestamp table */
+            // add both the recv & send timestamp to the timestamp table
             // FIXME: the following timestamp record will drag down the throughput (33M -> 20M for single core)
             sc_util_add_full_timestamp(payload_timestamp, recv_ns);
-            sc_util_add_full_timestamp(payload_timestamp, send_ns);
-        }
-    #endif // defined(SC_ECHO_SERVER_GET_LATENCY)
+        #endif // defined(SC_ECHO_SERVER_GET_LATENCY)
 
+        // append pkt to the forward queue
+        forward_queue[forward_queue_len] = pkt[i];
+        forward_queue_len += 1;
+
+        // flush forward queue if the length reach the threshold
+        if(forward_queue_len >= SC_MAX_TX_PKT_BURST){
+            #if defined(SC_ECHO_SERVER_GET_LATENCY)
+                send_ns = sc_util_timestamp_ns();
+                sc_util_add_full_timestamp(payload_timestamp, send_ns);
+            #endif // defined(SC_ECHO_SERVER_GET_LATENCY)
+
+            sc_flush_tx_queue(fwd_port_id, queue_id, forward_queue, forward_queue_len, &temp_nb_fwd_pkts);
+            nb_fwd_pkts += temp_nb_fwd_pkts;
+            forward_queue_len = 0;
+        }
+    }
+
+    // flush forward queue
+    if(forward_queue_len > 0){
+        sc_flush_tx_queue(recv_port_id, queue_id, forward_queue, forward_queue_len, &temp_nb_fwd_pkts);
+        nb_fwd_pkts += temp_nb_fwd_pkts;
+    }
+
+    // count
+    PER_CORE_APP_META(sc_config).nb_forward_pkt += nb_fwd_pkts;
+    PER_CORE_APP_META(sc_config).nb_interval_forward_pkt += nb_fwd_pkts;
+    
     return SC_SUCCESS;
 }
 
@@ -330,6 +305,37 @@ int _worker_all_exit(struct sc_config *sc_config){
 }
 
 /*!
+ * \brief   callback while entering control-plane thread
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully initialization
+ */
+int _control_enter(struct sc_config *sc_config, uint32_t worker_core_id){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
+ * \brief   callback during control-plane thread runtime
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully execution
+ */
+int _control_infly(struct sc_config *sc_config, uint32_t worker_core_id){
+
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   callback while exiting control-plane thread
+ * \param   sc_config       the global configuration
+ * \param   worker_core_id  the core id of the worker
+ * \return  zero for successfully execution
+ */
+int _control_exit(struct sc_config *sc_config, uint32_t worker_core_id){
+    return SC_ERROR_NOT_IMPLEMENTED;
+}
+
+/*!
  * \brief   initialize application (internal)
  * \param   sc_config   the global configuration
  * \return  zero for successfully initialization
@@ -342,7 +348,6 @@ int _init_app(struct sc_config *sc_config){
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter;
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_exit_func = _process_exit;
         PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_func = _process_pkt;
-        PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_pkt_drop_func = _process_pkt_drop;
     }
 
     return SC_SUCCESS;

@@ -29,6 +29,8 @@ struct _per_core_app_meta {
     double throughput[SC_ECHO_SERVER_NB_THROUGHPUT];
     double average_throughput;
 
+    struct rte_mbuf *forward_queue[SC_MAX_TX_PKT_BURST*2];
+
     /* for calculating throughput */
     uint64_t nb_interval_forward_pkt;
     uint64_t nb_interval_drop_pkt;
