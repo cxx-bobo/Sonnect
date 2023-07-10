@@ -99,6 +99,44 @@ int sc_util_get_mac_by_port_id(struct sc_config *sc_config, uint32_t port_id, ch
 }
 
 /*!
+ * \brief   obtain core index by given logical core index
+ * \param   sc_config           the global configuration
+ * \param   logical_core_id     given logical core id
+ * \param   core_id             result core id
+ * \return  zero for successfully searching
+ */
+int sc_util_get_core_id_by_logical_core_id(struct sc_config *sc_config,  uint32_t logical_core_id, uint32_t *core_id){
+    if(logical_core_id >= sc_config->nb_used_cores){
+        SC_ERROR_DETAILS("given logical core id (%u) is larger than overall number of initialized core (%u)",
+            logical_core_id, sc_config->nb_used_cores);
+        return SC_ERROR_INVALID_VALUE;
+    }
+    *core_id = sc_config->core_ids[logical_core_id];
+    return SC_SUCCESS;
+}
+
+/*!
+ * \brief   obtain logical core index by given core index
+ * \param   sc_config           the global configuration
+ * \param   core_id             given core id
+ * \param   logical_core_id     result logical core id
+ * \return  zero for successfully searching
+ */
+int sc_util_get_logical_core_id_by_core_id(struct sc_config *sc_config, uint32_t core_id, uint32_t *logical_core_id){
+    int i, ret, result = SC_ERROR_NOT_EXIST;
+
+    for(i=0; i<sc_config->nb_used_cores; i++){
+        if (sc_config->core_ids[i] == core_id) {
+            *logical_core_id = i;
+            result = SC_SUCCESS;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+/*!
  * \brief   obtain port index by given logical port index
  * \param   sc_config           the global configuration
  * \param   logical_port_id     given logical port id
@@ -116,7 +154,7 @@ int sc_util_get_port_id_by_logical_port_id(struct sc_config *sc_config,  uint32_
 }
 
 /*!
- * \brief   obtain port index by given logical port index
+ * \brief   obtain logical port index by given port index
  * \param   sc_config           the global configuration
  * \param   port_id             given port id
  * \param   logical_port_id     result logical port id

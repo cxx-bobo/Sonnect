@@ -83,7 +83,8 @@ int _worker_loop(void* param){
 
     /* Hook Point: Enter */    
     if(SC_SUCCESS != process_enter_func(sc_config)){
-        SC_THREAD_WARNING("error occurs while executing enter callback\n");
+        SC_THREAD_ERROR("error occurs while executing enter callback\n");
+        sc_force_quit = true;
     }
 
     while(!sc_force_quit){
@@ -107,7 +108,7 @@ int _worker_loop(void* param){
                         /* nb_fwd_pkts */ &nb_fwd_pkts
                     )
                 )){
-                    SC_THREAD_WARNING("failed to process the received frame");
+                    SC_THREAD_WARNING_LOCKLESS("failed to process the received frame");
                 }
 
                 if(nb_fwd_pkts > 0){
@@ -128,7 +129,7 @@ int _worker_loop(void* param){
                                 /* nb_drop_pkts */ nb_fwd_pkts-nb_tx
                             )
                         )){
-                            SC_THREAD_WARNING("failed to process the frames to be dropped");
+                            SC_THREAD_WARNING_LOCKLESS("failed to process the frames to be dropped");
                         }
 
                         do {
@@ -146,7 +147,7 @@ int _worker_loop(void* param){
         #if defined(ROLE_CLIENT)
             /* Hook Point: Packet Preparing */
             if(SC_SUCCESS != process_client_func(sc_config, queue_id, &ready_to_exit)){
-                SC_THREAD_WARNING("error occured within the client process");
+                SC_THREAD_WARNING_LOCKLESS("error occured within the client process");
             }
 
             if(ready_to_exit){ break; }

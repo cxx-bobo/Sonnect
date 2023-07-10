@@ -21,15 +21,13 @@ struct _per_core_app_meta {
     struct rte_mbuf **send_pkt_bufs; 
     struct rte_mbuf **recv_pkt_bufs;
     
-    /* record the total number of send packets */
+    /* record the total number of sended / confirmed packets */
     uint64_t nb_send_pkt;
-    uint64_t nb_last_send_pkt;
     uint64_t nb_confirmed_pkt;
 
     /* record to total period */
     struct timeval start_time;
     struct timeval end_time;
-    struct timeval last_send_time;
 
     /* last send flow */
     uint64_t last_used_flow;
@@ -41,9 +39,20 @@ struct _per_core_app_meta {
     sc_utils_distribution_uint64_generator* interval_generator;
     double payload_copy_latency;
     
-    uint64_t nb_ts_tables;
-    uint64_t ts_tables_pointer;
-    struct sc_timestamp_table ts_tables[SC_ECHO_CLIENT_NB_TS_TABLE];
+    /* for control plane (sender) */
+    uint64_t nb_interval_send_pkt;
+    uint64_t nb_interval_drop_pkt;
+    uint64_t last_send_record_timestamp;
+
+    /* for control plane (receiver) */
+    uint64_t nb_interval_recv_pkt;
+    uint64_t last_recv_record_timestamp;
+
+    #if defined(SC_ECHO_CLIENT_GET_LATENCY)
+        uint64_t nb_ts_tables;
+        uint64_t ts_tables_pointer;
+        struct sc_timestamp_table ts_tables[SC_ECHO_CLIENT_NB_TS_TABLE];
+    #endif
 };
 
 /* definition of internal config */
@@ -56,6 +65,12 @@ struct _internal_config {
     /* when enable pkt rate, bit rate is invalid */
     double bit_rate;
     double pkt_rate;
+
+    /* core dispatching */
+    uint32_t nb_send_cores;
+    uint32_t nb_recv_cores;
+    uint32_t *send_core_idx;
+    uint32_t *recv_core_idx;
 
     /* used echo ports */
     uint32_t nb_send_ports, nb_recv_ports;

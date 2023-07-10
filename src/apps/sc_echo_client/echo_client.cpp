@@ -459,7 +459,13 @@ int _process_client_sender(struct sc_config *sc_config, uint16_t queue_id, bool 
 
     /* update metadata */
     if(nb_tx != 0){
+        // record the #sended packet
         PER_CORE_APP_META(sc_config).nb_send_pkt += nb_tx;
+        PER_CORE_APP_META(sc_config).nb_interval_send_pkt += nb_tx;
+        PER_CORE_APP_META(sc_config).nb_interval_drop_pkt 
+            += INTERNAL_CONF(sc_config)->nb_pkt_per_burst * INTERNAL_CONF(sc_config)->nb_send_ports;
+        
+        // switch the sended flow
         if(PER_CORE_APP_META(sc_config).last_used_flow == INTERNAL_CONF(sc_config)->nb_flow_per_core-1){
             PER_CORE_APP_META(sc_config).last_used_flow = 0;
         } else {
@@ -572,6 +578,7 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
         if(nb_recv_pkt == 0) { continue; }
         
         PER_CORE_APP_META(sc_config).nb_confirmed_pkt += nb_recv_pkt;
+        PER_CORE_APP_META(sc_config).nb_interval_recv_pkt += nb_recv_pkt;
         
         for(j=0; j<nb_recv_pkt; j++) {
             /* extract the timestamp struct */
@@ -589,27 +596,22 @@ int _process_client_receiver(struct sc_config *sc_config, uint16_t queue_id, boo
                 /* add receive timestamp to the timestamp table */
                 sc_util_add_full_timestamp(payload_timestamp, current_ns);
 
-                if(sc_util_get_full_timestamp(payload_timestamp, 1) < sc_util_get_full_timestamp(payload_timestamp, 0)){
-                    SC_THREAD_WARNING("why!: t2: %lu, t1: %lu", sc_util_get_full_timestamp(payload_timestamp, 1), sc_util_get_full_timestamp(payload_timestamp, 0));
+                /* copy the timestamp table to local collection */                
+                rte_memcpy(
+                    /* dst */ PER_CORE_APP_META(sc_config).ts_tables 
+                        + PER_CORE_APP_META(sc_config).ts_tables_pointer,
+                    /* src */ payload_timestamp,
+                    /* size */ sizeof(struct sc_timestamp_table)
+                );
+
+                PER_CORE_APP_META(sc_config).ts_tables_pointer += 1;
+                if(PER_CORE_APP_META(sc_config).ts_tables_pointer == SC_ECHO_CLIENT_NB_TS_TABLE){
+                    PER_CORE_APP_META(sc_config).ts_tables_pointer = 0;
+                }
+                if(PER_CORE_APP_META(sc_config).nb_ts_tables < SC_ECHO_CLIENT_NB_TS_TABLE){
+                    PER_CORE_APP_META(sc_config).nb_ts_tables += 1;
                 }
             #endif defined(SC_ECHO_CLIENT_GET_LATENCY)
-
-            /* copy the timestamp table to local collection */
-            
-            rte_memcpy(
-                /* dst */ PER_CORE_APP_META(sc_config).ts_tables 
-                    + PER_CORE_APP_META(sc_config).ts_tables_pointer,
-                /* src */ payload_timestamp,
-                /* size */ sizeof(struct sc_timestamp_table)
-            );
-
-            PER_CORE_APP_META(sc_config).ts_tables_pointer += 1;
-            if(PER_CORE_APP_META(sc_config).ts_tables_pointer == SC_ECHO_CLIENT_NB_TS_TABLE){
-                PER_CORE_APP_META(sc_config).ts_tables_pointer = 0;
-            }
-            if(PER_CORE_APP_META(sc_config).nb_ts_tables < SC_ECHO_CLIENT_NB_TS_TABLE){
-                PER_CORE_APP_META(sc_config).nb_ts_tables += 1;
-            }
 
 free_recv_pkt_mbuf:
             /* return back recv pkt_mbuf */
@@ -667,24 +669,26 @@ int _worker_all_exit(struct sc_config *sc_config){
     }
 
     // record latency data
-    sprintf(profiling_file_name, "latency.txt");
-    fp = fopen(profiling_file_name, "w");
-    if (!fp) {
-        SC_ERROR("failed to create/open log file to store latency statistics");
-        result = SC_ERROR_INTERNAL;
-        goto worker_all_exit_exit;
-    }
-    for(i=sc_config->nb_used_cores/2; i<sc_config->nb_used_cores; i++){
-        for(j=0; j<PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_ts_tables; j++){
-            sc_ts = &(PER_CORE_APP_META_BY_CORE_ID(sc_config, i).ts_tables[j]);
-            fprintf(
-                /* fd */ fp, "%u\t%lu\t%lu\n", 
-                /* core_id */ i,
-                /* t1 */ sc_util_get_full_timestamp(sc_ts, 0),
-                /* t2 */ sc_util_get_full_timestamp(sc_ts, 1)
-            );
+    #if defined(SC_ECHO_CLIENT_GET_LATENCY)
+        sprintf(profiling_file_name, "latency.txt");
+        fp = fopen(profiling_file_name, "w");
+        if (!fp) {
+            SC_ERROR("failed to create/open log file to store latency statistics");
+            result = SC_ERROR_INTERNAL;
+            goto worker_all_exit_exit;
         }
-    }
+        for(i=sc_config->nb_used_cores/2; i<sc_config->nb_used_cores; i++){
+            for(j=0; j<PER_CORE_APP_META_BY_CORE_ID(sc_config, i).nb_ts_tables; j++){
+                sc_ts = &(PER_CORE_APP_META_BY_CORE_ID(sc_config, i).ts_tables[j]);
+                fprintf(
+                    /* fd */ fp, "%u\t%lu\t%lu\n", 
+                    /* core_id */ i,
+                    /* t1 */ sc_util_get_full_timestamp(sc_ts, 0),
+                    /* t2 */ sc_util_get_full_timestamp(sc_ts, 1)
+                );
+            }
+        }
+    #endif // defined(SC_ECHO_CLIENT_GET_LATENCY)
 
     for(i=0; i<sc_config->nb_used_cores; i++){
         /* reduce number of packet */
@@ -755,8 +759,47 @@ int _control_enter_sender(struct sc_config *sc_config, uint32_t worker_core_id){
  * \return  zero for successfully execution
  */
 int _control_infly_sender(struct sc_config *sc_config, uint32_t worker_core_id){
-    SC_LOG("hello from receiver control from core %u", worker_core_id);
-    return SC_ERROR_NOT_IMPLEMENTED;
+    uint64_t i;
+    uint64_t current_ns;
+    uint64_t record_interval, nb_interval_send_pkt, nb_interval_drop_pkt;
+    uint32_t target_core_id;
+    double send_throughput, drop_throughput;
+
+    char print_title[1024] = {0};
+    char print_send_statistics[1024] = {0};
+    char print_drop_statistics[1024] = {0};
+    
+    sprintf(print_title, "| Core Index |");
+    sprintf(print_send_statistics, "| Send Thrpt |");
+    sprintf(print_drop_statistics, "| Drop Thrpt |");
+
+    // print statistics by first sender core's control function
+    if(worker_core_id == INTERNAL_CONF(sc_config)->send_core_idx[0]){
+        for(i=0; i<INTERNAL_CONF(sc_config)->nb_send_cores; i++){
+            current_ns = sc_util_timestamp_ns();
+            target_core_id = INTERNAL_CONF(sc_config)->send_core_idx[i];
+            record_interval = current_ns - PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).last_send_record_timestamp;
+            nb_interval_send_pkt = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_send_pkt;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_send_pkt = 0;
+            nb_interval_drop_pkt = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_drop_pkt;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_drop_pkt = 0;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).last_send_record_timestamp = current_ns;
+
+            send_throughput = ((double)nb_interval_send_pkt) / ((double)record_interval) * ((double)1000.f);
+            drop_throughput = ((double)nb_interval_drop_pkt) / ((double)record_interval) * ((double)1000.f);
+
+            if(target_core_id < 10)
+                sprintf(print_title, "%s     Core %u    |", print_title, target_core_id);
+            else
+                sprintf(print_title, "%s    Core %u    |", print_title, target_core_id);
+            sprintf(print_send_statistics, "%s %lf Mpps |", print_send_statistics, send_throughput);
+            sprintf(print_drop_statistics, "%s %lf Mpps |", print_drop_statistics, drop_throughput);
+        }
+
+        SC_LOG("Sender Throughput\n%s\n%s\n%s", print_title, print_send_statistics, print_drop_statistics);
+    }
+
+    return SC_SUCCESS;
 }
 
 /*!
@@ -786,7 +829,40 @@ int _control_enter_receiver(struct sc_config *sc_config, uint32_t worker_core_id
  * \return  zero for successfully execution
  */
 int _control_infly_receiver(struct sc_config *sc_config, uint32_t worker_core_id){
-    SC_LOG("hello from receiver control from core %u", worker_core_id);
+    uint64_t i;
+    uint64_t current_ns;
+    uint64_t record_interval, nb_interval_recv_pkt;
+    uint32_t target_core_id;
+    double recv_throughput;
+
+    char print_title[1024] = {0};
+    char print_send_statistics[1024] = {0};
+    
+    sprintf(print_title,                "| Core Index |");
+    sprintf(print_send_statistics,      "| Recv Thrpt |");
+
+    // print statistics by first receiver core's control function
+    if(worker_core_id == INTERNAL_CONF(sc_config)->recv_core_idx[0]){
+        for(i=0; i<INTERNAL_CONF(sc_config)->nb_recv_cores; i++){
+            current_ns = sc_util_timestamp_ns();
+            target_core_id = INTERNAL_CONF(sc_config)->recv_core_idx[i];
+            record_interval = current_ns - PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).last_recv_record_timestamp;
+            nb_interval_recv_pkt = PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_recv_pkt;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).nb_interval_recv_pkt = 0;
+            PER_CORE_APP_META_BY_CORE_ID(sc_config, target_core_id).last_recv_record_timestamp = current_ns;
+
+            recv_throughput = ((double)nb_interval_recv_pkt) / ((double)record_interval) * ((double)1000.f);
+
+            if(target_core_id < 10)
+                sprintf(print_title, "%s     Core %u    |", print_title, target_core_id);
+            else
+                sprintf(print_title, "%s    Core %u    |", print_title, target_core_id);
+            sprintf(print_send_statistics, "%s %lf Mpps |", print_send_statistics, recv_throughput);
+        }
+
+        SC_LOG("Receiver Throughput\n%s\n%s\n", print_title, print_send_statistics);
+    }
+
     return SC_SUCCESS;
 }
 
@@ -806,7 +882,8 @@ int _control_exit_receiver(struct sc_config *sc_config, uint32_t worker_core_id)
  * \return  zero for successfully initialization
  */
 int _init_app(struct sc_config *sc_config){
-    int i;
+    int i, result = SC_SUCCESS;
+    uint32_t nb_recorded_send_core = 0, nb_recorded_recv_core = 0, core_id;
 
     if(sc_config->nb_used_cores % 2 != 0){
         SC_ERROR_DETAILS("number of used cores (%u) should be a power of 2",
@@ -831,11 +908,24 @@ int _init_app(struct sc_config *sc_config){
         return SC_ERROR_INVALID_VALUE;
     }
 
+    // FIXME: should this managed by configuration file? (i.e., dynamically control #cores for sending and recving)
+    INTERNAL_CONF(sc_config)->send_core_idx = (uint32_t*)rte_malloc(NULL, sizeof(uint32_t)*sc_config->nb_used_cores/2, NULL);
+    INTERNAL_CONF(sc_config)->recv_core_idx = (uint32_t*)rte_malloc(NULL, sizeof(uint32_t)*sc_config->nb_used_cores/2, NULL);
+    assert(INTERNAL_CONF(sc_config)->send_core_idx != NULL);
+    assert(INTERNAL_CONF(sc_config)->recv_core_idx != NULL);
+
     /* 
         dispatch processing functions:
         using half of cores for sending, half of cores for receiving
     */
     for(i=0; i<sc_config->nb_used_cores; i++){
+        // obtain the physical core id
+        result = sc_util_get_core_id_by_logical_core_id(sc_config, i, &core_id);
+        if(unlikely(result != SC_SUCCESS)){
+            SC_ERROR_DETAILS("failed to get core id by logical core id %u", i);
+            goto _init_app_exit;
+        }
+
         if(i < sc_config->nb_used_cores/2){
             /* sender (worker functions) */
             PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_sender;
@@ -846,6 +936,9 @@ int _init_app(struct sc_config *sc_config){
             PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_infly_func = _control_infly_sender;
             PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_exit_func = _control_exit_sender;
             PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).infly_interval = 1000000;
+
+            INTERNAL_CONF(sc_config)->send_core_idx[nb_recorded_send_core] = core_id;
+            nb_recorded_send_core += 1;
         } else {
             /* receiver (worker functions) */
             PER_CORE_WORKER_FUNC_BY_CORE_ID(sc_config, i).process_enter_func = _process_enter_receiver;
@@ -856,8 +949,15 @@ int _init_app(struct sc_config *sc_config){
             PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_infly_func = _control_infly_receiver;
             PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_exit_func = _control_exit_receiver;
             PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).infly_interval = 1000000;
+
+            INTERNAL_CONF(sc_config)->recv_core_idx[nb_recorded_recv_core] = core_id;
+            nb_recorded_recv_core += 1;
         }
     }
 
-    return SC_SUCCESS;
+    INTERNAL_CONF(sc_config)->nb_send_cores = nb_recorded_send_core;
+    INTERNAL_CONF(sc_config)->nb_recv_cores = nb_recorded_recv_core;
+
+_init_app_exit:
+    return result;
 }

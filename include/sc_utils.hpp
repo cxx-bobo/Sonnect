@@ -32,6 +32,8 @@ enum {
 /* core operation */
 int sc_util_stick_this_thread_to_core(uint32_t core_id);
 int sc_util_check_core_id(uint32_t core_id);
+int sc_util_get_core_id_by_logical_core_id(struct sc_config *sc_config,  uint32_t logical_core_id, uint32_t *core_id);
+int sc_util_get_logical_core_id_by_core_id(struct sc_config *sc_config, uint32_t core_id, uint32_t *logical_core_id);
 
 /* port operation */
 int sc_util_get_port_id_by_mac(struct sc_config *sc_config, char* port_mac, uint32_t *port_id);

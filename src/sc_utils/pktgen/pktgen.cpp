@@ -40,6 +40,8 @@ int sc_util_generate_random_pkt_hdr(
 
 	if(pkt_len < min_pkt_len){
 		SC_THREAD_ERROR_DETAILS("pakcet length is too small, should be larger than %d", min_pkt_len);
+		result = SC_ERROR_INVALID_VALUE;
+		goto sc_util_generate_random_pkt_hdr_exit;
 	}
 	sc_pkt_hdr->pkt_len = pkt_len;
 

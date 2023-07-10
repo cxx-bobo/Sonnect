@@ -14,7 +14,7 @@ pthread_mutex_t timer_mutex;
  */
 void* _control_loop(void *args){
     int result = SC_SUCCESS, func_result;
-    uint32_t i;
+    uint32_t i, core_id;
     time_t time_ptr;
     struct tm *tmp_ptr = NULL;
     struct sc_config *sc_config = (struct sc_config*)args;
@@ -84,6 +84,13 @@ void* _control_loop(void *args){
         for(i=0; i<sc_config->nb_used_cores; i++){
             infly_func = PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).control_infly_func;
             if(likely(infly_func)){
+                // obtain the physical core id
+                result = sc_util_get_core_id_by_logical_core_id(sc_config, i, &core_id);
+                if(unlikely(result != SC_SUCCESS)){
+                    SC_ERROR_DETAILS("failed to get core id by logical core id %u", i);
+                    goto control_plane_shutdown;
+                }
+
                 // record current time
                 if(unlikely(-1 == gettimeofday(&infly_tick_time, NULL))){
                     SC_THREAD_ERROR_DETAILS("failed to obtain infly tick time");
@@ -103,7 +110,7 @@ void* _control_loop(void *args){
 
                 if(current_tick_time_us - last_exec_time_us >= PER_CORE_CONTROL_FUNC_BY_CORE_ID(sc_config, i).infly_interval){
                     // execution
-                    func_result = infly_func(sc_config, i);
+                    func_result = infly_func(sc_config, core_id);
                     if(func_result != SC_SUCCESS && func_result != SC_ERROR_NOT_IMPLEMENTED){
                         SC_ERROR("failed to execute control_infly_func for worker core %u", i);
                     }
