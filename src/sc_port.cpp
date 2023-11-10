@@ -219,32 +219,62 @@ int _init_single_port(uint16_t port_index, uint16_t port_logical_index, struct s
 
     if(sc_config->enable_offload){
         /* RX offload capacity check and config */
-        if (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_CHECKSUM){
-            port_conf.rxmode.offloads |= DEV_RX_OFFLOAD_CHECKSUM;
-        }
+        #if RTE_VERSION >= RTE_VERSION_NUM(22, 3, 255, 255)
+            if (dev_info.rx_offload_capa & RTE_ETH_RX_OFFLOAD_CHECKSUM){
+                port_conf.rxmode.offloads |= RTE_ETH_RX_OFFLOAD_CHECKSUM;
+            }
+        #else
+            if (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_CHECKSUM){
+                port_conf.rxmode.offloads |= DEV_RX_OFFLOAD_CHECKSUM;
+            }
+        #endif
 
         /* TX offload capacity check and config */
-        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MULTI_SEGS){
-            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MULTI_SEGS;
-        }
-        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE){
-            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MBUF_FAST_FREE;
-        }
-        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MT_LOCKFREE){
-            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MT_LOCKFREE;
-        }
-        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM){
-            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_IPV4_CKSUM;
-        }
-        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM){
-            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_UDP_CKSUM;
-        }
-        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM){
-            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_TCP_CKSUM;
-        }
-        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_SCTP_CKSUM){
-            port_conf.txmode.offloads |= DEV_TX_OFFLOAD_SCTP_CKSUM;
-        }
+        #if RTE_VERSION >= RTE_VERSION_NUM(22, 3, 255, 255)
+            if (dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_MULTI_SEGS){
+                port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
+            }
+            if (dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE){
+                port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE;
+            }
+            if (dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_MT_LOCKFREE){
+                port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MT_LOCKFREE;
+            }
+            if (dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM){
+                port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_IPV4_CKSUM;
+            }
+            if (dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_UDP_CKSUM){
+                port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_UDP_CKSUM;
+            }
+            if (dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_TCP_CKSUM){
+                port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_TCP_CKSUM;
+            }
+            if (dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_SCTP_CKSUM){
+                port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_SCTP_CKSUM;
+            }
+        #else
+            if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MULTI_SEGS){
+                port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MULTI_SEGS;
+            }
+            if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE){
+                port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+            }
+            if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MT_LOCKFREE){
+                port_conf.txmode.offloads |= DEV_TX_OFFLOAD_MT_LOCKFREE;
+            }
+            if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM){
+                port_conf.txmode.offloads |= DEV_TX_OFFLOAD_IPV4_CKSUM;
+            }
+            if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM){
+                port_conf.txmode.offloads |= DEV_TX_OFFLOAD_UDP_CKSUM;
+            }
+            if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM){
+                port_conf.txmode.offloads |= DEV_TX_OFFLOAD_TCP_CKSUM;
+            }
+            if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_SCTP_CKSUM){
+                port_conf.txmode.offloads |= DEV_TX_OFFLOAD_SCTP_CKSUM;
+            }
+        #endif
     }
 
     /* configure rss */
@@ -410,9 +440,9 @@ static void _print_port_info(uint16_t port_index){
     }
 
     /* print dev_info */
-    printf("\t  -- driver %s device %s socket %d\n",
-            dev_info.driver_name, dev_info.device->name,
-            rte_eth_dev_socket_id(port_index));
+    // printf("\t  -- driver %s device %s socket %d\n",
+    //         dev_info.driver_name, dev_info.device->name,
+    //         rte_eth_dev_socket_id(port_index));
 
     /* print dev_owner */
     ret = rte_eth_dev_owner_get(port_index, &owner);

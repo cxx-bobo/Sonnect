@@ -70,13 +70,7 @@ endif
 
 # >>>>>>>>>>>>>> DOCA >>>>>>>>>>>>>>
 doca_pc_path = '/opt/mellanox/doca/lib/aarch64-linux-gnu/pkgconfig/'
-doca_modules = [
-	'doca-apsh-lib', 'doca-argp-lib', 'doca-comm-channel-lib',
-	'doca-common-lib', 'doca-compress-lib', 'doca-dma-lib', 
-	'doca-dpi-grpc-lib', 'doca-dpi-lib', 'doca-flow-grpc-lib',  
-	'doca-flow-lib', 'doca-ipsec-lib', 'doca-regex-lib', 'doca-sha-lib',
-	'doca-telemetry-lib'
-]
+doca_modules = ['doca-grpc-libs', 'doca-grpc', 'doca-libs', 'doca']
 founded_doca_modules = []
 message('>>> Detecting DOCA, assume pc file of DOCA is located at ' + doca_pc_path)
 env.set('PKG_CONFIG_PATH', doca_pc_path)

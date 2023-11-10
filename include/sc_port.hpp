@@ -5,6 +5,7 @@
 
 #include <rte_ethdev.h>
 #include <rte_version.h>
+#include <rte_dev.h>
 
 /*!
  * \brief maximum number of RX/TX ring descriptors per queue
