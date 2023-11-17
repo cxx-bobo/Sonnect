@@ -215,6 +215,8 @@ int _process_pkt(struct rte_mbuf **pkt, uint64_t nb_recv_pkts, struct sc_config 
         }
     }
 
+    //todo:加sha运算
+
     // flush forward queue
     if(forward_queue_len > 0){
         sc_flush_tx_queue(recv_port_id, queue_id, forward_queue, forward_queue_len, &temp_nb_fwd_pkts);
